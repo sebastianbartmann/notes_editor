@@ -43,17 +43,18 @@
                   hx-swap="innerHTML"
                   hx-on::after-request="if(event.detail.successful) { document.getElementById('content').value = ''; location.reload(); }">
 
-                <label for="content">
-                    Add to today's note:
-                    <textarea
-                        id="content"
-                        name="content"
-                        rows="8"
-                        placeholder="Write something..."
-                        required></textarea>
-                </label>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Add to today's note</h3>
+                    <button type="submit">Append</button>
+                </div>
 
-                <button type="submit">Append</button>
+                <label for="content" class="visually-hidden">Content</label>
+                <textarea
+                    id="content"
+                    name="content"
+                    rows="8"
+                    placeholder="Write something..."
+                    required></textarea>
             </form>
 
             <div id="message"></div>

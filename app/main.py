@@ -81,7 +81,7 @@ async def root(request: Request):
     ensure_file_exists(filepath)
     content = filepath.read_text()
     return templates.TemplateResponse(
-        "append.html",
+        "editor.html",
         {"request": request, "today": today, "content": content}
     )
 
