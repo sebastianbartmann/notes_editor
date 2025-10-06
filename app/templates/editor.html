@@ -23,7 +23,10 @@
             <div id="current-content">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <h3>Current Note</h3>
-                    <button id="edit-btn" onclick="toggleEditMode()">Edit</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button id="edit-btn" onclick="toggleEditMode()">Edit</button>
+                        <button id="collapse-btn" onclick="toggleCollapse()" class="secondary">Collapse</button>
+                    </div>
                 </div>
                 <pre id="note-display" style="white-space: pre-wrap; background: var(--pico-background-color); padding: 1rem; border-radius: var(--pico-border-radius); max-height: 400px; overflow-y: auto;">{{ content }}</pre>
                 <form id="edit-form" style="display: none;" hx-post="/api/save" hx-target="#save-message" hx-swap="innerHTML">
@@ -73,6 +76,21 @@
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-btn').style.display = 'inline-block';
             document.getElementById('save-message').innerHTML = '';
+        }
+
+        function toggleCollapse() {
+            const noteDisplay = document.getElementById('note-display');
+            const editForm = document.getElementById('edit-form');
+            const collapseBtn = document.getElementById('collapse-btn');
+
+            if (noteDisplay.style.display === 'none' && editForm.style.display === 'none') {
+                noteDisplay.style.display = 'block';
+                collapseBtn.textContent = 'Collapse';
+            } else {
+                noteDisplay.style.display = 'none';
+                editForm.style.display = 'none';
+                collapseBtn.textContent = 'Expand';
+            }
         }
 
         // Handle append response
