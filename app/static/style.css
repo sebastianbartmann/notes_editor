@@ -1,0 +1,33 @@
+/* Additional custom styles for the notes editor */
+
+textarea {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+#message {
+    margin-top: 1rem;
+    min-height: 1.5rem;
+}
+
+mark {
+    padding: 0.5rem 1rem;
+    display: inline-block;
+    border-radius: var(--pico-border-radius);
+}
+
+article header p {
+    margin-bottom: 0;
+    color: var(--pico-muted-color);
+    font-size: 0.9rem;
+}
+
+.container {
+    max-width: 800px;
+}
+
+/* Ensure forms don't have bottom margin issues */
+form {
+    margin-bottom: 0;
+}

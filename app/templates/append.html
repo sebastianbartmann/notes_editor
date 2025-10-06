@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Append - Daily Notes</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+    <main class="container">
+        <nav>
+            <ul>
+                <li><strong>Daily Notes</strong></li>
+            </ul>
+            <ul>
+                <li>Today: {{ today }}</li>
+            </ul>
+        </nav>
+
+        <article>
+            <div id="current-content">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Current Note</h3>
+                    <button id="edit-btn" onclick="toggleEditMode()">Edit</button>
+                </div>
+                <pre id="note-display" style="white-space: pre-wrap; background: var(--pico-background-color); padding: 1rem; border-radius: var(--pico-border-radius); max-height: 400px; overflow-y: auto;">{{ content }}</pre>
+                <form id="edit-form" style="display: none;" hx-post="/api/save" hx-target="#save-message" hx-swap="innerHTML">
+                    <textarea id="note-editor" name="content" rows="20" style="font-family: monospace;">{{ content }}</textarea>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="submit">Save</button>
+                        <button type="button" onclick="cancelEdit()">Cancel</button>
+                    </div>
+                </form>
+                <div id="save-message"></div>
+            </div>
+
+            <hr>
+
+            <form hx-post="/api/append"
+                  hx-target="#message"
+                  hx-swap="innerHTML"
+                  hx-on::after-request="if(event.detail.successful) { document.getElementById('content').value = ''; location.reload(); }">
+
+                <label for="content">
+                    Add to today's note:
+                    <textarea
+                        id="content"
+                        name="content"
+                        rows="8"
+                        placeholder="Write something..."
+                        required></textarea>
+                </label>
+
+                <button type="submit">Append</button>
+            </form>
+
+            <div id="message"></div>
+        </article>
+    </main>
+
+    <script>
+        function toggleEditMode() {
+            document.getElementById('note-display').style.display = 'none';
+            document.getElementById('edit-form').style.display = 'block';
+            document.getElementById('edit-btn').style.display = 'none';
+        }
+
+        function cancelEdit() {
+            document.getElementById('note-display').style.display = 'block';
+            document.getElementById('edit-form').style.display = 'none';
+            document.getElementById('edit-btn').style.display = 'inline-block';
+            document.getElementById('save-message').innerHTML = '';
+        }
+
+        // Handle append response
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.responseURL.includes('/api/append')) {
+                const messageDiv = document.getElementById('message');
+                if (evt.detail.successful) {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    messageDiv.innerHTML = `<mark>${response.message}</mark>`;
+
+                    // Clear message after 3 seconds
+                    setTimeout(() => {
+                        messageDiv.innerHTML = '';
+                    }, 3000);
+                } else {
+                    messageDiv.innerHTML = `<mark style="background-color: var(--pico-del-color);">Error appending content</mark>`;
+                }
+            }
+        });
+
+        // Handle save response
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.responseURL.includes('/api/save')) {
+                const saveMessageDiv = document.getElementById('save-message');
+                if (evt.detail.successful) {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    saveMessageDiv.innerHTML = `<mark>${response.message}</mark>`;
+
+                    // Reload page after 1 second to show updated content
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    saveMessageDiv.innerHTML = `<mark style="background-color: var(--pico-del-color);">Error saving note</mark>`;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

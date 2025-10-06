@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(uv init:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
