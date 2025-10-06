@@ -2,11 +2,9 @@ from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
 from datetime import datetime
 from pathlib import Path
 import subprocess
-import os
 
 app = FastAPI()
 
@@ -15,14 +13,6 @@ templates = Jinja2Templates(directory="app/templates")
 
 NOTES_DIR = Path.home() / "notes" / "daily"
 GIT_DIR = Path.home() / "notes"
-
-
-class AppendRequest(BaseModel):
-    content: str
-
-
-class SaveRequest(BaseModel):
-    content: str
 
 
 def get_today_filename() -> str:
@@ -48,11 +38,10 @@ def git_commit_and_push(message: str = "Update notes") -> tuple[bool, str]:
         return True, "No git repository (notes saved locally)"
 
     try:
-        os.chdir(GIT_DIR)
-
         # Check if there are changes
         result = subprocess.run(
             ["git", "status", "--porcelain"],
+            cwd=GIT_DIR,
             capture_output=True,
             text=True,
             check=True
@@ -62,23 +51,24 @@ def git_commit_and_push(message: str = "Update notes") -> tuple[bool, str]:
             return True, "No changes to commit"
 
         # Add all changes
-        subprocess.run(["git", "add", "."], check=True, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=GIT_DIR, check=True, capture_output=True)
 
         # Commit
         subprocess.run(
             ["git", "commit", "-m", message],
+            cwd=GIT_DIR,
             check=True,
             capture_output=True,
             text=True
         )
 
         # Push
-        subprocess.run(["git", "push"], check=True, capture_output=True)
+        subprocess.run(["git", "push"], cwd=GIT_DIR, check=True, capture_output=True)
 
         return True, "Changes committed and pushed"
 
     except subprocess.CalledProcessError as e:
-        error_msg = e.stderr if hasattr(e, 'stderr') and e.stderr else str(e)
+        error_msg = e.stderr if e.stderr else str(e)
         return False, f"Git error: {error_msg}"
     except Exception as e:
         return False, f"Error: {str(e)}"

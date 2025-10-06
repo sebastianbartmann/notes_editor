@@ -17,12 +17,6 @@ mark {
     border-radius: var(--pico-border-radius);
 }
 
-article header p {
-    margin-bottom: 0;
-    color: var(--pico-muted-color);
-    font-size: 0.9rem;
-}
-
 .container {
     max-width: 800px;
 }
