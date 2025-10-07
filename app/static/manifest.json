@@ -1,0 +1,11 @@
+{
+  "name": "Daily Notes Editor",
+  "short_name": "Notes",
+  "description": "Quick daily notes editor",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": []
+}

@@ -31,6 +31,30 @@ def ensure_file_exists(filepath: Path) -> None:
         filepath.write_text(f"# daily {date_str}\n\n")
 
 
+def git_pull() -> tuple[bool, str]:
+    """Pull latest changes from remote. Returns (success, message)"""
+    # Check if git repo exists
+    if not GIT_DIR.exists() or not (GIT_DIR / ".git").exists():
+        return True, "No git repository"
+
+    try:
+        # Pull latest changes
+        subprocess.run(
+            ["git", "pull", "--rebase"],
+            cwd=GIT_DIR,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        return True, "Pulled latest changes"
+
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr if e.stderr else str(e)
+        return False, f"Git pull error: {error_msg}"
+    except Exception as e:
+        return False, f"Error: {str(e)}"
+
+
 def git_commit_and_push(message: str = "Update notes") -> tuple[bool, str]:
     """Perform git add, commit, and push. Returns (success, message)"""
     # Check if git repo exists
@@ -76,6 +100,9 @@ def git_commit_and_push(message: str = "Update notes") -> tuple[bool, str]:
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
+    # Pull latest changes from remote
+    git_pull()
+
     today = datetime.now().strftime("%Y-%m-%d")
     filepath = get_today_filepath()
     ensure_file_exists(filepath)
