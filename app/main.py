@@ -5,6 +5,7 @@ from fastapi.templating import Jinja2Templates
 from datetime import datetime
 from pathlib import Path
 import subprocess
+import re
 
 app = FastAPI()
 
@@ -23,12 +24,82 @@ def get_today_filepath() -> Path:
     return NOTES_DIR / get_today_filename()
 
 
+def get_most_recent_note() -> Path | None:
+    """Find the most recent daily note file (excluding today's)"""
+    if not NOTES_DIR.exists():
+        return None
+
+    # Get all markdown files sorted by name (which sorts by date due to YYYY-MM-DD format)
+    note_files = sorted(NOTES_DIR.glob("*.md"), reverse=True)
+
+    today_file = get_today_filename()
+    for note_file in note_files:
+        if note_file.name != today_file:
+            return note_file
+
+    return None
+
+
+def extract_incomplete_todos(filepath: Path) -> str:
+    """Extract incomplete todos from the ## todos section of a note file"""
+    if not filepath.exists():
+        return ""
+
+    content = filepath.read_text()
+
+    # Find the ## todos section
+    todos_match = re.search(r'^## todos\s*$', content, re.MULTILINE | re.IGNORECASE)
+    if not todos_match:
+        return ""
+
+    # Get content starting from ## todos
+    start_pos = todos_match.end()
+    remaining_content = content[start_pos:]
+
+    # Find the next ## header or end of file
+    next_section_match = re.search(r'^## ', remaining_content, re.MULTILINE)
+    if next_section_match:
+        todos_content = remaining_content[:next_section_match.start()]
+    else:
+        todos_content = remaining_content
+
+    # Filter out completed todos (lines with - [x] or - [X], with any indentation)
+    lines = todos_content.split('\n')
+    incomplete_lines = []
+
+    for line in lines:
+        # Skip completed todo items (with any amount of leading whitespace)
+        if re.match(r'^\s*-\s*\[x\]', line, re.IGNORECASE):
+            continue
+        incomplete_lines.append(line)
+
+    # Join and clean up the result
+    result = '\n'.join(incomplete_lines).strip()
+
+    return result if result else ""
+
+
 def ensure_file_exists(filepath: Path) -> None:
     """Create file with header if it doesn't exist"""
     if not filepath.exists():
         NOTES_DIR.mkdir(parents=True, exist_ok=True)
         date_str = datetime.now().strftime("%Y-%m-%d")
-        filepath.write_text(f"# daily {date_str}\n\n")
+
+        # Start with header
+        content = f"# daily {date_str}\n\n"
+
+        # Try to get incomplete todos from previous note
+        previous_note = get_most_recent_note()
+        if previous_note:
+            incomplete_todos = extract_incomplete_todos(previous_note)
+            if incomplete_todos:
+                content += f"## todos\n\n{incomplete_todos}\n\n"
+
+        # Write the file
+        filepath.write_text(content)
+
+        # Commit and push the new file
+        git_commit_and_push(f"Create daily note {date_str}")
 
 
 def git_pull() -> tuple[bool, str]:
@@ -125,7 +196,7 @@ async def append_note(content: str = Form(...)):
     time_str = datetime.now().strftime("%H:%M")
 
     # Append content with format
-    append_text = f"\n## {time_str}\n{content.strip()}\n\n"
+    append_text = f"\n## {time_str}\n\n{content.strip()}\n\n"
 
     with open(filepath, "a") as f:
         f.write(append_text)

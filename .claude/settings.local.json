@@ -3,7 +3,8 @@
     "allow": [
       "Bash(mkdir:*)",
       "Bash(uv init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(sudo systemctl restart:*)"
     ],
     "deny": [],
     "ask": []
