@@ -1,27 +1,94 @@
 /* Additional custom styles for the notes editor */
 
-textarea {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 0.95rem;
-    line-height: 1.5;
+* {
+    --pico-spacing: 0.5rem;
+    --pico-form-element-spacing-vertical: 0.25rem;
+    --pico-form-element-spacing-horizontal: 0.5rem;
+    --pico-nav-element-spacing-vertical: 0.25rem;
+    --pico-nav-element-spacing-horizontal: 0.25rem;
 }
 
-#message {
-    margin-top: 1rem;
-    min-height: 1.5rem;
-}
-
-mark {
-    padding: 0.5rem 1rem;
-    display: inline-block;
-    border-radius: var(--pico-border-radius);
+body {
+    padding: 0.5rem;
 }
 
 .container {
     max-width: 800px;
+    padding: 0;
+    margin: 0 auto;
 }
 
-/* Ensure forms don't have bottom margin issues */
+article {
+    padding: 0.5rem;
+    margin: 0;
+}
+
+nav {
+    margin: 0 0 0.25rem 0;
+    padding: 0;
+}
+
+nav ul {
+    margin: 0;
+    padding: 0;
+}
+
+nav li {
+    padding: 0;
+    margin: 0;
+}
+
+nav li strong {
+    font-size: 0.9rem;
+}
+
+h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 0.9rem;
+}
+
+textarea, pre {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    padding: 0.35rem;
+    margin-bottom: 0.25rem;
+}
+
+#note-display {
+    max-height: 350px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    background: var(--pico-background-color);
+    border-radius: var(--pico-border-radius);
+}
+
+hr {
+    margin: 0.5rem 0;
+    border-color: #555;
+}
+
+button {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+#edit-btn, #collapse-btn {
+    margin-bottom: 0.25rem;
+}
+
+#message {
+    margin-top: 0.25rem;
+    min-height: 1rem;
+}
+
+mark {
+    padding: 0.15rem 0.35rem;
+    display: inline-block;
+    border-radius: var(--pico-border-radius);
+}
+
 form {
     margin-bottom: 0;
 }

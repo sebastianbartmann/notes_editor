@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,7 +14,7 @@
         <nav>
             <ul>
                 <li><strong>Daily Notes</strong></li>
-                <li><a href="#" onclick="location.reload(); return false;" style="font-size: 1.2em;" title="Reload page">🔄</a></li>
+                <li><button onclick="location.reload()" class="outline secondary" style="margin-left: 0.5rem; padding: 0.1rem 0.4rem;">Reload</button></li>
             </ul>
             <ul>
                 <li>Today: {{ today }}</li>
@@ -30,7 +30,7 @@
                         <button id="collapse-btn" onclick="toggleCollapse()" class="secondary">Collapse</button>
                     </div>
                 </div>
-                <pre id="note-display" style="white-space: pre-wrap; background: var(--pico-background-color); padding: 1rem; border-radius: var(--pico-border-radius); max-height: 400px; overflow-y: auto;">{{ content }}</pre>
+                <pre id="note-display">{{ content }}</pre>
                 <form id="edit-form" style="display: none;" hx-post="/api/save" hx-target="#save-message" hx-swap="innerHTML">
                     <textarea id="note-editor" name="content" rows="20" style="font-family: monospace;">{{ content }}</textarea>
                     <div style="display: flex; gap: 0.5rem;">
@@ -48,12 +48,7 @@
                   hx-swap="innerHTML"
                   hx-on::after-request="if(event.detail.successful) { document.getElementById('content').value = ''; location.reload(); }">
 
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h3>Add to today's note</h3>
-                    <button type="submit">Append</button>
-                </div>
-
-                <label for="content" class="visually-hidden">Content</label>
+                <button type="submit">Add</button>
                 <textarea
                     id="content"
                     name="content"
