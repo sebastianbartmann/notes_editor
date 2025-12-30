@@ -40,28 +40,37 @@ def get_most_recent_note() -> Path | None:
     return None
 
 
-def extract_incomplete_todos(filepath: Path) -> str:
-    """Extract incomplete todos from the ## todos section of a note file"""
+def extract_section(filepath: Path, section_name: str) -> str:
+    """Extract content from a ## section of a note file"""
     if not filepath.exists():
         return ""
 
     content = filepath.read_text()
 
-    # Find the ## todos section
-    todos_match = re.search(r'^## todos\s*$', content, re.MULTILINE | re.IGNORECASE)
-    if not todos_match:
+    # Find the section
+    section_match = re.search(rf'^## {section_name}\s*$', content, re.MULTILINE | re.IGNORECASE)
+    if not section_match:
         return ""
 
-    # Get content starting from ## todos
-    start_pos = todos_match.end()
+    # Get content starting from section header
+    start_pos = section_match.end()
     remaining_content = content[start_pos:]
 
     # Find the next ## header or end of file
     next_section_match = re.search(r'^## ', remaining_content, re.MULTILINE)
     if next_section_match:
-        todos_content = remaining_content[:next_section_match.start()]
+        section_content = remaining_content[:next_section_match.start()]
     else:
-        todos_content = remaining_content
+        section_content = remaining_content
+
+    return section_content.strip()
+
+
+def extract_incomplete_todos(filepath: Path) -> str:
+    """Extract incomplete todos from the ## todos section of a note file"""
+    todos_content = extract_section(filepath, "todos")
+    if not todos_content:
+        return ""
 
     # Filter out completed todos (lines with - [x] or - [X], with any indentation)
     lines = todos_content.split('\n')
@@ -79,6 +88,36 @@ def extract_incomplete_todos(filepath: Path) -> str:
     return result if result else ""
 
 
+def extract_pinned_notes(filepath: Path) -> str:
+    """Extract pinned notes (### entries with <pinned> marker) from custom notes section"""
+    custom_notes = extract_section(filepath, "custom notes")
+    if not custom_notes:
+        return ""
+
+    # Find all ### sections that have <pinned> in the header
+    pinned_entries = []
+    lines = custom_notes.split('\n')
+    current_entry = []
+    is_pinned = False
+
+    for line in lines:
+        if line.startswith('### '):
+            # Save previous entry if it was pinned
+            if is_pinned and current_entry:
+                pinned_entries.append('\n'.join(current_entry))
+            # Start new entry
+            current_entry = [line]
+            is_pinned = '<pinned>' in line.lower()
+        elif current_entry:
+            current_entry.append(line)
+
+    # Don't forget last entry
+    if is_pinned and current_entry:
+        pinned_entries.append('\n'.join(current_entry))
+
+    return '\n\n'.join(pinned_entries) if pinned_entries else ""
+
+
 def ensure_file_exists(filepath: Path) -> None:
     """Create file with header if it doesn't exist"""
     if not filepath.exists():
@@ -88,12 +127,16 @@ def ensure_file_exists(filepath: Path) -> None:
         # Start with header
         content = f"# daily {date_str}\n\n"
 
-        # Try to get incomplete todos from previous note
+        # Try to get incomplete todos and pinned notes from previous note
         previous_note = get_most_recent_note()
         if previous_note:
             incomplete_todos = extract_incomplete_todos(previous_note)
             if incomplete_todos:
                 content += f"## todos\n\n{incomplete_todos}\n\n"
+
+            pinned_notes = extract_pinned_notes(previous_note)
+            if pinned_notes:
+                content += f"## custom notes\n\n{pinned_notes}\n\n"
 
         # Write the file
         filepath.write_text(content)
@@ -247,7 +290,7 @@ async def root(request: Request):
 
 
 @app.post("/api/append")
-async def append_note(content: str = Form(...)):
+async def append_note(content: str = Form(...), pinned: str = Form(None)):
     if not content.strip():
         raise HTTPException(status_code=400, detail="Content cannot be empty")
 
@@ -260,23 +303,51 @@ async def append_note(content: str = Form(...)):
     # Read current content
     current_content = filepath.read_text()
 
-    # Check if ## custom notes section exists
+    # Determine header based on pinned checkbox
+    is_pinned = pinned == "on"
+    header = f"### {time_str} <pinned>" if is_pinned else f"### {time_str}"
+
+    # Check if custom notes section exists
     if re.search(r'^## custom notes\s*$', current_content, re.MULTILINE | re.IGNORECASE):
         # Append under existing section
-        append_text = f"\n### {time_str}\n\n{content.strip()}\n"
+        append_text = f"\n{header}\n\n{content.strip()}\n"
     else:
         # Create section and add first entry
-        append_text = f"\n## custom notes\n\n### {time_str}\n\n{content.strip()}\n"
+        append_text = f"\n## custom notes\n\n{header}\n\n{content.strip()}\n"
 
     with open(filepath, "a") as f:
         f.write(append_text)
 
     # Git operations
-    success, msg = git_commit_and_push(f"Append note at {time_str}")
+    success, msg = git_commit_and_push(f"Append {'pinned ' if is_pinned else ''}note at {time_str}")
 
     return {
         "success": success,
         "message": "Content appended successfully" if success else msg
+    }
+
+
+@app.post("/api/clear-pinned")
+async def clear_pinned():
+    filepath = get_today_filepath()
+    if not filepath.exists():
+        return {"success": True, "message": "No notes to clear"}
+
+    content = filepath.read_text()
+
+    # Remove <pinned> markers from ### headers
+    updated_content = re.sub(r'^(### \d{2}:\d{2})\s*<pinned>', r'\1', content, flags=re.MULTILINE | re.IGNORECASE)
+
+    if content == updated_content:
+        return {"success": True, "message": "No pinned notes to clear"}
+
+    filepath.write_text(updated_content)
+
+    success, msg = git_commit_and_push("Clear pinned markers")
+
+    return {
+        "success": success,
+        "message": "Pinned markers cleared" if success else msg
     }
 
 

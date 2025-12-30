@@ -48,7 +48,14 @@
                   hx-swap="innerHTML"
                   hx-on::after-request="if(event.detail.successful) { document.getElementById('content').value = ''; location.reload(); }">
 
-                <button type="submit">Add</button>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.25rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="pinned" name="pinned" style="margin: 0;">
+                        <label for="pinned" style="margin: 0;">Pin</label>
+                        <button type="button" class="outline secondary" onclick="clearPinned()" style="padding: 0.1rem 0.4rem;">Clear</button>
+                    </div>
+                    <button type="submit">Add</button>
+                </div>
                 <textarea
                     id="content"
                     name="content"
@@ -73,6 +80,14 @@
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-btn').style.display = 'inline-block';
             document.getElementById('save-message').innerHTML = '';
+        }
+
+        async function clearPinned() {
+            const response = await fetch('/api/clear-pinned', { method: 'POST' });
+            const data = await response.json();
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<mark>${data.message}</mark>`;
+            setTimeout(() => location.reload(), 1000);
         }
 
         function toggleCollapse() {
