@@ -68,8 +68,8 @@ hr {
     border-color: #555;
 }
 
-button {
-    padding: 0.2rem 0.5rem;
+button, button.outline, button.secondary, button[type="submit"] {
+    padding: 0 0.4rem !important;
     font-size: 0.85rem;
     margin: 0;
 }

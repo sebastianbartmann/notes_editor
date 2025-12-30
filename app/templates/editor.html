@@ -14,7 +14,7 @@
         <nav>
             <ul>
                 <li><strong>Daily Notes</strong></li>
-                <li><button onclick="location.reload()" class="outline secondary" style="margin-left: 0.5rem; padding: 0.1rem 0.4rem;">Reload</button></li>
+                <li><button onclick="location.reload()" class="outline secondary" style="margin-left: 0.5rem;">Reload</button></li>
             </ul>
             <ul>
                 <li>Today: {{ today }}</li>
@@ -52,7 +52,7 @@
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <input type="checkbox" id="pinned" name="pinned" style="margin: 0;">
                         <label for="pinned" style="margin: 0;">Pin</label>
-                        <button type="button" class="outline secondary" onclick="clearPinned()" style="padding: 0.1rem 0.4rem;">Clear</button>
+                        <button type="button" class="outline secondary" onclick="clearPinned()">Clear</button>
                     </div>
                     <button type="submit">Add</button>
                 </div>
