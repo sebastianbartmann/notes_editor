@@ -257,8 +257,16 @@ async def append_note(content: str = Form(...)):
     # Get current time
     time_str = datetime.now().strftime("%H:%M")
 
-    # Append content with format
-    append_text = f"\n## {time_str}\n\n{content.strip()}\n\n"
+    # Read current content
+    current_content = filepath.read_text()
+
+    # Check if ## custom notes section exists
+    if re.search(r'^## custom notes\s*$', current_content, re.MULTILINE | re.IGNORECASE):
+        # Append under existing section
+        append_text = f"\n### {time_str}\n\n{content.strip()}\n"
+    else:
+        # Create section and add first entry
+        append_text = f"\n## custom notes\n\n### {time_str}\n\n{content.strip()}\n"
 
     with open(filepath, "a") as f:
         f.write(append_text)

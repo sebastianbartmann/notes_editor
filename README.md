@@ -7,7 +7,6 @@ A lightweight web app for quickly editing daily markdown notes with automatic gi
 - **Daily Notes**: Automatically creates and edits date-based markdown files
 - **Quick Append**: Add timestamped entries throughout the day
 - **Git Sync**: Auto-commits and pushes changes, pulls latest on page load
-- **PWA Support**: Install as a standalone app on mobile devices
 - **Simple UI**: Clean, minimal interface using Pico CSS and HTMX
 
 ## Setup
@@ -26,11 +25,9 @@ git clone https://github.com/sebastianbartmann/notes_editor
 cd notes_editor
 ```
 
-2. Set up Python environment:
+2. Install dependencies:
 ```bash
-uv venv
-source .venv/bin/activate
-uv pip install fastapi uvicorn jinja2 python-multipart
+uv sync
 ```
 
 3. Configure git identity (required for auto-commits):
@@ -39,14 +36,16 @@ git config --global user.email "your@email.com"
 git config --global user.name "Your Name"
 ```
 
-4. Ensure your notes repository exists at `~/notes` with a `daily/` subdirectory
+4. Clone the notes repository:
+```bash
+git clone dev@dev:/home/dev/git/notes.git ~/notes
+```
 
 ### Running
 
 **Development:**
 ```bash
-source .venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+make run
 ```
 
 **Production (systemd service):**
@@ -91,10 +90,6 @@ Service management:
 - `sudo systemctl status notes-editor` - check status
 - `sudo systemctl restart notes-editor` - restart after code changes
 - `sudo systemctl stop notes-editor` - stop service
-
-## PWA Installation
-
-On mobile devices, visit the app URL and use "Add to Home Screen" to install as a standalone app.
 
 ## License
 
