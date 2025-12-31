@@ -5,10 +5,12 @@ from fastapi.templating import Jinja2Templates
 from datetime import datetime
 from pathlib import Path
 import re
+import subprocess
 
 from app.renderers.pinned import render_with_pinned_buttons
+from app.renderers.file_tree import render_tree
 from app.services.git_sync import git_pull, git_commit_and_push
-from app.services.vault_store import VAULT_ROOT, write_entry, append_entry, resolve_path
+from app.services.vault_store import VAULT_ROOT, write_entry, append_entry, resolve_path, read_entry, list_dir, delete_entry
 
 app = FastAPI()
 
@@ -280,4 +282,155 @@ async def unpin_entry(path: str = Form(...), line: int = Form(...)):
 
 @app.get("/files", response_class=HTMLResponse)
 async def files_page(request: Request):
-    return templates.TemplateResponse("files.html", {"request": request})
+    git_pull()
+    entries = list_dir(".")
+    tree_html = render_tree(entries)
+    return templates.TemplateResponse(
+        "files.html",
+        {
+            "request": request,
+            "tree_html": tree_html,
+            "file_path": None,
+            "content": "",
+            "note_html": "",
+            "message": "",
+        },
+    )
+
+
+@app.get("/tools", response_class=HTMLResponse)
+async def tools_page(request: Request):
+    return templates.TemplateResponse("tools.html", {"request": request})
+
+
+@app.get("/tools/llm", response_class=HTMLResponse)
+async def llm_page(request: Request):
+    return templates.TemplateResponse("llm.html", {"request": request})
+
+
+@app.get("/api/files/tree", response_class=HTMLResponse)
+async def files_tree(path: str = "."):
+    entries = list_dir(path)
+    tree_html = render_tree(entries)
+    return HTMLResponse(tree_html)
+
+
+@app.get("/api/files/open", response_class=HTMLResponse)
+async def open_file(request: Request, path: str):
+    filepath = resolve_path(path)
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    if filepath.is_dir():
+        raise HTTPException(status_code=400, detail="Path is a directory")
+
+    content = read_entry(path)
+    note_html = render_with_pinned_buttons(content, path)
+    return templates.TemplateResponse(
+        "file_editor.html",
+        {
+            "request": request,
+            "file_path": path,
+            "content": content,
+            "note_html": note_html,
+            "message": "",
+        },
+    )
+
+
+@app.post("/api/files/save", response_class=HTMLResponse)
+async def save_file(request: Request, path: str = Form(...), content: str = Form(...)):
+    write_entry(path, content)
+    success, msg = git_commit_and_push("Update file")
+    note_html = render_with_pinned_buttons(content, path)
+    return templates.TemplateResponse(
+        "file_editor.html",
+        {
+            "request": request,
+            "file_path": path,
+            "content": content,
+            "note_html": note_html,
+            "message": "File saved" if success else msg,
+        },
+    )
+
+
+@app.post("/api/files/delete", response_class=HTMLResponse)
+async def delete_file(request: Request, path: str = Form(...)):
+    try:
+        delete_entry(path)
+    except IsADirectoryError:
+        return templates.TemplateResponse(
+            "file_editor.html",
+            {
+                "request": request,
+                "file_path": path,
+                "content": "",
+                "note_html": "",
+                "message": "Cannot delete a directory",
+            },
+        )
+
+    success, msg = git_commit_and_push("Delete file")
+    response = templates.TemplateResponse(
+        "file_editor.html",
+        {
+            "request": request,
+            "file_path": None,
+            "content": "",
+            "note_html": "",
+            "message": "File deleted" if success else msg,
+        },
+    )
+    response.headers["HX-Trigger"] = "fileDeleted"
+    return response
+
+
+@app.post("/api/tools/claude", response_class=HTMLResponse)
+async def run_claude(prompt: str = Form(...)):
+    command = [
+        "claude",
+        "--print",
+        "--output-format",
+        "text",
+        "--dangerously-skip-permissions",
+        "--tools",
+        "default",
+        "--add-dir",
+        str(VAULT_ROOT),
+    ]
+
+    claude_candidates = [
+        VAULT_ROOT / "CLAUDE.md",
+        VAULT_ROOT / "claude.md",
+        VAULT_ROOT / "Claude.md",
+    ]
+    claude_md = next((path for path in claude_candidates if path.exists()), None)
+    if claude_md:
+        system_prompt = claude_md.read_text()
+        command.extend(["--append-system-prompt", system_prompt])
+
+    command.append(prompt)
+
+    try:
+        result = subprocess.run(
+            command,
+            cwd=VAULT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        return HTMLResponse("<mark class=\"error\">Claude timed out.</mark>", status_code=200)
+
+    if result.returncode != 0:
+        error_text = (result.stderr or "Claude failed").strip()
+        return HTMLResponse(
+            f"<mark class=\"error\">{error_text}</mark>",
+            status_code=200,
+        )
+
+    response = result.stdout.strip()
+    if not response:
+        response = "No response."
+
+    return HTMLResponse(f"<pre class=\"llm-output\">{response}</pre>", status_code=200)

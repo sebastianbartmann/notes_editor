@@ -33,3 +33,36 @@ def append_entry(relative_path: str, content: str) -> None:
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, "a") as handle:
         handle.write(content)
+
+
+def delete_entry(relative_path: str) -> None:
+    filepath = resolve_path(relative_path)
+    if not filepath.exists():
+        return
+    if filepath.is_dir():
+        raise IsADirectoryError("Path is a directory")
+    filepath.unlink()
+
+
+def list_dir(relative_path: str) -> list[dict]:
+    directory = resolve_path(relative_path)
+    if not directory.exists():
+        raise FileNotFoundError("Directory does not exist")
+    if not directory.is_dir():
+        raise NotADirectoryError("Path is not a directory")
+
+    entries = []
+    for entry in directory.iterdir():
+        name = entry.name
+        if name.startswith("."):
+            continue
+        entries.append(
+            {
+                "name": name,
+                "path": str(entry.relative_to(VAULT_ROOT)),
+                "is_dir": entry.is_dir(),
+            }
+        )
+
+    entries.sort(key=lambda item: (0 if not item["is_dir"] else 1, item["name"].lower()))
+    return entries

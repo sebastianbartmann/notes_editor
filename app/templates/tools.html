@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tools</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+    <main class="container">
+        <nav class="topbar">
+            <div class="brand">
+                <strong>Tools</strong>
+                <a class="button ghost" href="/">Daily</a>
+            </div>
+            <div class="today">Vault root: ~/notes</div>
+        </nav>
+
+        <article class="panel">
+            <div class="tools-grid">
+                <a class="tool-card" href="/files">
+                    <div class="tool-title">Files</div>
+                    <div class="tool-desc">Browse and edit vault files.</div>
+                </a>
+                <a class="tool-card" href="/tools/llm">
+                    <div class="tool-title">Claude</div>
+                    <div class="tool-desc">Run commands against the vault.</div>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>
