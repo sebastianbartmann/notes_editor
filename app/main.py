@@ -1,19 +1,21 @@
 from fastapi import FastAPI, Request, HTTPException, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from datetime import datetime
 from pathlib import Path
-import subprocess
 import re
+
+from app.renderers.pinned import render_with_pinned_buttons
+from app.services.git_sync import git_pull, git_commit_and_push
+from app.services.vault_store import VAULT_ROOT, write_entry, append_entry, resolve_path
 
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-NOTES_DIR = Path.home() / "notes" / "daily"
-GIT_DIR = Path.home() / "notes"
+DAILY_DIR = VAULT_ROOT / "daily"
 
 
 def get_today_filename() -> str:
@@ -21,16 +23,16 @@ def get_today_filename() -> str:
 
 
 def get_today_filepath() -> Path:
-    return NOTES_DIR / get_today_filename()
+    return DAILY_DIR / get_today_filename()
 
 
 def get_most_recent_note() -> Path | None:
     """Find the most recent daily note file (excluding today's)"""
-    if not NOTES_DIR.exists():
+    if not DAILY_DIR.exists():
         return None
 
     # Get all markdown files that match the date pattern YYYY-MM-DD.md
-    note_files = sorted(NOTES_DIR.glob("????-??-??.md"), reverse=True)
+    note_files = sorted(DAILY_DIR.glob("????-??-??.md"), reverse=True)
 
     today_file = get_today_filename()
     for note_file in note_files:
@@ -121,7 +123,7 @@ def extract_pinned_notes(filepath: Path) -> str:
 def ensure_file_exists(filepath: Path) -> None:
     """Create file with header if it doesn't exist"""
     if not filepath.exists():
-        NOTES_DIR.mkdir(parents=True, exist_ok=True)
+        DAILY_DIR.mkdir(parents=True, exist_ok=True)
         date_str = datetime.now().strftime("%Y-%m-%d")
 
         # Start with header
@@ -145,135 +147,6 @@ def ensure_file_exists(filepath: Path) -> None:
         git_commit_and_push(f"Create daily note {date_str}")
 
 
-def git_pull() -> tuple[bool, str]:
-    """Pull latest changes from remote. Returns (success, message)"""
-    # Check if git repo exists
-    if not GIT_DIR.exists() or not (GIT_DIR / ".git").exists():
-        return True, "No git repository"
-
-    try:
-        # Check for and abort any stuck rebase/merge states
-        rebase_dir = GIT_DIR / ".git" / "rebase-merge"
-        rebase_apply = GIT_DIR / ".git" / "rebase-apply"
-        merge_head = GIT_DIR / ".git" / "MERGE_HEAD"
-
-        if rebase_dir.exists() or rebase_apply.exists():
-            subprocess.run(["git", "rebase", "--abort"], cwd=GIT_DIR, capture_output=True)
-
-        if merge_head.exists():
-            subprocess.run(["git", "merge", "--abort"], cwd=GIT_DIR, capture_output=True)
-
-        # Pull with merge strategy (not rebase) and auto-resolve conflicts with remote version
-        result = subprocess.run(
-            ["git", "pull", "--no-rebase", "-X", "theirs"],
-            cwd=GIT_DIR,
-            capture_output=True,
-            text=True
-        )
-
-        if result.returncode == 0:
-            return True, "Pulled latest changes"
-
-        # If pull failed, try to recover by resetting to remote
-        subprocess.run(
-            ["git", "fetch", "origin"],
-            cwd=GIT_DIR,
-            capture_output=True,
-            text=True
-        )
-
-        # Get current branch name
-        branch_result = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=GIT_DIR,
-            capture_output=True,
-            text=True
-        )
-
-        if branch_result.returncode == 0:
-            branch = branch_result.stdout.strip()
-            subprocess.run(
-                ["git", "reset", "--hard", f"origin/{branch}"],
-                cwd=GIT_DIR,
-                capture_output=True,
-                text=True
-            )
-            return True, "Recovered by resetting to remote"
-
-        return False, "Git pull failed"
-
-    except Exception as e:
-        return False, f"Error: {str(e)}"
-
-
-def git_commit_and_push(message: str = "Update notes") -> tuple[bool, str]:
-    """Perform git add, commit, and push. Returns (success, message)"""
-    # Check if git repo exists
-    if not GIT_DIR.exists() or not (GIT_DIR / ".git").exists():
-        return True, "No git repository (notes saved locally)"
-
-    try:
-        # Check if there are changes
-        result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=GIT_DIR,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-
-        if not result.stdout.strip():
-            return True, "No changes to commit"
-
-        # Add all changes
-        subprocess.run(["git", "add", "."], cwd=GIT_DIR, check=True, capture_output=True)
-
-        # Commit
-        subprocess.run(
-            ["git", "commit", "-m", message],
-            cwd=GIT_DIR,
-            check=True,
-            capture_output=True,
-            text=True
-        )
-
-        # Push - try up to 2 times
-        push_result = subprocess.run(
-            ["git", "push"],
-            cwd=GIT_DIR,
-            capture_output=True,
-            text=True
-        )
-
-        if push_result.returncode == 0:
-            return True, "Changes committed and pushed"
-
-        # If push failed (likely due to diverged history), pull and retry
-        pull_success, _ = git_pull()
-
-        if pull_success:
-            # Retry push after successful pull
-            retry_push = subprocess.run(
-                ["git", "push"],
-                cwd=GIT_DIR,
-                capture_output=True,
-                text=True
-            )
-
-            if retry_push.returncode == 0:
-                return True, "Changes committed and pushed (after sync)"
-
-        # If all retries failed, still return success since changes are committed locally
-        return True, "Changes committed locally (push failed, will retry on next sync)"
-
-    except subprocess.CalledProcessError as e:
-        error_msg = e.stderr if e.stderr else str(e)
-        # Don't fail the request - changes may still be saved locally
-        return True, f"Changes saved locally: {error_msg}"
-    except Exception as e:
-        return True, f"Changes saved locally: {str(e)}"
-
-
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     # Pull latest changes from remote
@@ -283,9 +156,17 @@ async def root(request: Request):
     filepath = get_today_filepath()
     ensure_file_exists(filepath)
     content = filepath.read_text()
+    relative_path = str(filepath.relative_to(VAULT_ROOT))
+    note_html = render_with_pinned_buttons(content, relative_path)
     return templates.TemplateResponse(
         "editor.html",
-        {"request": request, "today": today, "content": content}
+        {
+            "request": request,
+            "today": today,
+            "content": content,
+            "note_html": note_html,
+            "current_path": relative_path,
+        }
     )
 
 
@@ -315,8 +196,7 @@ async def append_note(content: str = Form(...), pinned: str = Form(None)):
         # Create section and add first entry
         append_text = f"\n## custom notes\n\n{header}\n\n{content.strip()}\n"
 
-    with open(filepath, "a") as f:
-        f.write(append_text)
+    append_entry(str(filepath.relative_to(VAULT_ROOT)), append_text)
 
     # Git operations
     success, msg = git_commit_and_push(f"Append {'pinned ' if is_pinned else ''}note at {time_str}")
@@ -356,7 +236,7 @@ async def save_note(content: str = Form(...)):
     filepath = get_today_filepath()
     ensure_file_exists(filepath)
 
-    filepath.write_text(content)
+    write_entry(str(filepath.relative_to(VAULT_ROOT)), content)
 
     # Git operations
     success, msg = git_commit_and_push("Update note")
@@ -365,3 +245,39 @@ async def save_note(content: str = Form(...)):
         "success": success,
         "message": "Note saved successfully" if success else msg
     }
+
+
+@app.post("/api/files/unpin")
+async def unpin_entry(path: str = Form(...), line: int = Form(...)):
+    if line < 1:
+        raise HTTPException(status_code=400, detail="Invalid line number")
+
+    filepath = resolve_path(path)
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    content = filepath.read_text()
+    lines = content.splitlines()
+    if line > len(lines):
+        raise HTTPException(status_code=400, detail="Line out of range")
+
+    target = lines[line - 1]
+    if not re.match(r"^###\s+.*<pinned>.*$", target, re.IGNORECASE):
+        return {"success": True, "message": "Entry already unpinned"}
+
+    updated_line = re.sub(r"\s*<pinned>\s*", "", target, flags=re.IGNORECASE).rstrip()
+    lines[line - 1] = updated_line
+
+    updated_content = "\n".join(lines)
+    if content.endswith("\n"):
+        updated_content += "\n"
+
+    filepath.write_text(updated_content)
+    success, msg = git_commit_and_push("Unpin entry")
+
+    return {"success": success, "message": "Entry unpinned" if success else msg}
+
+
+@app.get("/files", response_class=HTMLResponse)
+async def files_page(request: Request):
+    return templates.TemplateResponse("files.html", {"request": request})
