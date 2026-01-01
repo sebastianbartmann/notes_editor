@@ -1,18 +1,32 @@
-from fastapi import FastAPI, Request, HTTPException, Form
+from fastapi import FastAPI, Request, HTTPException, Form, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from datetime import datetime
 from pathlib import Path
 import re
 import subprocess
+import secrets
 
 from app.renderers.pinned import render_with_pinned_buttons
 from app.renderers.file_tree import render_tree
 from app.services.git_sync import git_pull, git_commit_and_push
 from app.services.vault_store import VAULT_ROOT, write_entry, append_entry, resolve_path, read_entry, list_dir, delete_entry
 
-app = FastAPI()
+security = HTTPBasic()
+
+
+def require_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
+    expected_username = "root"
+    expected_password = "family"
+    valid_username = secrets.compare_digest(credentials.username, expected_username)
+    valid_password = secrets.compare_digest(credentials.password, expected_password)
+    if not (valid_username and valid_password):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+app = FastAPI(dependencies=[Depends(require_auth)])
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
