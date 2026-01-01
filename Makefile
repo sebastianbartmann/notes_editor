@@ -1,4 +1,12 @@
-.PHONY: run install status
+.PHONY: help run install status
+
+.DEFAULT_GOAL := help
+
+help:
+	@echo "Available targets:"
+	@echo "  run      Run the dev server"
+	@echo "  install  Install/update systemd service"
+	@echo "  status   Show systemd service status"
 
 run:
 	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
