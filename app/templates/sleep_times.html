@@ -17,8 +17,67 @@
         </nav>
 
         <article class="panel">
-            <p class="muted">Coming soon.</p>
+            <div class="panel-header">
+                <h3>Log</h3>
+            </div>
+            <form class="sleep-form" hx-post="/api/sleep-times/append" hx-target="#sleep-message" hx-swap="innerHTML">
+                <div class="sleep-inputs">
+                    <label class="sleep-label">
+                        <span>Child</span>
+                        <div class="sleep-options">
+                            <label class="sleep-choice">
+                                <input type="radio" name="child" value="Fabian" checked>
+                                <span>Fabian</span>
+                            </label>
+                            <label class="sleep-choice">
+                                <input type="radio" name="child" value="Thomas">
+                                <span>Thomas</span>
+                            </label>
+                        </div>
+                    </label>
+                    <label class="sleep-label">
+                        <span>Entry</span>
+                        <input type="text" name="entry" placeholder="19:30-06:10 night" required autocomplete="off" autocapitalize="none" spellcheck="false">
+                    </label>
+                </div>
+                <div class="actions view-actions">
+                    <button class="button" type="submit">Add</button>
+                </div>
+            </form>
+            <div id="sleep-message"></div>
+
+            <div class="sleep-history">
+                <div class="panel-header">
+                    <h3>Recent</h3>
+                </div>
+                <div class="sleep-list">
+                    {% if entries %}
+                        {% for item in entries %}
+                        <div class="sleep-line">{{ item }}</div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="muted">No entries yet.</p>
+                    {% endif %}
+                </div>
+            </div>
         </article>
     </main>
+
+    <script>
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.responseURL.includes('/api/sleep-times/append')) {
+                const messageDiv = document.getElementById('sleep-message');
+                if (evt.detail.successful) {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    messageDiv.innerHTML = `<mark>${response.message}</mark>`;
+                    setTimeout(() => {
+                        location.reload();
+                    }, 600);
+                } else {
+                    messageDiv.innerHTML = `<mark class="error">Error adding entry</mark>`;
+                }
+            }
+        });
+    </script>
 </body>
 </html>

@@ -197,6 +197,88 @@ a {
     font-size: 12px;
 }
 
+.sleep-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.sleep-inputs {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: var(--space-2);
+}
+
+.sleep-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.sleep-label input {
+    background: #0f1114;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 6px 8px;
+    font-family: var(--font);
+    font-size: 13px;
+}
+
+.sleep-options {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    margin-top: 2px;
+}
+
+.sleep-choice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text);
+}
+
+.sleep-choice input {
+    accent-color: var(--accent);
+}
+
+.sleep-history {
+    margin-top: var(--space-3);
+}
+
+.sleep-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+}
+
+.sleep-line {
+    padding: 4px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--panel-border);
+    background: #111418;
+    color: var(--text);
+}
+
+body.theme-petra .sleep-label input {
+    background: #eef7f6;
+    border-color: #b9d8d6;
+}
+
+body.theme-petra .sleep-line {
+    background: #e8f4f3;
+}
+
+@media (max-width: 600px) {
+    .sleep-inputs {
+        grid-template-columns: 1fr;
+    }
+}
 h3 {
     margin: 0;
     font-size: 13px;

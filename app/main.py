@@ -180,6 +180,30 @@ def ensure_petra_file_exists(filepath: Path) -> None:
         git_commit_and_push("Create Petra notes")
 
 
+def get_sleep_times_filepath() -> Path:
+    return VAULT_ROOT / "sleep_times.md"
+
+
+def ensure_sleep_times_file_exists(filepath: Path) -> None:
+    if not filepath.exists():
+        content = (
+            "# Sleep Times\n\n"
+            "Log entries in the format:\n"
+            "- YYYY-MM-DD | Name | 19:30-06:10 | night\n\n"
+        )
+        filepath.write_text(content)
+        git_commit_and_push("Create sleep times log")
+
+
+def get_recent_sleep_entries(filepath: Path, limit: int = 20) -> list[str]:
+    if not filepath.exists():
+        return []
+
+    lines = [line for line in filepath.read_text().splitlines() if line.strip()]
+    entries = [line for line in lines if not line.startswith("#") and not line.startswith("- ")]
+    return entries[-limit:]
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     # Pull latest changes from remote
@@ -394,7 +418,37 @@ async def llm_page(request: Request):
 
 @app.get("/sleep-times", response_class=HTMLResponse)
 async def sleep_times_page(request: Request):
-    return templates.TemplateResponse("sleep_times.html", {"request": request})
+    git_pull()
+    filepath = get_sleep_times_filepath()
+    ensure_sleep_times_file_exists(filepath)
+    entries = get_recent_sleep_entries(filepath)
+    return templates.TemplateResponse(
+        "sleep_times.html",
+        {"request": request, "entries": entries},
+    )
+
+
+@app.post("/api/sleep-times/append")
+async def append_sleep_times(
+    child: str = Form(...),
+    entry: str = Form(...),
+):
+    if not entry.strip():
+        raise HTTPException(status_code=400, detail="Entry cannot be empty")
+
+    filepath = get_sleep_times_filepath()
+    ensure_sleep_times_file_exists(filepath)
+
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    normalized_child = child.strip().capitalize()
+    line = f"{date_str} | {normalized_child} | {entry.strip()}\n"
+    append_entry("sleep_times.md", line)
+
+    success, msg = git_commit_and_push("Append sleep times")
+    return {
+        "success": success,
+        "message": "Entry added" if success else msg,
+    }
 
 
 @app.get("/api/files/tree", response_class=HTMLResponse)
