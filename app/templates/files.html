@@ -44,12 +44,16 @@
             document.getElementById('note-display').style.display = 'none';
             document.getElementById('edit-form').style.display = 'block';
             document.getElementById('edit-btn').style.display = 'none';
+            document.getElementById('collapse-btn').style.display = 'none';
+            document.getElementById('view-actions').style.display = 'none';
         }
 
         function cancelEdit() {
             document.getElementById('note-display').style.display = 'block';
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-btn').style.display = 'inline-block';
+            document.getElementById('collapse-btn').style.display = 'inline-block';
+            document.getElementById('view-actions').style.display = 'flex';
             const saveMessage = document.getElementById('save-message');
             if (saveMessage) {
                 saveMessage.innerHTML = '';

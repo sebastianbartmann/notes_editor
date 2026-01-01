@@ -25,7 +25,7 @@
                     <h3>Current Note</h3>
                 </div>
                 <div id="note-display" class="note-view">{{ note_html | safe }}</div>
-                <div class="actions view-actions">
+                <div class="actions view-actions" id="view-actions">
                     <button id="edit-btn" class="button" onclick="toggleEditMode()">Edit</button>
                     <button id="collapse-btn" class="button ghost" onclick="toggleCollapse()">Collapse</button>
                 </div>
@@ -71,12 +71,16 @@
             document.getElementById('note-display').style.display = 'none';
             document.getElementById('edit-form').style.display = 'block';
             document.getElementById('edit-btn').style.display = 'none';
+            document.getElementById('collapse-btn').style.display = 'none';
+            document.getElementById('view-actions').style.display = 'none';
         }
 
         function cancelEdit() {
             document.getElementById('note-display').style.display = 'block';
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-btn').style.display = 'inline-block';
+            document.getElementById('collapse-btn').style.display = 'inline-block';
+            document.getElementById('view-actions').style.display = 'flex';
             document.getElementById('save-message').innerHTML = '';
         }
 
