@@ -605,6 +605,10 @@ mark.error {
         flex-direction: column;
         align-items: flex-start;
     }
+
+    .panel-header .actions {
+        align-self: flex-end;
+    }
 }
 
 .theme-petra {
