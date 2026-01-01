@@ -398,3 +398,44 @@ mark.error {
         align-items: flex-start;
     }
 }
+
+.theme-petra {
+    --bg: #d9f2f0;
+    --panel: #f6fbfb;
+    --panel-border: #b9d8d6;
+    --text: #1d2b2a;
+    --muted: #4f6f6e;
+    --accent: #1f6d6a;
+    --accent-dim: #6fb1ad;
+    --shadow: rgba(22, 63, 60, 0.12);
+}
+
+body.theme-petra {
+    background: radial-gradient(circle at 20% 20%, #e6f6f5 0%, #d9f2f0 60%);
+}
+
+body.theme-petra textarea {
+    background: #eef7f6;
+    border-color: #b9d8d6;
+}
+
+body.theme-petra .note-view {
+    background: #eef7f6;
+}
+
+body.theme-petra mark {
+    background: #e1f0ef;
+}
+
+body.theme-petra .button {
+    background: #e8f4f3;
+}
+
+body.theme-petra .button.ghost {
+    color: var(--muted);
+}
+
+body.theme-petra .tree-item.file:hover,
+body.theme-petra .tree-item.dir:hover {
+    background: #e5f2f1;
+}

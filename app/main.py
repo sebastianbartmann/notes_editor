@@ -163,6 +163,23 @@ def ensure_file_exists(filepath: Path) -> None:
         git_commit_and_push(f"Create daily note {date_str}")
 
 
+def get_petra_filepath() -> Path:
+    return VAULT_ROOT / "petra_notes.md"
+
+
+def ensure_petra_file_exists(filepath: Path) -> None:
+    if not filepath.exists():
+        content = (
+            "# Petra Notes\n\n"
+            "This page is for quick notes and todos.\n\n"
+            "How to use:\n"
+            "- Use the editor to update the full note.\n"
+            "- Use the add box to append a quick entry.\n\n"
+        )
+        filepath.write_text(content)
+        git_commit_and_push("Create Petra notes")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     # Pull latest changes from remote
@@ -183,6 +200,24 @@ async def root(request: Request):
             "note_html": note_html,
             "current_path": relative_path,
         }
+    )
+
+
+@app.get("/petra", response_class=HTMLResponse)
+async def petra(request: Request):
+    git_pull()
+
+    filepath = get_petra_filepath()
+    ensure_petra_file_exists(filepath)
+    content = filepath.read_text()
+    note_html = render_with_pinned_buttons(content, "petra_notes.md")
+    return templates.TemplateResponse(
+        "petra.html",
+        {
+            "request": request,
+            "content": content,
+            "note_html": note_html,
+        },
     )
 
 
@@ -223,6 +258,27 @@ async def append_note(content: str = Form(...), pinned: str = Form(None)):
     }
 
 
+@app.post("/api/petra/append")
+async def append_petra(content: str = Form(...)):
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="Content cannot be empty")
+
+    filepath = get_petra_filepath()
+    ensure_petra_file_exists(filepath)
+
+    time_str = datetime.now().strftime("%H:%M")
+    header = f"### {time_str}"
+
+    append_text = f"\n{header}\n\n{content.strip()}\n"
+    append_entry("petra_notes.md", append_text)
+
+    success, msg = git_commit_and_push(f"Append Petra note at {time_str}")
+    return {
+        "success": success,
+        "message": "Content appended successfully" if success else msg
+    }
+
+
 @app.post("/api/clear-pinned")
 async def clear_pinned():
     filepath = get_today_filepath()
@@ -256,6 +312,20 @@ async def save_note(content: str = Form(...)):
 
     # Git operations
     success, msg = git_commit_and_push("Update note")
+
+    return {
+        "success": success,
+        "message": "Note saved successfully" if success else msg
+    }
+
+
+@app.post("/api/petra/save")
+async def save_petra(content: str = Form(...)):
+    filepath = get_petra_filepath()
+    ensure_petra_file_exists(filepath)
+
+    write_entry("petra_notes.md", content)
+    success, msg = git_commit_and_push("Update Petra notes")
 
     return {
         "success": success,
@@ -320,6 +390,11 @@ async def tools_page(request: Request):
 @app.get("/tools/llm", response_class=HTMLResponse)
 async def llm_page(request: Request):
     return templates.TemplateResponse("llm.html", {"request": request})
+
+
+@app.get("/sleep-times", response_class=HTMLResponse)
+async def sleep_times_page(request: Request):
+    return templates.TemplateResponse("sleep_times.html", {"request": request})
 
 
 @app.get("/api/files/tree", response_class=HTMLResponse)
