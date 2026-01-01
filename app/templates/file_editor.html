@@ -2,20 +2,20 @@
 <div class="file-editor-body" data-path="{{ file_path }}">
     <div class="panel-header">
         <h3>{{ file_path }}</h3>
-        <div class="actions">
-            <button id="edit-btn" class="button" onclick="toggleEditMode()">Edit</button>
-            <button id="collapse-btn" class="button ghost" onclick="toggleCollapse()">Collapse</button>
-            <form class="inline-form" hx-post="/api/files/delete" hx-target="#file-editor" hx-swap="innerHTML">
-                <input type="hidden" name="path" value="{{ file_path }}">
-                <button type="submit" class="button ghost danger" onclick="return confirm('Delete this file?')">Delete</button>
-            </form>
-        </div>
     </div>
     <div id="note-display" class="note-view">{{ note_html | safe }}</div>
+    <div class="actions view-actions">
+        <button id="edit-btn" class="button" onclick="toggleEditMode()">Edit</button>
+        <button id="collapse-btn" class="button ghost" onclick="toggleCollapse()">Collapse</button>
+        <form class="inline-form" hx-post="/api/files/delete" hx-target="#file-editor" hx-swap="innerHTML">
+            <input type="hidden" name="path" value="{{ file_path }}">
+            <button type="submit" class="button ghost danger" onclick="return confirm('Delete this file?')">Delete</button>
+        </form>
+    </div>
     <form id="edit-form" class="edit-form" style="display: none;" hx-post="/api/files/save" hx-target="#file-editor" hx-swap="innerHTML">
         <input type="hidden" name="path" value="{{ file_path }}">
         <textarea id="note-editor" name="content" rows="20">{{ content }}</textarea>
-        <div class="actions">
+        <div class="actions view-actions">
             <button type="submit" class="button">Save</button>
             <button type="button" class="button ghost" onclick="cancelEdit()">Cancel</button>
         </div>

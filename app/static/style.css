@@ -212,6 +212,11 @@ h3 {
     gap: var(--space-1);
 }
 
+.view-actions {
+    justify-content: flex-end;
+    margin-top: var(--space-2);
+}
+
 .button {
     appearance: none;
     border: 1px solid var(--panel-border);
@@ -330,7 +335,7 @@ textarea:focus {
 .form-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: var(--space-2);
     margin-bottom: var(--space-2);
 }

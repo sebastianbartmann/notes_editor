@@ -23,15 +23,15 @@
             <div id="current-content">
                 <div class="panel-header">
                     <h3>Current Note</h3>
-                    <div class="actions">
-                        <button id="edit-btn" class="button" onclick="toggleEditMode()">Edit</button>
-                        <button id="collapse-btn" class="button ghost" onclick="toggleCollapse()">Collapse</button>
-                    </div>
                 </div>
                 <div id="note-display" class="note-view">{{ note_html | safe }}</div>
+                <div class="actions view-actions">
+                    <button id="edit-btn" class="button" onclick="toggleEditMode()">Edit</button>
+                    <button id="collapse-btn" class="button ghost" onclick="toggleCollapse()">Collapse</button>
+                </div>
                 <form id="edit-form" class="edit-form" style="display: none;" hx-post="/api/save" hx-target="#save-message" hx-swap="innerHTML">
                     <textarea id="note-editor" name="content" rows="20">{{ content }}</textarea>
-                    <div class="actions">
+                    <div class="actions view-actions">
                         <button type="submit" class="button">Save</button>
                         <button type="button" class="button ghost" onclick="cancelEdit()">Cancel</button>
                     </div>
@@ -47,10 +47,10 @@
                   hx-on::after-request="if(event.detail.successful) { document.getElementById('content').value = ''; location.reload(); }">
 
                 <div class="form-row">
+                    <button type="button" class="button ghost" onclick="clearPinned()">Clear</button>
                     <div class="pin-row">
                         <input type="checkbox" id="pinned" name="pinned">
                         <label for="pinned">Pin</label>
-                        <button type="button" class="button ghost" onclick="clearPinned()">Clear</button>
                     </div>
                     <button type="submit" class="button">Add</button>
                 </div>
