@@ -14,108 +14,39 @@
                 <strong>Files</strong>
                 <a class="button ghost" href="/">Daily</a>
                 <a class="button ghost" href="/tools">Tools</a>
-                <button id="tree-toggle-global" class="button ghost" type="button">Tree</button>
             </div>
             <div class="today">Vault root: ~/notes</div>
         </nav>
 
         <article class="panel files-panel">
-            <div class="files-layout" id="files-layout">
-                <section class="tree-panel">
-                    <div class="panel-header">
-                        <h3>Vault</h3>
-                    </div>
-                    <div id="tree-root" class="file-tree">
-                        {{ tree_html | safe }}
-                    </div>
-                </section>
-                <section class="editor-panel">
-                    <div id="file-editor">
-                        {% include "file_editor.html" %}
-                    </div>
-                    <div id="message"></div>
-                </section>
-            </div>
+            <section class="tree-panel">
+                <div class="panel-header">
+                    <h3>Vault</h3>
+                </div>
+                <form class="file-create" hx-post="/api/files/create" hx-target="#file-message" hx-swap="innerHTML">
+                    <input type="text" name="path" placeholder="new/file.md" required autocomplete="off" spellcheck="false">
+                    <button type="submit" class="button">Create</button>
+                </form>
+                <div id="file-message"></div>
+                <div id="tree-root" class="file-tree">
+                    {{ tree_html | safe }}
+                </div>
+            </section>
         </article>
     </main>
 
     <script>
-        function toggleEditMode() {
-            document.getElementById('note-display').style.display = 'none';
-            document.getElementById('edit-form').style.display = 'block';
-            document.getElementById('edit-btn').style.display = 'none';
-            document.getElementById('collapse-btn').style.display = 'none';
-            document.getElementById('view-actions').style.display = 'none';
-        }
-
-        function cancelEdit() {
-            document.getElementById('note-display').style.display = 'block';
-            document.getElementById('edit-form').style.display = 'none';
-            document.getElementById('edit-btn').style.display = 'inline-block';
-            document.getElementById('collapse-btn').style.display = 'inline-block';
-            document.getElementById('view-actions').style.display = 'flex';
-            const saveMessage = document.getElementById('save-message');
-            if (saveMessage) {
-                saveMessage.innerHTML = '';
-            }
-        }
-
-        function toggleCollapse() {
-            const noteDisplay = document.getElementById('note-display');
-            const editForm = document.getElementById('edit-form');
-            const collapseBtn = document.getElementById('collapse-btn');
-
-            if (!noteDisplay || !editForm || !collapseBtn) {
-                return;
-            }
-
-            if (noteDisplay.style.display === 'none' && editForm.style.display === 'none') {
-                noteDisplay.style.display = 'block';
-                collapseBtn.textContent = 'Collapse';
-            } else {
-                noteDisplay.style.display = 'none';
-                editForm.style.display = 'none';
-                collapseBtn.textContent = 'Expand';
-            }
-        }
-
-        document.body.addEventListener('htmx:afterRequest', function(evt) {
-            if (evt.detail.xhr.responseURL.includes('/api/files/unpin')) {
-                const messageDiv = document.getElementById('message');
-                if (evt.detail.successful) {
-                    const response = JSON.parse(evt.detail.xhr.response);
-                    messageDiv.innerHTML = `<mark>${response.message}</mark>`;
-                    setTimeout(() => {
-                        const fileEditor = document.querySelector('.file-editor-body');
-                        if (!fileEditor) {
-                            return;
-                        }
-                        const path = fileEditor.getAttribute('data-path');
-                        if (!path) {
-                            return;
-                        }
-                        htmx.ajax('GET', `/api/files/open?path=${encodeURIComponent(path)}`, {
-                            target: '#file-editor',
-                            swap: 'innerHTML'
-                        });
-                    }, 400);
-                } else {
-                    messageDiv.innerHTML = `<mark class="error">Error unpinning</mark>`;
-                }
-            }
-        });
-
-        document.body.addEventListener('fileDeleted', function() {
-            htmx.ajax('GET', '/api/files/tree?path=.', {
-                target: '#tree-root',
-                swap: 'innerHTML'
-            });
-            setTreeHidden(false);
-        });
-
         document.body.addEventListener('click', function(event) {
             const toggle = event.target.closest('.tree-toggle');
             if (!toggle) {
+                const dirRow = event.target.closest('.tree-item.dir');
+                if (!dirRow) {
+                    return;
+                }
+                const rowToggle = dirRow.querySelector('.tree-toggle');
+                if (rowToggle) {
+                    rowToggle.click();
+                }
                 return;
             }
 
@@ -157,27 +88,22 @@
                     target.style.display = 'block';
                 }
             }
-
-            if (evt.detail.target && evt.detail.target.id === 'file-editor') {
-                setTreeHidden(true);
-            }
         });
 
-        function setTreeHidden(hidden) {
-            const layout = document.getElementById('files-layout');
-            if (!layout) {
-                return;
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.responseURL.includes('/api/files/create')) {
+                const messageDiv = document.getElementById('file-message');
+                if (evt.detail.successful) {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    messageDiv.innerHTML = `<mark>${response.message}</mark>`;
+                    htmx.ajax('GET', '/api/files/tree?path=.', {
+                        target: '#tree-root',
+                        swap: 'innerHTML'
+                    });
+                } else {
+                    messageDiv.innerHTML = `<mark class="error">Error creating file</mark>`;
+                }
             }
-            layout.classList.toggle('tree-hidden', hidden);
-        }
-
-        document.getElementById('tree-toggle-global').addEventListener('click', function() {
-            const layout = document.getElementById('files-layout');
-            if (!layout) {
-                return;
-            }
-            const isHidden = layout.classList.contains('tree-hidden');
-            setTreeHidden(!isHidden);
         });
     </script>
 </body>

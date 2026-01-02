@@ -66,7 +66,11 @@ def extract_section(filepath: Path, section_name: str) -> str:
     content = filepath.read_text()
 
     # Find the section
-    section_match = re.search(rf'^## {section_name}\s*$', content, re.MULTILINE | re.IGNORECASE)
+    if section_name.lower() == "todos":
+        section_pattern = r'^##\s+todos\s*$'
+    else:
+        section_pattern = rf'^## {section_name}\s*$'
+    section_match = re.search(section_pattern, content, re.MULTILINE | re.IGNORECASE)
     if not section_match:
         return ""
 
@@ -180,6 +184,61 @@ def ensure_petra_file_exists(filepath: Path) -> None:
         git_commit_and_push("Create Petra notes")
 
 
+def add_task_to_todos(filepath: Path, category: str) -> None:
+    content = filepath.read_text() if filepath.exists() else ""
+    lines = content.splitlines()
+    had_trailing = content.endswith("\n")
+
+    todo_index = None
+    for idx, line in enumerate(lines):
+        if re.match(r"^##\s+todo(?:s)?\s*$", line, re.IGNORECASE):
+            todo_index = idx
+            break
+
+    if todo_index is None:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append("## todos")
+        lines.append("")
+        lines.append(f"### {category}")
+        lines.append("")
+        lines.append("- [ ]")
+        lines.append("")
+    else:
+        next_section = None
+        for idx in range(todo_index + 1, len(lines)):
+            if re.match(r"^##\s+", lines[idx]):
+                next_section = idx
+                break
+        section_end = next_section if next_section is not None else len(lines)
+
+        sub_index = None
+        for idx in range(todo_index + 1, section_end):
+            if re.match(rf"^###\s+{re.escape(category)}\s*$", lines[idx], re.IGNORECASE):
+                sub_index = idx
+                break
+
+        if sub_index is None:
+            insert_at = section_end
+            if insert_at > 0 and lines[insert_at - 1].strip():
+                lines.insert(insert_at, "")
+                insert_at += 1
+            lines.insert(insert_at, f"### {category}")
+            lines.insert(insert_at + 1, "")
+            lines.insert(insert_at + 2, "- [ ]")
+            lines.insert(insert_at + 3, "")
+        else:
+            insert_at = sub_index + 1
+            if insert_at < len(lines) and lines[insert_at].strip() == "":
+                insert_at += 1
+            lines.insert(insert_at, "- [ ]")
+
+    updated = "\n".join(lines)
+    if had_trailing:
+        updated += "\n"
+    filepath.write_text(updated)
+
+
 def get_sleep_times_filepath() -> Path:
     return VAULT_ROOT / "sleep_times.md"
 
@@ -289,6 +348,58 @@ async def append_note(content: str = Form(...), pinned: str = Form(None)):
     return {
         "success": success,
         "message": "Content appended successfully" if success else msg
+    }
+
+
+@app.post("/api/todos/add")
+async def add_todo(category: str = Form(...)):
+    category = category.strip().lower()
+    if category not in {"work", "priv"}:
+        raise HTTPException(status_code=400, detail="Invalid category")
+
+    filepath = get_today_filepath()
+    ensure_file_exists(filepath)
+    add_task_to_todos(filepath, category)
+    success, msg = git_commit_and_push(f"Add {category} task")
+
+    return {
+        "success": success,
+        "message": "Task added" if success else msg
+    }
+
+
+@app.post("/api/todos/toggle")
+async def toggle_todo(path: str = Form(...), line: int = Form(...)):
+    if line < 1:
+        raise HTTPException(status_code=400, detail="Invalid line number")
+
+    filepath = resolve_path(path)
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    content = filepath.read_text()
+    lines = content.splitlines()
+    if line > len(lines):
+        raise HTTPException(status_code=400, detail="Line out of range")
+
+    target = lines[line - 1]
+    if re.match(r"^\s*-\s*\[\s*\]\s*", target):
+        lines[line - 1] = re.sub(r"\[\s*\]", "[x]", target, count=1)
+    elif re.match(r"^\s*-\s*\[x\]\s*", target, re.IGNORECASE):
+        lines[line - 1] = re.sub(r"\[\s*x\s*\]", "[ ]", target, count=1, flags=re.IGNORECASE)
+    else:
+        return {"success": True, "message": "Not a task line"}
+
+    updated_content = "\n".join(lines)
+    if content.endswith("\n"):
+        updated_content += "\n"
+
+    filepath.write_text(updated_content)
+    success, msg = git_commit_and_push("Toggle todo")
+
+    return {
+        "success": success,
+        "message": "Task updated" if success else msg
     }
 
 
@@ -408,9 +519,28 @@ async def files_page(request: Request):
         {
             "request": request,
             "tree_html": tree_html,
-            "file_path": None,
-            "content": "",
-            "note_html": "",
+        },
+    )
+
+
+@app.get("/file", response_class=HTMLResponse)
+async def file_page(request: Request, path: str):
+    git_pull()
+    filepath = resolve_path(path)
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    if filepath.is_dir():
+        raise HTTPException(status_code=400, detail="Path is a directory")
+
+    content = read_entry(path)
+    note_html = render_with_pinned_buttons(content, path)
+    return templates.TemplateResponse(
+        "file_page.html",
+        {
+            "request": request,
+            "file_path": path,
+            "content": content,
+            "note_html": note_html,
             "message": "",
         },
     )
@@ -520,6 +650,24 @@ async def open_file(request: Request, path: str):
             "message": "",
         },
     )
+
+
+@app.post("/api/files/create")
+async def create_file(path: str = Form(...)):
+    if not path.strip():
+        raise HTTPException(status_code=400, detail="Path required")
+
+    normalized = path.strip().lstrip("/")
+    filepath = resolve_path(normalized)
+    if filepath.exists():
+        return {"success": True, "message": "File already exists"}
+
+    write_entry(normalized, "")
+    success, msg = git_commit_and_push("Create file")
+    return {
+        "success": success,
+        "message": "File created" if success else msg,
+    }
 
 
 @app.post("/api/files/save", response_class=HTMLResponse)

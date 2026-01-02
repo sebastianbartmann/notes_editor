@@ -30,12 +30,10 @@ def render_tree(entries: list[dict]) -> str:
             )
         else:
             html_lines.append(
-                "<div class=\"tree-item file\" "
-                f"hx-get=\"/api/files/open?path={encoded_path}\" "
-                "hx-target=\"#file-editor\" "
-                "hx-swap=\"innerHTML\">"
+                "<a class=\"tree-item file\" "
+                f"href=\"/file?path={encoded_path}\">"
                 f"<span class=\"tree-name\">{name}</span>"
-                "</div>"
+                "</a>"
             )
 
     return "\n".join(html_lines)

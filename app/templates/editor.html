@@ -27,7 +27,14 @@
                 <div id="note-display" class="note-view">{{ note_html | safe }}</div>
                 <div class="actions view-actions" id="view-actions">
                     <button id="edit-btn" class="button" onclick="toggleEditMode()">Edit</button>
-                    <button id="collapse-btn" class="button ghost" onclick="toggleCollapse()">Collapse</button>
+                    <form class="inline-form" hx-post="/api/todos/add" hx-target="#message" hx-swap="innerHTML">
+                        <input type="hidden" name="category" value="work">
+                        <button type="submit" class="button ghost">Work task</button>
+                    </form>
+                    <form class="inline-form" hx-post="/api/todos/add" hx-target="#message" hx-swap="innerHTML">
+                        <input type="hidden" name="category" value="priv">
+                        <button type="submit" class="button ghost">Priv task</button>
+                    </form>
                 </div>
                 <form id="edit-form" class="edit-form" style="display: none;" hx-post="/api/save" hx-target="#save-message" hx-swap="innerHTML">
                     <textarea id="note-editor" name="content" rows="20">{{ content }}</textarea>
@@ -71,7 +78,6 @@
             document.getElementById('note-display').style.display = 'none';
             document.getElementById('edit-form').style.display = 'block';
             document.getElementById('edit-btn').style.display = 'none';
-            document.getElementById('collapse-btn').style.display = 'none';
             document.getElementById('view-actions').style.display = 'none';
         }
 
@@ -79,7 +85,6 @@
             document.getElementById('note-display').style.display = 'block';
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-btn').style.display = 'inline-block';
-            document.getElementById('collapse-btn').style.display = 'inline-block';
             document.getElementById('view-actions').style.display = 'flex';
             document.getElementById('save-message').innerHTML = '';
         }
@@ -90,21 +95,6 @@
             const messageDiv = document.getElementById('message');
             messageDiv.innerHTML = `<mark>${data.message}</mark>`;
             setTimeout(() => location.reload(), 1000);
-        }
-
-        function toggleCollapse() {
-            const noteDisplay = document.getElementById('note-display');
-            const editForm = document.getElementById('edit-form');
-            const collapseBtn = document.getElementById('collapse-btn');
-
-            if (noteDisplay.style.display === 'none' && editForm.style.display === 'none') {
-                noteDisplay.style.display = 'block';
-                collapseBtn.textContent = 'Collapse';
-            } else {
-                noteDisplay.style.display = 'none';
-                editForm.style.display = 'none';
-                collapseBtn.textContent = 'Expand';
-            }
         }
 
         // Handle append response
@@ -141,6 +131,37 @@
             }
         });
 
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.responseURL.includes('/api/todos/add')) {
+                const messageDiv = document.getElementById('message');
+                if (evt.detail.successful) {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    messageDiv.innerHTML = `<mark>${response.message}</mark>`;
+                    sessionStorage.setItem('openEditAfterReload', 'true');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 300);
+                } else {
+                    messageDiv.innerHTML = `<mark class="error">Error adding task</mark>`;
+                }
+            }
+        });
+
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.responseURL.includes('/api/todos/toggle')) {
+                const messageDiv = document.getElementById('message');
+                if (evt.detail.successful) {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    messageDiv.innerHTML = `<mark>${response.message}</mark>`;
+                    setTimeout(() => {
+                        location.reload();
+                    }, 400);
+                } else {
+                    messageDiv.innerHTML = `<mark class="error">Error updating task</mark>`;
+                }
+            }
+        });
+
         // Handle save response
         document.body.addEventListener('htmx:afterRequest', function(evt) {
             if (evt.detail.xhr.responseURL.includes('/api/save')) {
@@ -158,6 +179,11 @@
                 }
             }
         });
+
+        if (sessionStorage.getItem('openEditAfterReload') === 'true') {
+            sessionStorage.removeItem('openEditAfterReload');
+            toggleEditMode();
+        }
     </script>
 </body>
 </html>

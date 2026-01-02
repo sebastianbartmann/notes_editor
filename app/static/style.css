@@ -71,23 +71,9 @@ a {
     padding: var(--space-2);
 }
 
-.files-layout {
-    display: grid;
-    grid-template-columns: 260px 1fr;
-    gap: var(--space-3);
-}
-
-.files-layout.tree-hidden {
-    grid-template-columns: 1fr;
-}
-
-.files-layout.tree-hidden .tree-panel {
-    display: none;
-}
-
 .tree-panel {
-    border-right: 1px solid var(--panel-border);
-    padding-right: var(--space-2);
+    border-right: none;
+    padding-right: 0;
 }
 
 .file-tree {
@@ -96,6 +82,29 @@ a {
     gap: 2px;
     max-height: 70vh;
     overflow-y: auto;
+}
+
+.file-create {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.file-create input {
+    flex: 1;
+    background: #0f1114;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 6px 8px;
+    font-family: var(--font);
+    font-size: 12px;
+}
+
+body.theme-petra .file-create input {
+    background: #eef7f6;
+    border-color: #b9d8d6;
 }
 
 .tree-item {
@@ -135,10 +144,6 @@ a {
     margin-left: 14px;
     padding-left: var(--space-1);
     border-left: 1px dashed #24282e;
-}
-
-.editor-panel {
-    min-height: 300px;
 }
 
 .panel-header {
@@ -466,6 +471,48 @@ textarea:focus {
     color: var(--accent);
 }
 
+.heading.h1 .heading-text {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.heading.h2 .heading-text {
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+}
+
+.heading.h3 .heading-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.heading.h4 .heading-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.task-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.task-line input {
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+
+.task-line.done .task-text {
+    text-decoration: line-through;
+    color: var(--muted);
+}
+
 .pin-form {
     margin: 0;
 }
@@ -533,17 +580,6 @@ mark.error {
 
     .panel {
         padding: var(--space-2);
-    }
-
-    .files-layout {
-        grid-template-columns: 1fr;
-    }
-
-    .tree-panel {
-        border-right: none;
-        padding-right: 0;
-        border-bottom: 1px solid var(--panel-border);
-        padding-bottom: var(--space-2);
     }
 
     .panel-header {

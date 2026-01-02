@@ -24,7 +24,6 @@
                 <div id="note-display" class="note-view">{{ note_html | safe }}</div>
                 <div class="actions view-actions" id="view-actions">
                     <button id="edit-btn" class="button" onclick="toggleEditMode()">Edit</button>
-                    <button id="collapse-btn" class="button ghost" onclick="toggleCollapse()">Collapse</button>
                 </div>
                 <form id="edit-form" class="edit-form" style="display: none;" hx-post="/api/petra/save" hx-target="#save-message" hx-swap="innerHTML">
                     <textarea id="note-editor" name="content" rows="20">{{ content }}</textarea>
@@ -63,7 +62,6 @@
             document.getElementById('note-display').style.display = 'none';
             document.getElementById('edit-form').style.display = 'block';
             document.getElementById('edit-btn').style.display = 'none';
-            document.getElementById('collapse-btn').style.display = 'none';
             document.getElementById('view-actions').style.display = 'none';
         }
 
@@ -71,24 +69,8 @@
             document.getElementById('note-display').style.display = 'block';
             document.getElementById('edit-form').style.display = 'none';
             document.getElementById('edit-btn').style.display = 'inline-block';
-            document.getElementById('collapse-btn').style.display = 'inline-block';
             document.getElementById('view-actions').style.display = 'flex';
             document.getElementById('save-message').innerHTML = '';
-        }
-
-        function toggleCollapse() {
-            const noteDisplay = document.getElementById('note-display');
-            const editForm = document.getElementById('edit-form');
-            const collapseBtn = document.getElementById('collapse-btn');
-
-            if (noteDisplay.style.display === 'none' && editForm.style.display === 'none') {
-                noteDisplay.style.display = 'block';
-                collapseBtn.textContent = 'Collapse';
-            } else {
-                noteDisplay.style.display = 'none';
-                editForm.style.display = 'none';
-                collapseBtn.textContent = 'Expand';
-            }
         }
 
         document.body.addEventListener('htmx:afterRequest', function(evt) {
