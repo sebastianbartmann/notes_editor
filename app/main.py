@@ -195,13 +195,23 @@ def ensure_sleep_times_file_exists(filepath: Path) -> None:
         git_commit_and_push("Create sleep times log")
 
 
-def get_recent_sleep_entries(filepath: Path, limit: int = 20) -> list[str]:
+def get_recent_sleep_entries(filepath: Path, limit: int = 20) -> list[dict]:
     if not filepath.exists():
         return []
 
-    lines = [line for line in filepath.read_text().splitlines() if line.strip()]
-    entries = [line for line in lines if not line.startswith("#") and not line.startswith("- ")]
-    return entries[-limit:]
+    content = filepath.read_text()
+    lines = content.splitlines()
+    entries: list[dict] = []
+    for index, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        if line.startswith("#") or line.startswith("- "):
+            continue
+        entries.append({"line_no": index, "text": line})
+
+    recent = entries[-limit:]
+    recent.reverse()
+    return recent
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -432,6 +442,8 @@ async def sleep_times_page(request: Request):
 async def append_sleep_times(
     child: str = Form(...),
     entry: str = Form(...),
+    asleep: str = Form(None),
+    woke: str = Form(None),
 ):
     if not entry.strip():
         raise HTTPException(status_code=400, detail="Entry cannot be empty")
@@ -441,13 +453,43 @@ async def append_sleep_times(
 
     date_str = datetime.now().strftime("%Y-%m-%d")
     normalized_child = child.strip().capitalize()
-    line = f"{date_str} | {normalized_child} | {entry.strip()}\n"
+    suffix = ""
+    if asleep == "on":
+        suffix = " | eingeschlafen"
+    elif woke == "on":
+        suffix = " | aufgewacht"
+    line = f"{date_str} | {normalized_child} | {entry.strip()}{suffix}\n"
     append_entry("sleep_times.md", line)
 
     success, msg = git_commit_and_push("Append sleep times")
     return {
         "success": success,
         "message": "Entry added" if success else msg,
+    }
+
+
+@app.post("/api/sleep-times/delete")
+async def delete_sleep_entry(line: int = Form(...)):
+    if line < 1:
+        raise HTTPException(status_code=400, detail="Invalid line number")
+
+    filepath = get_sleep_times_filepath()
+    ensure_sleep_times_file_exists(filepath)
+    content = filepath.read_text()
+    lines = content.splitlines()
+    if line > len(lines):
+        raise HTTPException(status_code=400, detail="Line out of range")
+
+    lines.pop(line - 1)
+    updated_content = "\n".join(lines)
+    if content.endswith("\n"):
+        updated_content += "\n"
+    filepath.write_text(updated_content)
+
+    success, msg = git_commit_and_push("Delete sleep times entry")
+    return {
+        "success": success,
+        "message": "Entry deleted" if success else msg,
     }
 
 
