@@ -556,6 +556,11 @@ async def llm_page(request: Request):
     return templates.TemplateResponse("llm.html", {"request": request})
 
 
+@app.get("/tools/noise", response_class=HTMLResponse)
+async def noise_page(request: Request):
+    return templates.TemplateResponse("noise.html", {"request": request})
+
+
 @app.get("/sleep-times", response_class=HTMLResponse)
 async def sleep_times_page(request: Request):
     git_pull()
