@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Petra Notes</title>
+    <link rel="stylesheet" href="/static/style.css?v=2025-01-01">
+    <script src="/static/htmx.min.js?v=2025-01-01"></script>
+</head>
+<body class="theme-petra">
+    <main class="container">
+        <nav class="topbar">
+            <div class="brand">
+                <strong>Petra Notes</strong>
+                <a class="button ghost" href="/sleep-times">Sleep Times</a>
+            </div>
+        </nav>
+
+        <article class="panel">
+            <div id="current-content">
+                <div class="panel-header">
+                    <h3>Notes</h3>
+                </div>
+                <div id="note-display" class="note-view">{{ note_html | safe }}</div>
+                <div class="actions view-actions" id="view-actions">
+                    <button id="edit-btn" class="button" onclick="toggleEditMode()">Edit</button>
+                </div>
+                <form id="edit-form" class="edit-form" style="display: none;" hx-post="/api/petra/save" hx-target="#save-message" hx-swap="innerHTML">
+                    <textarea id="note-editor" name="content" rows="20">{{ content }}</textarea>
+                    <div class="actions view-actions">
+                        <button type="submit" class="button">Save</button>
+                        <button type="button" class="button ghost" onclick="cancelEdit()">Cancel</button>
+                    </div>
+                </form>
+                <div id="save-message"></div>
+            </div>
+
+            <hr>
+
+            <form hx-post="/api/petra/append"
+                  hx-target="#message"
+                  hx-swap="innerHTML"
+                  hx-on::after-request="if(event.detail.successful) { document.getElementById('content').value = ''; location.reload(); }">
+
+                <div class="form-row">
+                    <button type="submit" class="button">Add</button>
+                </div>
+                <textarea
+                    id="content"
+                    name="content"
+                    rows="8"
+                    placeholder="Write something..."
+                    required></textarea>
+            </form>
+
+            <div id="message"></div>
+        </article>
+    </main>
+
+    <script>
+        function toggleEditMode() {
+            document.getElementById('note-display').style.display = 'none';
+            document.getElementById('edit-form').style.display = 'block';
+            document.getElementById('edit-btn').style.display = 'none';
+            document.getElementById('view-actions').style.display = 'none';
+        }
+
+        function cancelEdit() {
+            document.getElementById('note-display').style.display = 'block';
+            document.getElementById('edit-form').style.display = 'none';
+            document.getElementById('edit-btn').style.display = 'inline-block';
+            document.getElementById('view-actions').style.display = 'flex';
+            document.getElementById('save-message').innerHTML = '';
+        }
+
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.responseURL.includes('/api/petra/append')) {
+                const messageDiv = document.getElementById('message');
+                if (evt.detail.successful) {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    messageDiv.innerHTML = `<mark>${response.message}</mark>`;
+                    setTimeout(() => {
+                        messageDiv.innerHTML = '';
+                    }, 3000);
+                } else {
+                    messageDiv.innerHTML = `<mark class="error">Error appending content</mark>`;
+                }
+            }
+        });
+
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.responseURL.includes('/api/petra/save')) {
+                const saveMessageDiv = document.getElementById('save-message');
+                if (evt.detail.successful) {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    saveMessageDiv.innerHTML = `<mark>${response.message}</mark>`;
+
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    saveMessageDiv.innerHTML = `<mark class="error">Error saving note</mark>`;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

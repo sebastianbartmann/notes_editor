@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File</title>
+    <link rel="stylesheet" href="/static/style.css?v=2025-01-01">
+    <script src="/static/htmx.min.js?v=2025-01-01"></script>
+</head>
+<body>
+    <main class="container">
+        <nav class="topbar">
+            <div class="brand">
+                <strong>File</strong>
+                <a class="button ghost" href="/files">Tree</a>
+                <a class="button ghost" href="/tools">Tools</a>
+            </div>
+            <div class="today">Vault root: ~/notes</div>
+        </nav>
+
+        <article class="panel">
+            <div id="file-editor">
+                {% include "file_editor.html" %}
+            </div>
+            <div id="message"></div>
+        </article>
+    </main>
+
+    <script>
+        function toggleEditMode() {
+            document.getElementById('note-display').style.display = 'none';
+            document.getElementById('edit-form').style.display = 'block';
+            document.getElementById('edit-btn').style.display = 'none';
+            document.getElementById('view-actions').style.display = 'none';
+        }
+
+        function cancelEdit() {
+            document.getElementById('note-display').style.display = 'block';
+            document.getElementById('edit-form').style.display = 'none';
+            document.getElementById('edit-btn').style.display = 'inline-block';
+            document.getElementById('view-actions').style.display = 'flex';
+            const saveMessage = document.getElementById('save-message');
+            if (saveMessage) {
+                saveMessage.innerHTML = '';
+            }
+        }
+
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.responseURL.includes('/api/files/unpin')) {
+                const messageDiv = document.getElementById('message');
+                if (evt.detail.successful) {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    messageDiv.innerHTML = `<mark>${response.message}</mark>`;
+                    setTimeout(() => {
+                        const fileEditor = document.querySelector('.file-editor-body');
+                        if (!fileEditor) {
+                            return;
+                        }
+                        const path = fileEditor.getAttribute('data-path');
+                        if (!path) {
+                            return;
+                        }
+                        htmx.ajax('GET', `/api/files/open?path=${encodeURIComponent(path)}`, {
+                            target: '#file-editor',
+                            swap: 'innerHTML'
+                        });
+                    }, 400);
+                } else {
+                    messageDiv.innerHTML = `<mark class="error">Error unpinning</mark>`;
+                }
+            }
+        });
+
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.xhr.responseURL.includes('/api/todos/toggle')) {
+                const messageDiv = document.getElementById('message');
+                if (evt.detail.successful) {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    messageDiv.innerHTML = `<mark>${response.message}</mark>`;
+                    setTimeout(() => {
+                        const fileEditor = document.querySelector('.file-editor-body');
+                        if (!fileEditor) {
+                            return;
+                        }
+                        const path = fileEditor.getAttribute('data-path');
+                        if (!path) {
+                            return;
+                        }
+                        htmx.ajax('GET', `/api/files/open?path=${encodeURIComponent(path)}`, {
+                            target: '#file-editor',
+                            swap: 'innerHTML'
+                        });
+                    }, 300);
+                } else {
+                    messageDiv.innerHTML = `<mark class="error">Error updating task</mark>`;
+                }
+            }
+        });
+
+        document.body.addEventListener('fileDeleted', function() {
+            window.location.href = '/files';
+        });
+    </script>
+</body>
+</html>

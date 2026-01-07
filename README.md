@@ -36,7 +36,13 @@ git config --global user.email "your@email.com"
 git config --global user.name "Your Name"
 ```
 
-4. Clone the notes repository:
+4. Set the auth token (used by the web app and mobile clients):
+```bash
+export NOTES_TOKEN="your-secure-token"
+```
+Access the web UI by visiting `/login` and entering the token.
+
+5. Clone the notes repository:
 ```bash
 git clone dev@dev:/home/dev/git/notes.git ~/notes
 ```
@@ -61,7 +67,7 @@ Type=simple
 User=YOUR_USERNAME
 WorkingDirectory=/path/to/notes_editor
 Environment="PATH=/home/YOUR_USERNAME/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/path/to/notes_editor/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+ExecStart=/path/to/notes_editor/.venv/bin/uvicorn server.web_app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=3
 
@@ -82,7 +88,7 @@ sudo systemctl status notes-editor
 screen -S notes
 cd notes_editor
 source .venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn server.web_app.main:app --host 0.0.0.0 --port 8000
 # Press Ctrl+A then D to detach
 ```
 
@@ -90,6 +96,18 @@ Service management:
 - `sudo systemctl status notes-editor` - check status
 - `sudo systemctl restart notes-editor` - restart after code changes
 - `sudo systemctl stop notes-editor` - stop service
+
+## Android app (CLI build)
+
+Android sources live in `app/android/`. Build tooling is CLI-only; no IDE required.
+
+Minimum prerequisites:
+- JDK 17
+- Android SDK command-line tools
+
+Notes:
+- The app expects an MP3 at `app/android/app/src/main/res/raw/noise.mp3`. Replace the placeholder.
+- The app uses the bearer token in `app/android/app/src/main/java/com/bartmann/noteseditor/AppConfig.kt`.
 
 ## License
 
