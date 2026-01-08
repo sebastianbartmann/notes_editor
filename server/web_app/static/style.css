@@ -29,6 +29,19 @@ body {
     line-height: 1.5;
 }
 
+body.theme-light {
+    --bg: #f3f6f8;
+    --panel: #ffffff;
+    --panel-border: #d2d9df;
+    --text: #1b2026;
+    --muted: #5c6b73;
+    --accent: #e07a28;
+    --accent-dim: #ffd7b8;
+    --danger: #d66b6b;
+    --shadow: rgba(18, 33, 45, 0.08);
+    background: radial-gradient(circle at 15% 15%, #ffffff 0%, #eef3f6 60%);
+}
+
 a {
     color: inherit;
     text-decoration: none;

@@ -38,6 +38,21 @@ fun SettingsScreen(modifier: Modifier, padding: androidx.compose.foundation.layo
                     color = AppTheme.colors.muted
                 )
             }
+            CompactDivider()
+            SectionTitle(text = "Theme")
+            AppText(
+                text = "Pick a color theme for this device.",
+                style = AppTheme.typography.bodySmall,
+                color = AppTheme.colors.muted
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ThemeButton(label = "Dark", value = "dark")
+                ThemeButton(label = "Light", value = "light")
+            }
         }
     }
 }
@@ -52,5 +67,18 @@ private fun RowScope.PersonButton(label: String, value: String, currentPerson: S
         border = if (selected) AppTheme.colors.accent else AppTheme.colors.panelBorder,
         textColor = AppTheme.colors.text,
         onClick = { UserSettings.updatePerson(value) }
+    )
+}
+
+@Composable
+private fun RowScope.ThemeButton(label: String, value: String) {
+    val selected = UserSettings.theme == value
+    CompactButton(
+        text = label,
+        modifier = Modifier.weight(1f),
+        background = if (selected) AppTheme.colors.accentDim else AppTheme.colors.input,
+        border = if (selected) AppTheme.colors.accent else AppTheme.colors.panelBorder,
+        textColor = AppTheme.colors.text,
+        onClick = { UserSettings.updateTheme(value) }
     )
 }

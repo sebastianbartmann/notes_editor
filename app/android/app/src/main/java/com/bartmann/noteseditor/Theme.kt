@@ -88,20 +88,37 @@ object AppTheme {
 
 @Composable
 fun NotesEditorTheme(content: @Composable () -> Unit) {
-    val colors = AppColors(
-        background = Color(0xFF0F1012),
-        panel = Color(0xFF15171A),
-        panelBorder = Color(0xFF2A2D33),
-        text = Color(0xFFE6E6E6),
-        muted = Color(0xFF9AA0A6),
-        accent = Color(0xFFD9832B),
-        accentDim = Color(0xFF7A4A1D),
-        danger = Color(0xFFD66B6B),
-        input = Color(0xFF0F1114),
-        note = Color(0xFF101317),
-        button = Color(0xFF20252B),
-        buttonText = Color(0xFFE6E6E6),
-    )
+    val colors = if (UserSettings.theme == "light") {
+        AppColors(
+            background = Color(0xFFF2F5F6),
+            panel = Color(0xFFFFFFFF),
+            panelBorder = Color(0xFFD3DAE0),
+            text = Color(0xFF1B1F24),
+            muted = Color(0xFF5C6B73),
+            accent = Color(0xFFE07A28),
+            accentDim = Color(0xFFFFD7B8),
+            danger = Color(0xFFD76A6A),
+            input = Color(0xFFF8FAFB),
+            note = Color(0xFFFDFDFE),
+            button = Color(0xFFF2F4F6),
+            buttonText = Color(0xFF1B1F24),
+        )
+    } else {
+        AppColors(
+            background = Color(0xFF0F1012),
+            panel = Color(0xFF15171A),
+            panelBorder = Color(0xFF2A2D33),
+            text = Color(0xFFE6E6E6),
+            muted = Color(0xFF9AA0A6),
+            accent = Color(0xFFD9832B),
+            accentDim = Color(0xFF7A4A1D),
+            danger = Color(0xFFD66B6B),
+            input = Color(0xFF0F1114),
+            note = Color(0xFF101317),
+            button = Color(0xFF20252B),
+            buttonText = Color(0xFFE6E6E6),
+        )
+    }
     val spacing = AppSpacing()
     val typography = LocalAppTypography.current
     CompositionLocalProvider(

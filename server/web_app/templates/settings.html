@@ -6,7 +6,7 @@
     <title>Settings</title>
     <link rel="stylesheet" href="/static/style.css?v=2025-01-01">
 </head>
-<body>
+<body class="{{ theme_class }}">
     <main class="container">
         <nav class="topbar">
             <div class="brand">
@@ -39,6 +39,19 @@
             {% if not current_person %}
                 <p class="muted">Pick a person to unlock the rest of the app.</p>
             {% endif %}
+            <hr>
+            <div class="panel-header">
+                <h3>Theme</h3>
+            </div>
+            <p class="muted">Choose a color theme for this device.</p>
+            <form method="post" action="/settings" class="form-row">
+                <button type="submit" name="theme" value="dark" class="button ghost{% if current_theme == 'dark' %} active{% endif %}">
+                    Dark
+                </button>
+                <button type="submit" name="theme" value="light" class="button ghost{% if current_theme == 'light' %} active{% endif %}">
+                    Light
+                </button>
+            </form>
         </article>
     </main>
 </body>

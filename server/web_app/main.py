@@ -43,6 +43,8 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 PERSONS = {"sebastian", "petra"}
 PERSON_COOKIE = "notes_person"
 PERSON_HEADER = "X-Notes-Person"
+THEME_COOKIE = "notes_theme"
+THEMES = {"dark", "light"}
 
 
 def get_person(request: Request) -> str | None:
@@ -66,6 +68,11 @@ def ensure_person(request: Request) -> str:
     if not person:
         raise HTTPException(status_code=400, detail="Person not selected")
     return person
+
+
+def get_theme(request: Request) -> str:
+    theme = (request.cookies.get(THEME_COOKIE) or "dark").strip().lower()
+    return theme if theme in THEMES else "dark"
 
 
 def person_root_path(person: str) -> Path:
@@ -326,6 +333,7 @@ async def root(request: Request):
     content = filepath.read_text()
     relative_path = strip_person_path(person, str(filepath.relative_to(VAULT_ROOT)))
     note_html = render_with_pinned_buttons(content, relative_path)
+    theme_class = f"theme-{get_theme(request)}"
     return templates.TemplateResponse(
         "editor.html",
         {
@@ -335,6 +343,7 @@ async def root(request: Request):
             "note_html": note_html,
             "current_path": relative_path,
             "person": person,
+            "theme_class": theme_class,
         }
     )
 
@@ -378,23 +387,39 @@ async def login(token: str = Form(...)):
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     current_person = get_person(request)
+    current_theme = get_theme(request)
     return templates.TemplateResponse(
         "settings.html",
         {
             "request": request,
             "current_person": current_person,
+            "current_theme": current_theme,
             "people": sorted(PERSONS),
+            "themes": sorted(THEMES),
+            "theme_class": f"theme-{current_theme}",
         },
     )
 
 
 @app.post("/settings")
-async def save_settings(request: Request, person: str = Form(...)):
-    normalized = person.strip().lower()
-    if normalized not in PERSONS:
-        return HTMLResponse("Invalid person", status_code=400)
-    response = RedirectResponse("/", status_code=302)
-    response.set_cookie(PERSON_COOKIE, normalized, max_age=60 * 60 * 24 * 365, samesite="lax")
+async def save_settings(
+    request: Request,
+    person: str | None = Form(None),
+    theme: str | None = Form(None),
+):
+    response = RedirectResponse("/settings", status_code=302)
+    if person:
+        normalized = person.strip().lower()
+        if normalized not in PERSONS:
+            return HTMLResponse("Invalid person", status_code=400)
+        response.set_cookie(PERSON_COOKIE, normalized, max_age=60 * 60 * 24 * 365, samesite="lax")
+    if theme:
+        normalized = theme.strip().lower()
+        if normalized not in THEMES:
+            return HTMLResponse("Invalid theme", status_code=400)
+        response.set_cookie(THEME_COOKIE, normalized, max_age=60 * 60 * 24 * 365, samesite="lax")
+    if not person and not theme:
+        return HTMLResponse("Nothing to update", status_code=400)
     return response
 
 
@@ -594,12 +619,14 @@ async def files_page(request: Request):
     for entry in entries:
         entry["path"] = strip_person_path(person, entry["path"])
     tree_html = render_tree(entries)
+    theme_class = f"theme-{get_theme(request)}"
     return templates.TemplateResponse(
         "files.html",
         {
             "request": request,
             "tree_html": tree_html,
             "person": person,
+            "theme_class": theme_class,
         },
     )
 
@@ -618,6 +645,7 @@ async def file_page(request: Request, path: str):
 
     content = read_entry(str(filepath.relative_to(VAULT_ROOT)))
     note_html = render_with_pinned_buttons(content, strip_person_path(person, str(filepath.relative_to(VAULT_ROOT))))
+    theme_class = f"theme-{get_theme(request)}"
     return templates.TemplateResponse(
         "file_page.html",
         {
@@ -627,6 +655,7 @@ async def file_page(request: Request, path: str):
             "note_html": note_html,
             "message": "",
             "person": person,
+            "theme_class": theme_class,
         },
     )
 
@@ -636,7 +665,10 @@ async def tools_page(request: Request):
     person = ensure_person_or_redirect(request)
     if isinstance(person, RedirectResponse):
         return person
-    return templates.TemplateResponse("tools.html", {"request": request, "person": person})
+    return templates.TemplateResponse(
+        "tools.html",
+        {"request": request, "person": person, "theme_class": f"theme-{get_theme(request)}"},
+    )
 
 
 @app.get("/tools/llm", response_class=HTMLResponse)
@@ -644,7 +676,10 @@ async def llm_page(request: Request):
     person = ensure_person_or_redirect(request)
     if isinstance(person, RedirectResponse):
         return person
-    return templates.TemplateResponse("llm.html", {"request": request, "person": person})
+    return templates.TemplateResponse(
+        "llm.html",
+        {"request": request, "person": person, "theme_class": f"theme-{get_theme(request)}"},
+    )
 
 
 @app.get("/tools/noise", response_class=HTMLResponse)
@@ -652,7 +687,10 @@ async def noise_page(request: Request):
     person = ensure_person_or_redirect(request)
     if isinstance(person, RedirectResponse):
         return person
-    return templates.TemplateResponse("noise.html", {"request": request, "person": person})
+    return templates.TemplateResponse(
+        "noise.html",
+        {"request": request, "person": person, "theme_class": f"theme-{get_theme(request)}"},
+    )
 
 
 @app.get("/sleep-times", response_class=HTMLResponse)
@@ -666,7 +704,12 @@ async def sleep_times_page(request: Request):
     entries = get_recent_sleep_entries(filepath)
     return templates.TemplateResponse(
         "sleep_times.html",
-        {"request": request, "entries": entries, "person": person},
+        {
+            "request": request,
+            "entries": entries,
+            "person": person,
+            "theme_class": f"theme-{get_theme(request)}",
+        },
     )
 
 
