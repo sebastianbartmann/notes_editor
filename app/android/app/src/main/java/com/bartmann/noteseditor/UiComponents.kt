@@ -153,26 +153,19 @@ fun CompactTextField(
 @Composable
 fun AppCheckbox(
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     size: Int = 14
 ) {
     val shape = RoundedCornerShape(3.dp)
+    val fill = if (checked) AppTheme.colors.accent else AppTheme.colors.checkboxFill
+    val border = if (checked) AppTheme.colors.accent else AppTheme.colors.panelBorder
     Box(
         modifier = modifier
             .size(size.dp)
-            .border(1.dp, AppTheme.colors.panelBorder, shape)
-            .background(AppTheme.colors.checkboxFill, shape)
-            .clickable { onCheckedChange(!checked) },
+            .border(1.dp, border, shape)
+            .background(fill, shape),
         contentAlignment = androidx.compose.ui.Alignment.Center
     ) {
-        if (checked) {
-            AppText(
-                text = "✓",
-                style = AppTheme.typography.label,
-                color = AppTheme.colors.accent
-            )
-        }
     }
 }
 

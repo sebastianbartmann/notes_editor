@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 
 private data class NoteLine(
     val lineNo: Int,
@@ -65,13 +66,14 @@ fun NoteView(
                     )
                     LineType.TASK -> {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggleTask(line.lineNo) },
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AppCheckbox(
-                                checked = line.done,
-                                onCheckedChange = { onToggleTask(line.lineNo) }
+                                checked = line.done
                             )
                             AppText(
                                 text = line.text,

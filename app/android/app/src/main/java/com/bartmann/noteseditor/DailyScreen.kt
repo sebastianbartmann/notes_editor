@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import kotlinx.coroutines.launch
 
 @Composable
@@ -167,11 +168,15 @@ fun DailyScreen(
                 CompactDivider()
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CompactTextButton(text = "Clear") {
+                    CompactButton(
+                        text = "Clear",
+                        background = AppTheme.colors.danger,
+                        border = AppTheme.colors.danger,
+                        textColor = AppTheme.colors.text,
+                        onClick = {
                             scope.launch {
                                 try {
                                     val response = ApiClient.clearPinned()
@@ -182,10 +187,14 @@ fun DailyScreen(
                                 }
                             }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { pinned = !pinned }
+                        ) {
                             AppCheckbox(
-                                checked = pinned,
-                                onCheckedChange = { pinned = it }
+                                checked = pinned
                             )
                             AppText(
                                 text = "Pin",
