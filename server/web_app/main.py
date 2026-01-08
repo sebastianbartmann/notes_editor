@@ -5,15 +5,19 @@ from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from datetime import datetime
 from pathlib import Path
+from dotenv import load_dotenv
 import os
 import re
 import secrets
 import subprocess
 
+load_dotenv()
+
 from .renderers.pinned import render_with_pinned_buttons
 from .renderers.file_tree import render_tree
 from .services.git_sync import git_pull, git_commit_and_push
 from .services.vault_store import VAULT_ROOT, write_entry, append_entry, resolve_path, read_entry, list_dir, delete_entry
+from .services import claude_service
 
 BASE_DIR = Path(__file__).resolve().parent
 NOTES_TOKEN = os.environ.get("NOTES_TOKEN", "VJY9EoAf1xx1bO-LaduCmItwRitCFm9BPuQZ8jd0tcg")
@@ -927,99 +931,39 @@ async def delete_file_json(request: Request, path: str = Form(...)):
     return {"success": success, "message": "File deleted" if success else msg}
 
 
-@app.post("/api/tools/claude", response_class=HTMLResponse)
-async def run_claude(request: Request, prompt: str = Form(...)):
-    ensure_person(request)
-    command = [
-        "claude",
-        "--print",
-        "--output-format",
-        "text",
-        "--dangerously-skip-permissions",
-        "--tools",
-        "default",
-        "--add-dir",
-        str(VAULT_ROOT),
-    ]
-
-    claude_candidates = [
-        VAULT_ROOT / "CLAUDE.md",
-        VAULT_ROOT / "claude.md",
-        VAULT_ROOT / "Claude.md",
-    ]
-    claude_md = next((path for path in claude_candidates if path.exists()), None)
-    if claude_md:
-        system_prompt = claude_md.read_text()
-        command.extend(["--append-system-prompt", system_prompt])
-
-    command.append(prompt)
-
+@app.post("/api/claude/chat")
+async def claude_chat(
+    request: Request,
+    message: str = Form(...),
+    session_id: str = Form(None),
+):
+    person = ensure_person(request)
     try:
-        result = subprocess.run(
-            command,
-            cwd=VAULT_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-    except subprocess.TimeoutExpired:
-        return HTMLResponse("<mark class=\"error\">Claude timed out.</mark>", status_code=200)
-
-    if result.returncode != 0:
-        error_text = (result.stderr or "Claude failed").strip()
-        return HTMLResponse(
-            f"<mark class=\"error\">{error_text}</mark>",
-            status_code=200,
-        )
-
-    response = result.stdout.strip()
-    if not response:
-        response = "No response."
-
-    return HTMLResponse(f"<pre class=\"llm-output\">{response}</pre>", status_code=200)
+        session, response = await claude_service.chat(session_id, message, person)
+        return {
+            "success": True,
+            "session_id": session.session_id,
+            "response": response,
+            "history": [{"role": m.role, "content": m.content} for m in session.messages],
+        }
+    except Exception as e:
+        return {"success": False, "message": str(e), "response": "", "history": []}
 
 
-@app.post("/api/tools/claude-json")
-async def run_claude_json(request: Request, prompt: str = Form(...)):
+@app.get("/api/claude/history")
+async def claude_history(request: Request, session_id: str):
     ensure_person(request)
-    command = [
-        "claude",
-        "--print",
-        "--output-format",
-        "text",
-        "--dangerously-skip-permissions",
-        "--tools",
-        "default",
-        "--add-dir",
-        str(VAULT_ROOT),
-    ]
+    history = claude_service.get_session_history(session_id)
+    if history is None:
+        return {"success": False, "message": "Session not found", "history": []}
+    return {
+        "success": True,
+        "history": [{"role": m.role, "content": m.content} for m in history],
+    }
 
-    claude_candidates = [
-        VAULT_ROOT / "CLAUDE.md",
-        VAULT_ROOT / "claude.md",
-        VAULT_ROOT / "Claude.md",
-    ]
-    claude_md = next((path for path in claude_candidates if path.exists()), None)
-    if claude_md:
-        system_prompt = claude_md.read_text()
-        command.extend(["--append-system-prompt", system_prompt])
 
-    command.append(prompt)
-
-    try:
-        result = subprocess.run(
-            command,
-            cwd=VAULT_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-    except subprocess.TimeoutExpired:
-        return {"success": False, "message": "Claude timed out.", "response": ""}
-
-    if result.returncode != 0:
-        error_text = (result.stderr or "Claude failed").strip()
-        return {"success": False, "message": error_text, "response": ""}
-
-    response = result.stdout.strip() or "No response."
-    return {"success": True, "message": "OK", "response": response}
+@app.post("/api/claude/clear")
+async def claude_clear(request: Request, session_id: str = Form(...)):
+    ensure_person(request)
+    cleared = claude_service.clear_session(session_id)
+    return {"success": cleared, "message": "Session cleared" if cleared else "Session not found"}

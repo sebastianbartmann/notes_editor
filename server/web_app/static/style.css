@@ -225,20 +225,61 @@ a {
     font-size: 12px;
 }
 
-.llm-form {
+.chat-panel {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 100px);
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
+    padding: var(--space-2) 0;
+    min-height: 200px;
 }
 
-.llm-output {
-    margin-top: var(--space-2);
-    border: 1px solid var(--panel-border);
-    border-radius: var(--radius);
+.chat-message {
     padding: var(--space-2);
-    background: #0f1114;
+    border-radius: var(--radius);
+    background: var(--input);
+}
+
+.chat-message.user {
+    background: var(--accent-dim);
+    margin-left: 20%;
+}
+
+.chat-message.assistant {
+    margin-right: 20%;
+}
+
+.chat-role {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+.chat-content {
+    font-size: 13px;
     white-space: pre-wrap;
-    font-size: 12px;
+    word-break: break-word;
+}
+
+.chat-form {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+}
+
+.chat-form textarea {
+    flex: 1;
+}
+
+.chat-form button {
+    align-self: flex-end;
 }
 
 .noise-panel {

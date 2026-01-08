@@ -136,6 +136,12 @@ object ApiClient {
     suspend fun unpinEntry(path: String, line: Int): ApiMessage =
         postForm("/api/files/unpin", mapOf("path" to path, "line" to line.toString()))
 
-    suspend fun runClaude(prompt: String): ClaudeResponse =
-        postForm("/api/tools/claude-json", mapOf("prompt" to prompt))
+    suspend fun claudeChat(message: String, sessionId: String?): ClaudeChatResponse {
+        val params = mutableMapOf("message" to message)
+        if (sessionId != null) params["session_id"] = sessionId
+        return postForm("/api/claude/chat", params)
+    }
+
+    suspend fun claudeClear(sessionId: String): ApiMessage =
+        postForm("/api/claude/clear", mapOf("session_id" to sessionId))
 }

@@ -1,56 +1,155 @@
 package com.bartmann.noteseditor
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 @Composable
 fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
-    var prompt by remember { mutableStateOf("") }
-    var responseText by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf("") }
+    var inputText by remember { mutableStateOf("") }
+    var sessionId by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf("") }
+    val messages = remember { mutableStateListOf<ChatMessage>() }
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
-    ScreenLayout(
-        modifier = modifier,
-        padding = padding
-    ) {
-        ScreenTitle(text = "Claude")
-        Panel {
-            SectionTitle(text = "Prompt")
-            CompactTextField(
-                value = prompt,
-                onValueChange = { prompt = it },
-                placeholder = "Ask Claude...",
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3
-            )
-            CompactButton(text = "Run") {
-                scope.launch {
-                    try {
-                        val response = ApiClient.runClaude(prompt)
-                        responseText = response.response
-                        message = response.message
-                    } catch (exc: Exception) {
-                        message = "Claude failed: ${exc.message}"
-                    }
+    fun sendMessage() {
+        val text = inputText.trim()
+        if (text.isEmpty() || isLoading) return
+        inputText = ""
+        isLoading = true
+        statusMessage = ""
+        messages.add(ChatMessage(role = "user", content = text))
+
+        scope.launch {
+            try {
+                val response = ApiClient.claudeChat(text, sessionId)
+                if (response.success) {
+                    sessionId = response.sessionId
+                    messages.add(ChatMessage(role = "assistant", content = response.response))
+                } else {
+                    statusMessage = "Error: ${response.message}"
+                }
+            } catch (exc: Exception) {
+                statusMessage = "Error: ${exc.message}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun clearChat() {
+        scope.launch {
+            sessionId?.let { ApiClient.claudeClear(it) }
+            sessionId = null
+            messages.clear()
+            statusMessage = ""
+        }
+    }
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    ScreenLayout(modifier = modifier, padding = padding) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ScreenTitle(text = "Claude")
+            CompactButton(text = "Clear", onClick = ::clearChat)
+        }
+
+        Panel(modifier = Modifier.weight(1f)) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(messages) { message ->
+                    ChatBubble(message = message)
                 }
             }
-            if (responseText.isNotBlank()) {
-                CompactDivider()
-                AppText(
-                    text = responseText,
-                    style = AppTheme.typography.bodySmall,
-                    color = AppTheme.colors.text
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                CompactTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    placeholder = "Ask Claude...",
+                    modifier = Modifier.weight(1f),
+                    minLines = 2
+                )
+                CompactButton(
+                    text = if (isLoading) "..." else "Send",
+                    onClick = { if (!isLoading && inputText.isNotBlank()) sendMessage() }
                 )
             }
-            StatusMessage(text = message)
+            if (statusMessage.isNotEmpty()) {
+                StatusMessage(text = statusMessage)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatBubble(message: ChatMessage) {
+    val isUser = message.role == "user"
+    val alignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
+    val bgColor = if (isUser) AppTheme.colors.accentDim else AppTheme.colors.input
+
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = alignment
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(bgColor)
+                .padding(10.dp)
+        ) {
+            AppText(
+                text = if (isUser) "You" else "Claude",
+                style = AppTheme.typography.label,
+                color = AppTheme.colors.muted
+            )
+            AppText(
+                text = message.content,
+                style = AppTheme.typography.bodySmall,
+                color = AppTheme.colors.text
+            )
         }
     }
 }

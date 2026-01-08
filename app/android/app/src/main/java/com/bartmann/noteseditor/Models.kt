@@ -49,8 +49,17 @@ data class ApiMessage(
 )
 
 @Serializable
-data class ClaudeResponse(
+data class ChatMessage(
+    val role: String,
+    val content: String
+)
+
+@Serializable
+data class ClaudeChatResponse(
     val success: Boolean,
-    val message: String,
-    val response: String
+    val message: String = "",
+    val response: String = "",
+    @SerialName("session_id")
+    val sessionId: String = "",
+    val history: List<ChatMessage> = emptyList()
 )

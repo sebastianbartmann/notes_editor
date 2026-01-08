@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claude</title>
     <link rel="stylesheet" href="/static/style.css?v=2025-01-01">
-    <script src="/static/htmx.min.js?v=2025-01-01"></script>
 </head>
 <body class="{{ theme_class }}">
     <main class="container">
@@ -18,18 +17,97 @@
             <div class="today">Person: {{ person }}</div>
         </nav>
 
-        <article class="panel">
+        <article class="panel chat-panel">
             <div class="panel-header">
-                <h3>Command</h3>
+                <h3>Chat</h3>
+                <button type="button" class="button ghost" id="clear-btn">Clear</button>
             </div>
-            <form class="llm-form" hx-post="/api/tools/claude" hx-target="#llm-output" hx-swap="innerHTML">
-                <textarea name="prompt" rows="6" placeholder="Describe what you want Claude to do..." required></textarea>
-                <div class="actions">
-                    <button type="submit" class="button">Send</button>
-                </div>
+            <div id="chat-messages" class="chat-messages"></div>
+            <form id="chat-form" class="chat-form">
+                <textarea name="message" rows="3" placeholder="Ask Claude..." required></textarea>
+                <button type="submit" class="button" id="send-btn">Send</button>
             </form>
-            <div id="llm-output" class="llm-output muted">Awaiting command.</div>
         </article>
     </main>
+
+    <script>
+        let sessionId = null;
+
+        const messagesDiv = document.getElementById('chat-messages');
+        const form = document.getElementById('chat-form');
+        const textarea = form.querySelector('textarea');
+        const sendBtn = document.getElementById('send-btn');
+        const clearBtn = document.getElementById('clear-btn');
+
+        function addMessage(role, content) {
+            const msg = document.createElement('div');
+            msg.className = `chat-message ${role}`;
+            msg.innerHTML = `<div class="chat-role">${role === 'user' ? 'You' : 'Claude'}</div><div class="chat-content">${escapeHtml(content)}</div>`;
+            messagesDiv.appendChild(msg);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML.replace(/\n/g, '<br>');
+        }
+
+        function setLoading(loading) {
+            sendBtn.disabled = loading;
+            sendBtn.textContent = loading ? 'Sending...' : 'Send';
+            textarea.disabled = loading;
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = textarea.value.trim();
+            if (!message) return;
+
+            addMessage('user', message);
+            textarea.value = '';
+            setLoading(true);
+
+            const formData = new FormData();
+            formData.append('message', message);
+            if (sessionId) formData.append('session_id', sessionId);
+
+            try {
+                const res = await fetch('/api/claude/chat', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await res.json();
+                if (data.success) {
+                    sessionId = data.session_id;
+                    addMessage('assistant', data.response);
+                } else {
+                    addMessage('assistant', `Error: ${data.message}`);
+                }
+            } catch (err) {
+                addMessage('assistant', `Error: ${err.message}`);
+            } finally {
+                setLoading(false);
+                textarea.focus();
+            }
+        });
+
+        clearBtn.addEventListener('click', async () => {
+            if (sessionId) {
+                const formData = new FormData();
+                formData.append('session_id', sessionId);
+                await fetch('/api/claude/clear', { method: 'POST', body: formData });
+            }
+            sessionId = null;
+            messagesDiv.innerHTML = '';
+        });
+
+        textarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                form.dispatchEvent(new Event('submit'));
+            }
+        });
+    </script>
 </body>
 </html>

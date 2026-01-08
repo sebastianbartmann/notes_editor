@@ -8,4 +8,5 @@ dependencies = [
     "uvicorn",
     "jinja2",
     "python-multipart",
+    "claude-agent-sdk",
 ]
