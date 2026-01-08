@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -99,8 +100,9 @@ fun CompactButton(
             .background(background, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = AppTheme.spacing.sm, vertical = 3.dp)
+        , contentAlignment = androidx.compose.ui.Alignment.Center
     ) {
-        AppText(text = text, style = AppTheme.typography.label, color = textColor)
+        AppText(text = text, style = AppTheme.typography.body, color = textColor)
     }
 }
 
@@ -160,7 +162,7 @@ fun AppCheckbox(
         modifier = modifier
             .size(size.dp)
             .border(1.dp, AppTheme.colors.panelBorder, shape)
-            .background(AppTheme.colors.text, shape)
+            .background(AppTheme.colors.checkboxFill, shape)
             .clickable { onCheckedChange(!checked) },
         contentAlignment = androidx.compose.ui.Alignment.Center
     ) {
@@ -198,9 +200,8 @@ fun Panel(
 
 @Composable
 fun appBackgroundBrush(): Brush =
-    Brush.radialGradient(
-        colors = listOf(Color(0xFF1A1C20), AppTheme.colors.background),
-        radius = 900f
+    Brush.verticalGradient(
+        colors = listOf(AppTheme.colors.background, AppTheme.colors.background)
     )
 
 @Composable

@@ -3,8 +3,10 @@ package com.bartmann.noteseditor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun ToolsScreen(
@@ -45,7 +47,9 @@ private fun ToolGrid(tools: List<Pair<String, () -> Unit>>) {
                 CompactButton(
                     text = label,
                     onClick = onClick,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(72.dp),
                     background = AppTheme.colors.input,
                     border = AppTheme.colors.panelBorder,
                     textColor = AppTheme.colors.text

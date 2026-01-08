@@ -25,6 +25,7 @@ data class AppColors(
     val note: Color,
     val button: Color,
     val buttonText: Color,
+    val checkboxFill: Color,
 )
 
 data class AppSpacing(
@@ -57,6 +58,7 @@ private val LocalAppColors = staticCompositionLocalOf {
         note = Color(0xFF101317),
         button = Color(0xFF1E2227),
         buttonText = Color(0xFFE6E6E6),
+        checkboxFill = Color(0xFFE6E6E6),
     )
 }
 
@@ -90,18 +92,19 @@ object AppTheme {
 fun NotesEditorTheme(content: @Composable () -> Unit) {
     val colors = if (UserSettings.theme == "light") {
         AppColors(
-            background = Color(0xFFF2F5F6),
-            panel = Color(0xFFFFFFFF),
-            panelBorder = Color(0xFFD3DAE0),
-            text = Color(0xFF1B1F24),
-            muted = Color(0xFF5C6B73),
-            accent = Color(0xFFE07A28),
-            accentDim = Color(0xFFFFD7B8),
+            background = Color(0xFFE9F7F7),
+            panel = Color(0xFFF6FBFF),
+            panelBorder = Color(0xFFC7E3E6),
+            text = Color(0xFF1A2A2F),
+            muted = Color(0xFF4F6F78),
+            accent = Color(0xFF3AA7A3),
+            accentDim = Color(0xFFC9F1EF),
             danger = Color(0xFFD76A6A),
-            input = Color(0xFFF8FAFB),
-            note = Color(0xFFFDFDFE),
-            button = Color(0xFFF2F4F6),
-            buttonText = Color(0xFF1B1F24),
+            input = Color(0xFFF2FAFB),
+            note = Color(0xFFF9FDFF),
+            button = Color(0xFFEEF6F8),
+            buttonText = Color(0xFF1A2A2F),
+            checkboxFill = Color(0xFFF2FAFB),
         )
     } else {
         AppColors(
@@ -117,6 +120,7 @@ fun NotesEditorTheme(content: @Composable () -> Unit) {
             note = Color(0xFF101317),
             button = Color(0xFF20252B),
             buttonText = Color(0xFFE6E6E6),
+            checkboxFill = Color(0xFFE6E6E6),
         )
     }
     val spacing = AppSpacing()

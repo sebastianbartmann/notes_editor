@@ -30,16 +30,16 @@ body {
 }
 
 body.theme-light {
-    --bg: #f3f6f8;
-    --panel: #ffffff;
-    --panel-border: #d2d9df;
-    --text: #1b2026;
-    --muted: #5c6b73;
-    --accent: #e07a28;
-    --accent-dim: #ffd7b8;
+    --bg: #e9f7f7;
+    --panel: #f6fbff;
+    --panel-border: #c7e3e6;
+    --text: #1a2a2f;
+    --muted: #4f6f78;
+    --accent: #3aa7a3;
+    --accent-dim: #c9f1ef;
     --danger: #d66b6b;
     --shadow: rgba(18, 33, 45, 0.08);
-    background: radial-gradient(circle at 15% 15%, #ffffff 0%, #eef3f6 60%);
+    background: radial-gradient(circle at 15% 15%, #f7fcff 0%, #def3f5 60%);
 }
 
 a {
