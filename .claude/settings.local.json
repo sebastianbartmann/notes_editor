@@ -4,7 +4,11 @@
       "Bash(mkdir:*)",
       "Bash(uv init:*)",
       "Bash(git add:*)",
-      "Bash(sudo systemctl restart:*)"
+      "Bash(sudo systemctl restart:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv run python:*)",
+      "Bash(make android-build:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []
