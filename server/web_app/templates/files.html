@@ -12,6 +12,7 @@
         <nav class="topbar">
             <div class="brand">
                 <strong>Files</strong>
+                <button onclick="location.reload()" class="button ghost">Reload</button>
                 <a class="button ghost" href="/">Daily</a>
                 <a class="button ghost" href="/tools">Tools</a>
             </div>
@@ -21,13 +22,14 @@
         <article class="panel files-panel">
             <section class="tree-panel">
                 <div class="panel-header">
-                    <h3>Vault</h3>
+                    <h3>Create File</h3>
                 </div>
                 <form class="file-create" hx-post="/api/files/create" hx-target="#file-message" hx-swap="innerHTML">
                     <input type="text" name="path" placeholder="new/file.md" required autocomplete="off" spellcheck="false">
                     <button type="submit" class="button">Create</button>
                 </form>
                 <div id="file-message"></div>
+                <hr>
                 <div id="tree-root" class="file-tree">
                     {{ tree_html | safe }}
                 </div>

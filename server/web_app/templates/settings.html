@@ -31,7 +31,7 @@
             </p>
             <form method="post" action="/settings" class="form-row">
                 {% for person in people %}
-                    <button type="submit" name="person" value="{{ person }}" class="button ghost">
+                    <button type="submit" name="person" value="{{ person }}" class="button ghost{% if current_person == person %} active{% endif %}">
                         {{ person | capitalize }}
                     </button>
                 {% endfor %}

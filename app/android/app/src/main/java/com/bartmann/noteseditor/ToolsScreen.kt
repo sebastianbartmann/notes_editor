@@ -15,7 +15,8 @@ fun ToolsScreen(
     onOpenClaude: () -> Unit,
     onOpenNoise: () -> Unit,
     onOpenNotifications: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onOpenKiosk: () -> Unit
 ) {
     ScreenLayout(
         modifier = modifier,
@@ -28,7 +29,8 @@ fun ToolsScreen(
                     "Claude" to onOpenClaude,
                     "Noise" to onOpenNoise,
                     "Notifications" to onOpenNotifications,
-                    "Settings" to onOpenSettings
+                    "Settings" to onOpenSettings,
+                    "Kiosk" to onOpenKiosk
                 )
             )
         }

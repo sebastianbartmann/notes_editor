@@ -12,68 +12,36 @@
         <nav class="topbar">
             <div class="brand">
                 <strong>Sleep Times</strong>
+                <button onclick="location.reload()" class="button ghost">Reload</button>
                 <a class="button ghost" href="/tools">Tools</a>
             </div>
             <div class="today">Person: {{ person }}</div>
         </nav>
 
         <article class="panel">
-            <div class="panel-header">
-                <h3>Log</h3>
-            </div>
             <form class="sleep-form" hx-post="/api/sleep-times/append" hx-target="#sleep-message" hx-swap="innerHTML">
-                <div class="sleep-inputs">
-                    <div class="sleep-block">
-                        <span class="sleep-label">Child</span>
-                        <div class="sleep-row">
-                            <div class="sleep-options">
-                                <label class="sleep-choice">
-                                    <input type="radio" name="child" value="Fabian" checked>
-                                    <span>Fabian</span>
-                                </label>
-                                <label class="sleep-choice">
-                                    <input type="radio" name="child" value="Thomas">
-                                    <span>Thomas</span>
-                                </label>
-                            </div>
-                            <span class="sleep-divider"></span>
-                            <div class="sleep-status">
-                                <label class="sleep-choice">
-                                    <input type="checkbox" id="status-asleep" name="asleep">
-                                    <span>eingeschlafen</span>
-                                </label>
-                                <label class="sleep-choice">
-                                    <input type="checkbox" id="status-woke" name="woke">
-                                    <span>aufgewacht</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="sleep-block sleep-entry">
-                        <span class="sleep-label">Entry</span>
-                        <div class="sleep-entry-row">
-                            <input type="text" id="sleep-entry" name="entry" placeholder="19:30-06:10 night" required autocomplete="off" autocapitalize="none" spellcheck="false">
-                            <div class="sleep-time-pickers">
-                                <div class="sleep-time-fields">
-                                    <select id="sleep-hour" aria-label="Hour">
-                                        <option value="">HH</option>
-                                        {% for h in range(0, 24) %}
-                                        <option value="{{ '%02d' % h }}">{{ '%02d' % h }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <span class="sleep-time-colon">:</span>
-                                    <select id="sleep-minute" aria-label="Minute">
-                                        <option value="">MM</option>
-                                        {% for m in range(0, 60) %}
-                                        <option value="{{ '%02d' % m }}">{{ '%02d' % m }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <button type="button" class="button ghost" id="sleep-time-add">Add</button>
-                            </div>
-                        </div>
-                    </div>
+                <div class="panel-header">
+                    <h3>Log</h3>
                 </div>
+                <div class="sleep-grid">
+                    <label class="sleep-choice">
+                        <input type="radio" name="child" value="Thomas">
+                        <span>Thomas</span>
+                    </label>
+                    <label class="sleep-choice">
+                        <input type="radio" name="child" value="Fabian" checked>
+                        <span>Fabian</span>
+                    </label>
+                    <label class="sleep-choice">
+                        <input type="checkbox" id="status-asleep" name="asleep">
+                        <span>eingeschlafen</span>
+                    </label>
+                    <label class="sleep-choice">
+                        <input type="checkbox" id="status-woke" name="woke">
+                        <span>aufgewacht</span>
+                    </label>
+                </div>
+                <input type="text" id="sleep-entry" name="entry" placeholder="Entry (19:30-06:10 | night)" required autocomplete="off" autocapitalize="none" spellcheck="false">
                 <div class="actions view-actions">
                     <button class="button" type="submit">Add</button>
                 </div>
@@ -147,37 +115,6 @@
                     asleepCheckbox.checked = false;
                 }
             });
-        }
-
-        const sleepEntry = document.getElementById('sleep-entry');
-        const sleepHour = document.getElementById('sleep-hour');
-        const sleepMinute = document.getElementById('sleep-minute');
-        const sleepAdd = document.getElementById('sleep-time-add');
-
-        function addSleepTime() {
-            if (!sleepEntry || !sleepHour || !sleepMinute) {
-                return;
-            }
-            if (!sleepHour.value || !sleepMinute.value) {
-                return;
-            }
-            const time = `${sleepHour.value}:${sleepMinute.value}`;
-            const value = sleepEntry.value.trim();
-            if (!value) {
-                sleepEntry.value = time;
-                return;
-            }
-
-            const matches = value.match(/\b\d{2}:\d{2}\b/g) || [];
-            if (matches.length === 1 && !value.includes("-") && value.endsWith(matches[0])) {
-                sleepEntry.value = `${value}-${time}`;
-            } else {
-                sleepEntry.value = `${value} ${time}`;
-            }
-        }
-
-        if (sleepAdd) {
-            sleepAdd.addEventListener('click', addSleepTime);
         }
 
     </script>

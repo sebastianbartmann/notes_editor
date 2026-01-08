@@ -19,23 +19,24 @@
         </nav>
 
         <article class="panel noise-panel">
-            <div class="panel-header">
-                <h3>Rain Noise</h3>
+            <div class="noise-shell">
+                <div class="noise-status-card" id="noise-status">Stopped</div>
+                <div class="noise-buttons">
+                    <button class="button noise-button" type="button" id="noise-toggle" aria-pressed="false">
+                        Play
+                    </button>
+                    <button class="button ghost danger noise-button" type="button" id="noise-stop">
+                        Stop
+                    </button>
+                </div>
             </div>
-            <p class="muted">Tap to start. It will loop endlessly until you stop it.</p>
-            <div class="actions">
-                <button class="button noise-toggle" type="button" id="noise-toggle" aria-pressed="false">
-                    Play noise
-                </button>
-                <span class="noise-status muted" id="noise-status">Stopped</span>
-            </div>
-            <p class="muted noise-note">Keep this tab open while playing.</p>
         </article>
     </main>
 
     <script>
         const toggleButton = document.getElementById('noise-toggle');
         const statusLabel = document.getElementById('noise-status');
+        const stopButton = document.getElementById('noise-stop');
         let audioCtx = null;
         let noiseNodes = [];
         let masterGain = null;
@@ -45,11 +46,17 @@
         let baseGain = 0.24;
         let isPlaying = false;
 
-        function setStatus(playing) {
-            isPlaying = playing;
-            toggleButton.textContent = playing ? 'Stop noise' : 'Play noise';
-            toggleButton.setAttribute('aria-pressed', playing ? 'true' : 'false');
-            statusLabel.textContent = playing ? 'Playing' : 'Stopped';
+        function setStatus(state) {
+            isPlaying = state === 'playing';
+            toggleButton.textContent = isPlaying ? 'Pause' : 'Play';
+            toggleButton.setAttribute('aria-pressed', isPlaying ? 'true' : 'false');
+            if (state === 'paused') {
+                statusLabel.textContent = 'Paused';
+            } else if (state === 'playing') {
+                statusLabel.textContent = 'Playing';
+            } else {
+                statusLabel.textContent = 'Stopped';
+            }
         }
 
         function createNoiseBuffer() {
@@ -137,7 +144,7 @@
                     masterGain.gain.value = baseGain + drift;
                 }, 2400);
             }
-            setStatus(true);
+            setStatus('playing');
         }
 
         function stopNoise() {
@@ -160,7 +167,7 @@
                 clearInterval(driftTimer);
                 driftTimer = null;
             }
-            setStatus(false);
+            setStatus('stopped');
         }
 
         if (!('AudioContext' in window || 'webkitAudioContext' in window)) {
@@ -171,6 +178,7 @@
         toggleButton.addEventListener('click', async () => {
             if (isPlaying) {
                 stopNoise();
+                setStatus('paused');
                 return;
             }
             try {
@@ -179,6 +187,13 @@
                 console.error(err);
                 statusLabel.textContent = 'Unable to start audio';
             }
+        });
+
+        stopButton.addEventListener('click', () => {
+            if (!isPlaying) {
+                return;
+            }
+            stopNoise();
         });
     </script>
 </body>

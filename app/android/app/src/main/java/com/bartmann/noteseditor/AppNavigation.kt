@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.dp
@@ -51,6 +52,7 @@ fun NotesEditorApp() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val currentRoute = currentDestination?.route
+    val uriHandler = LocalUriHandler.current
     val items = listOf(
         Screen.Daily,
         Screen.Files,
@@ -106,7 +108,8 @@ fun NotesEditorApp() {
                         onOpenClaude = { navController.navigate(Screen.ToolClaude.route) },
                         onOpenNoise = { navController.navigate(Screen.ToolNoise.route) },
                         onOpenNotifications = { navController.navigate(Screen.ToolNotifications.route) },
-                        onOpenSettings = { navController.navigate(Screen.Settings.route) }
+                        onOpenSettings = { navController.navigate(Screen.Settings.route) },
+                        onOpenKiosk = { uriHandler.openUri("https://thirdpartycheck.com/admin/kiosk") }
                     )
                 }
                 composable(Screen.ToolClaude.route) { ToolClaudeScreen(Modifier, androidx.compose.foundation.layout.PaddingValues()) }
