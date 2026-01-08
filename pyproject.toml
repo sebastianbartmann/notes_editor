@@ -9,4 +9,5 @@ dependencies = [
     "jinja2",
     "python-multipart",
     "claude-agent-sdk",
+    "python-dotenv",
 ]
