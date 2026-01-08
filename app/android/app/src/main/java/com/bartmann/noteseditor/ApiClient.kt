@@ -14,6 +14,7 @@ object ApiClient {
 
     private val baseUrls = AppConfig.BASE_URLS
     private val authHeader = "Bearer ${AppConfig.AUTH_TOKEN}"
+    private const val PERSON_HEADER = "X-Notes-Person"
 
     private suspend fun <T> executeRequest(
         buildRequest: (String) -> Request,
@@ -43,12 +44,15 @@ object ApiClient {
     private suspend inline fun <reified T> getJson(path: String): T =
         executeRequest(
             buildRequest = { baseUrl ->
-                Request.Builder()
+                val builder = Request.Builder()
                     .url("$baseUrl$path")
                     .header("Authorization", authHeader)
                     .header("Accept", "application/json")
-                    .get()
-                    .build()
+                val person = UserSettings.person
+                if (person != null) {
+                    builder.header(PERSON_HEADER, person)
+                }
+                builder.get().build()
             },
             parse = { body -> decode(body) }
         )
@@ -60,12 +64,16 @@ object ApiClient {
                 for ((key, value) in params) {
                     formBuilder.add(key, value)
                 }
-                Request.Builder()
+                val builder = Request.Builder()
                     .url("$baseUrl$path")
                     .header("Authorization", authHeader)
                     .header("Accept", "application/json")
                     .post(formBuilder.build())
-                    .build()
+                val person = UserSettings.person
+                if (person != null) {
+                    builder.header(PERSON_HEADER, person)
+                }
+                builder.build()
             },
             parse = { body -> decode(body) }
         )

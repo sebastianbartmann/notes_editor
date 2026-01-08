@@ -12,7 +12,8 @@ fun ToolsScreen(
     padding: androidx.compose.foundation.layout.PaddingValues,
     onOpenClaude: () -> Unit,
     onOpenNoise: () -> Unit,
-    onOpenNotifications: () -> Unit
+    onOpenNotifications: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     ScreenLayout(
         modifier = modifier,
@@ -24,7 +25,8 @@ fun ToolsScreen(
                 tools = listOf(
                     "Claude" to onOpenClaude,
                     "Noise" to onOpenNoise,
-                    "Notifications" to onOpenNotifications
+                    "Notifications" to onOpenNotifications,
+                    "Settings" to onOpenSettings
                 )
             )
         }

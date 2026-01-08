@@ -40,24 +40,71 @@ app = FastAPI(dependencies=[Depends(require_auth)])
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-DAILY_DIR = VAULT_ROOT / "daily"
+PERSONS = {"sebastian", "petra"}
+PERSON_COOKIE = "notes_person"
+PERSON_HEADER = "X-Notes-Person"
+
+
+def get_person(request: Request) -> str | None:
+    candidate = (
+        request.headers.get(PERSON_HEADER)
+        or request.cookies.get(PERSON_COOKIE)
+        or ""
+    ).strip().lower()
+    return candidate if candidate in PERSONS else None
+
+
+def ensure_person_or_redirect(request: Request):
+    person = get_person(request)
+    if person:
+        return person
+    return RedirectResponse("/settings")
+
+
+def ensure_person(request: Request) -> str:
+    person = get_person(request)
+    if not person:
+        raise HTTPException(status_code=400, detail="Person not selected")
+    return person
+
+
+def person_root_path(person: str) -> Path:
+    return VAULT_ROOT / person
+
+
+def person_relative_path(person: str, relative_path: str) -> str:
+    normalized = relative_path.strip().lstrip("/")
+    if normalized in {"", "."}:
+        return person
+    if normalized.startswith(f"{person}/") or normalized == person:
+        return normalized
+    return f"{person}/{normalized}"
+
+
+def strip_person_path(person: str, relative_path: str) -> str:
+    if relative_path == person:
+        return "."
+    if relative_path.startswith(f"{person}/"):
+        return relative_path[len(person) + 1 :]
+    return relative_path
 
 
 def get_today_filename() -> str:
     return datetime.now().strftime("%Y-%m-%d.md")
 
 
-def get_today_filepath() -> Path:
-    return DAILY_DIR / get_today_filename()
+def get_today_filepath(person: str) -> Path:
+    return person_root_path(person) / "daily" / get_today_filename()
 
 
-def get_most_recent_note() -> Path | None:
+def get_most_recent_note(person: str) -> Path | None:
     """Find the most recent daily note file (excluding today's)"""
-    if not DAILY_DIR.exists():
+    daily_dir = person_root_path(person) / "daily"
+    if not daily_dir.exists():
         return None
 
     # Get all markdown files that match the date pattern YYYY-MM-DD.md
-    note_files = sorted(DAILY_DIR.glob("????-??-??.md"), reverse=True)
+    note_files = sorted(daily_dir.glob("????-??-??.md"), reverse=True)
 
     today_file = get_today_filename()
     for note_file in note_files:
@@ -149,17 +196,17 @@ def extract_pinned_notes(filepath: Path) -> str:
     return '\n\n'.join(pinned_entries) if pinned_entries else ""
 
 
-def ensure_file_exists(filepath: Path) -> None:
+def ensure_file_exists(person: str, filepath: Path) -> None:
     """Create file with header if it doesn't exist"""
     if not filepath.exists():
-        DAILY_DIR.mkdir(parents=True, exist_ok=True)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
         date_str = datetime.now().strftime("%Y-%m-%d")
 
         # Start with header
         content = f"# daily {date_str}\n\n"
 
         # Try to get incomplete todos and pinned notes from previous note
-        previous_note = get_most_recent_note()
+        previous_note = get_most_recent_note(person)
         if previous_note:
             incomplete_todos = extract_incomplete_todos(previous_note)
             if incomplete_todos:
@@ -174,23 +221,6 @@ def ensure_file_exists(filepath: Path) -> None:
 
         # Commit and push the new file
         git_commit_and_push(f"Create daily note {date_str}")
-
-
-def get_petra_filepath() -> Path:
-    return VAULT_ROOT / "petra_notes.md"
-
-
-def ensure_petra_file_exists(filepath: Path) -> None:
-    if not filepath.exists():
-        content = (
-            "# Petra Notes\n\n"
-            "This page is for quick notes and todos.\n\n"
-            "How to use:\n"
-            "- Use the editor to update the full note.\n"
-            "- Use the add box to append a quick entry.\n\n"
-        )
-        filepath.write_text(content)
-        git_commit_and_push("Create Petra notes")
 
 
 def add_task_to_todos(filepath: Path, category: str) -> None:
@@ -284,14 +314,17 @@ def get_recent_sleep_entries(filepath: Path, limit: int = 20) -> list[dict]:
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
+    person = ensure_person_or_redirect(request)
+    if isinstance(person, RedirectResponse):
+        return person
     # Pull latest changes from remote
     git_pull()
 
     today = datetime.now().strftime("%Y-%m-%d")
-    filepath = get_today_filepath()
-    ensure_file_exists(filepath)
+    filepath = get_today_filepath(person)
+    ensure_file_exists(person, filepath)
     content = filepath.read_text()
-    relative_path = str(filepath.relative_to(VAULT_ROOT))
+    relative_path = strip_person_path(person, str(filepath.relative_to(VAULT_ROOT)))
     note_html = render_with_pinned_buttons(content, relative_path)
     return templates.TemplateResponse(
         "editor.html",
@@ -301,6 +334,7 @@ async def root(request: Request):
             "content": content,
             "note_html": note_html,
             "current_path": relative_path,
+            "person": person,
         }
     )
 
@@ -341,14 +375,38 @@ async def login(token: str = Form(...)):
     return response
 
 
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    current_person = get_person(request)
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "current_person": current_person,
+            "people": sorted(PERSONS),
+        },
+    )
+
+
+@app.post("/settings")
+async def save_settings(request: Request, person: str = Form(...)):
+    normalized = person.strip().lower()
+    if normalized not in PERSONS:
+        return HTMLResponse("Invalid person", status_code=400)
+    response = RedirectResponse("/", status_code=302)
+    response.set_cookie(PERSON_COOKIE, normalized, max_age=60 * 60 * 24 * 365, samesite="lax")
+    return response
+
+
 @app.get("/api/daily")
-async def get_daily_note():
+async def get_daily_note(request: Request):
+    person = ensure_person(request)
     git_pull()
     today = datetime.now().strftime("%Y-%m-%d")
-    filepath = get_today_filepath()
-    ensure_file_exists(filepath)
+    filepath = get_today_filepath(person)
+    ensure_file_exists(person, filepath)
     content = filepath.read_text()
-    relative_path = str(filepath.relative_to(VAULT_ROOT))
+    relative_path = strip_person_path(person, str(filepath.relative_to(VAULT_ROOT)))
     return {
         "date": today,
         "path": relative_path,
@@ -356,40 +414,14 @@ async def get_daily_note():
     }
 
 
-@app.get("/petra", response_class=HTMLResponse)
-async def petra(request: Request):
-    git_pull()
-
-    filepath = get_petra_filepath()
-    ensure_petra_file_exists(filepath)
-    content = filepath.read_text()
-    note_html = render_with_pinned_buttons(content, "petra_notes.md")
-    return templates.TemplateResponse(
-        "petra.html",
-        {
-            "request": request,
-            "content": content,
-            "note_html": note_html,
-        },
-    )
-
-
-@app.get("/api/petra")
-async def get_petra_note():
-    git_pull()
-    filepath = get_petra_filepath()
-    ensure_petra_file_exists(filepath)
-    content = filepath.read_text()
-    return {"path": "petra_notes.md", "content": content}
-
-
 @app.post("/api/append")
-async def append_note(content: str = Form(...), pinned: str = Form(None)):
+async def append_note(request: Request, content: str = Form(...), pinned: str = Form(None)):
     if not content.strip():
         raise HTTPException(status_code=400, detail="Content cannot be empty")
 
-    filepath = get_today_filepath()
-    ensure_file_exists(filepath)
+    person = ensure_person(request)
+    filepath = get_today_filepath(person)
+    ensure_file_exists(person, filepath)
 
     # Get current time
     time_str = datetime.now().strftime("%H:%M")
@@ -421,13 +453,14 @@ async def append_note(content: str = Form(...), pinned: str = Form(None)):
 
 
 @app.post("/api/todos/add")
-async def add_todo(category: str = Form(...)):
+async def add_todo(request: Request, category: str = Form(...)):
     category = category.strip().lower()
     if category not in {"work", "priv"}:
         raise HTTPException(status_code=400, detail="Invalid category")
 
-    filepath = get_today_filepath()
-    ensure_file_exists(filepath)
+    person = ensure_person(request)
+    filepath = get_today_filepath(person)
+    ensure_file_exists(person, filepath)
     add_task_to_todos(filepath, category)
     success, msg = git_commit_and_push(f"Add {category} task")
 
@@ -438,11 +471,12 @@ async def add_todo(category: str = Form(...)):
 
 
 @app.post("/api/todos/toggle")
-async def toggle_todo(path: str = Form(...), line: int = Form(...)):
+async def toggle_todo(request: Request, path: str = Form(...), line: int = Form(...)):
     if line < 1:
         raise HTTPException(status_code=400, detail="Invalid line number")
 
-    filepath = resolve_path(path)
+    person = ensure_person(request)
+    filepath = resolve_path(person_relative_path(person, path))
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -472,30 +506,12 @@ async def toggle_todo(path: str = Form(...), line: int = Form(...)):
     }
 
 
-@app.post("/api/petra/append")
-async def append_petra(content: str = Form(...)):
-    if not content.strip():
-        raise HTTPException(status_code=400, detail="Content cannot be empty")
-
-    filepath = get_petra_filepath()
-    ensure_petra_file_exists(filepath)
-
-    time_str = datetime.now().strftime("%H:%M")
-    header = f"### {time_str}"
-
-    append_text = f"\n{header}\n\n{content.strip()}\n"
-    append_entry("petra_notes.md", append_text)
-
-    success, msg = git_commit_and_push(f"Append Petra note at {time_str}")
-    return {
-        "success": success,
-        "message": "Content appended successfully" if success else msg
-    }
 
 
 @app.post("/api/clear-pinned")
-async def clear_pinned():
-    filepath = get_today_filepath()
+async def clear_pinned(request: Request):
+    person = ensure_person(request)
+    filepath = get_today_filepath(person)
     if not filepath.exists():
         return {"success": True, "message": "No notes to clear"}
 
@@ -518,9 +534,10 @@ async def clear_pinned():
 
 
 @app.post("/api/save")
-async def save_note(content: str = Form(...)):
-    filepath = get_today_filepath()
-    ensure_file_exists(filepath)
+async def save_note(request: Request, content: str = Form(...)):
+    person = ensure_person(request)
+    filepath = get_today_filepath(person)
+    ensure_file_exists(person, filepath)
 
     write_entry(str(filepath.relative_to(VAULT_ROOT)), content)
 
@@ -533,26 +550,15 @@ async def save_note(content: str = Form(...)):
     }
 
 
-@app.post("/api/petra/save")
-async def save_petra(content: str = Form(...)):
-    filepath = get_petra_filepath()
-    ensure_petra_file_exists(filepath)
-
-    write_entry("petra_notes.md", content)
-    success, msg = git_commit_and_push("Update Petra notes")
-
-    return {
-        "success": success,
-        "message": "Note saved successfully" if success else msg
-    }
 
 
 @app.post("/api/files/unpin")
-async def unpin_entry(path: str = Form(...), line: int = Form(...)):
+async def unpin_entry(request: Request, path: str = Form(...), line: int = Form(...)):
     if line < 1:
         raise HTTPException(status_code=400, detail="Invalid line number")
 
-    filepath = resolve_path(path)
+    person = ensure_person(request)
+    filepath = resolve_path(person_relative_path(person, path))
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -580,70 +586,93 @@ async def unpin_entry(path: str = Form(...), line: int = Form(...)):
 
 @app.get("/files", response_class=HTMLResponse)
 async def files_page(request: Request):
+    person = ensure_person_or_redirect(request)
+    if isinstance(person, RedirectResponse):
+        return person
     git_pull()
-    entries = list_dir(".")
+    entries = list_dir(person)
+    for entry in entries:
+        entry["path"] = strip_person_path(person, entry["path"])
     tree_html = render_tree(entries)
     return templates.TemplateResponse(
         "files.html",
         {
             "request": request,
             "tree_html": tree_html,
+            "person": person,
         },
     )
 
 
 @app.get("/file", response_class=HTMLResponse)
 async def file_page(request: Request, path: str):
+    person = ensure_person_or_redirect(request)
+    if isinstance(person, RedirectResponse):
+        return person
     git_pull()
-    filepath = resolve_path(path)
+    filepath = resolve_path(person_relative_path(person, path))
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="File not found")
     if filepath.is_dir():
         raise HTTPException(status_code=400, detail="Path is a directory")
 
-    content = read_entry(path)
-    note_html = render_with_pinned_buttons(content, path)
+    content = read_entry(str(filepath.relative_to(VAULT_ROOT)))
+    note_html = render_with_pinned_buttons(content, strip_person_path(person, str(filepath.relative_to(VAULT_ROOT))))
     return templates.TemplateResponse(
         "file_page.html",
         {
             "request": request,
-            "file_path": path,
+            "file_path": strip_person_path(person, str(filepath.relative_to(VAULT_ROOT))),
             "content": content,
             "note_html": note_html,
             "message": "",
+            "person": person,
         },
     )
 
 
 @app.get("/tools", response_class=HTMLResponse)
 async def tools_page(request: Request):
-    return templates.TemplateResponse("tools.html", {"request": request})
+    person = ensure_person_or_redirect(request)
+    if isinstance(person, RedirectResponse):
+        return person
+    return templates.TemplateResponse("tools.html", {"request": request, "person": person})
 
 
 @app.get("/tools/llm", response_class=HTMLResponse)
 async def llm_page(request: Request):
-    return templates.TemplateResponse("llm.html", {"request": request})
+    person = ensure_person_or_redirect(request)
+    if isinstance(person, RedirectResponse):
+        return person
+    return templates.TemplateResponse("llm.html", {"request": request, "person": person})
 
 
 @app.get("/tools/noise", response_class=HTMLResponse)
 async def noise_page(request: Request):
-    return templates.TemplateResponse("noise.html", {"request": request})
+    person = ensure_person_or_redirect(request)
+    if isinstance(person, RedirectResponse):
+        return person
+    return templates.TemplateResponse("noise.html", {"request": request, "person": person})
 
 
 @app.get("/sleep-times", response_class=HTMLResponse)
 async def sleep_times_page(request: Request):
+    person = ensure_person_or_redirect(request)
+    if isinstance(person, RedirectResponse):
+        return person
     git_pull()
     filepath = get_sleep_times_filepath()
     ensure_sleep_times_file_exists(filepath)
     entries = get_recent_sleep_entries(filepath)
     return templates.TemplateResponse(
         "sleep_times.html",
-        {"request": request, "entries": entries},
+        {"request": request, "entries": entries, "person": person},
     )
 
 
 @app.get("/api/sleep-times")
-async def list_sleep_times():
+async def list_sleep_times(request: Request):
+    ensure_person(request)
     git_pull()
     filepath = get_sleep_times_filepath()
     ensure_sleep_times_file_exists(filepath)
@@ -653,11 +682,13 @@ async def list_sleep_times():
 
 @app.post("/api/sleep-times/append")
 async def append_sleep_times(
+    request: Request,
     child: str = Form(...),
     entry: str = Form(...),
     asleep: str = Form(None),
     woke: str = Form(None),
 ):
+    ensure_person(request)
     if not entry.strip():
         raise HTTPException(status_code=400, detail="Entry cannot be empty")
 
@@ -682,7 +713,8 @@ async def append_sleep_times(
 
 
 @app.post("/api/sleep-times/delete")
-async def delete_sleep_entry(line: int = Form(...)):
+async def delete_sleep_entry(request: Request, line: int = Form(...)):
+    ensure_person(request)
     if line < 1:
         raise HTTPException(status_code=400, detail="Invalid line number")
 
@@ -707,45 +739,56 @@ async def delete_sleep_entry(line: int = Form(...)):
 
 
 @app.get("/api/files/tree", response_class=HTMLResponse)
-async def files_tree(path: str = "."):
-    entries = list_dir(path)
+async def files_tree(request: Request, path: str = "."):
+    person = ensure_person(request)
+    entries = list_dir(person_relative_path(person, path))
+    for entry in entries:
+        entry["path"] = strip_person_path(person, entry["path"])
     tree_html = render_tree(entries)
     return HTMLResponse(tree_html)
 
 
 @app.get("/api/files/list")
-async def list_files(path: str = "."):
+async def list_files(request: Request, path: str = "."):
+    person = ensure_person(request)
     git_pull()
-    entries = list_dir(path)
+    entries = list_dir(person_relative_path(person, path))
+    for entry in entries:
+        entry["path"] = strip_person_path(person, entry["path"])
     return {"entries": entries}
 
 
 @app.get("/api/files/read")
-async def read_file(path: str):
+async def read_file(request: Request, path: str):
+    person = ensure_person(request)
     git_pull()
-    filepath = resolve_path(path)
+    filepath = resolve_path(person_relative_path(person, path))
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="File not found")
     if filepath.is_dir():
         raise HTTPException(status_code=400, detail="Path is a directory")
-    return {"path": path, "content": read_entry(path)}
+    return {
+        "path": strip_person_path(person, str(filepath.relative_to(VAULT_ROOT))),
+        "content": read_entry(str(filepath.relative_to(VAULT_ROOT)))
+    }
 
 
 @app.get("/api/files/open", response_class=HTMLResponse)
 async def open_file(request: Request, path: str):
-    filepath = resolve_path(path)
+    person = ensure_person(request)
+    filepath = resolve_path(person_relative_path(person, path))
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="File not found")
     if filepath.is_dir():
         raise HTTPException(status_code=400, detail="Path is a directory")
 
-    content = read_entry(path)
-    note_html = render_with_pinned_buttons(content, path)
+    content = read_entry(str(filepath.relative_to(VAULT_ROOT)))
+    note_html = render_with_pinned_buttons(content, strip_person_path(person, str(filepath.relative_to(VAULT_ROOT))))
     return templates.TemplateResponse(
         "file_editor.html",
         {
             "request": request,
-            "file_path": path,
+            "file_path": strip_person_path(person, str(filepath.relative_to(VAULT_ROOT))),
             "content": content,
             "note_html": note_html,
             "message": "",
@@ -754,11 +797,12 @@ async def open_file(request: Request, path: str):
 
 
 @app.post("/api/files/create")
-async def create_file(path: str = Form(...)):
+async def create_file(request: Request, path: str = Form(...)):
     if not path.strip():
         raise HTTPException(status_code=400, detail="Path required")
 
-    normalized = path.strip().lstrip("/")
+    person = ensure_person(request)
+    normalized = person_relative_path(person, path.strip())
     filepath = resolve_path(normalized)
     if filepath.exists():
         return {"success": True, "message": "File already exists"}
@@ -773,7 +817,8 @@ async def create_file(path: str = Form(...)):
 
 @app.post("/api/files/save", response_class=HTMLResponse)
 async def save_file(request: Request, path: str = Form(...), content: str = Form(...)):
-    write_entry(path, content)
+    person = ensure_person(request)
+    write_entry(person_relative_path(person, path), content)
     success, msg = git_commit_and_push("Update file")
     note_html = render_with_pinned_buttons(content, path)
     return templates.TemplateResponse(
@@ -789,16 +834,18 @@ async def save_file(request: Request, path: str = Form(...), content: str = Form
 
 
 @app.post("/api/files/save-json")
-async def save_file_json(path: str = Form(...), content: str = Form(...)):
-    write_entry(path, content)
+async def save_file_json(request: Request, path: str = Form(...), content: str = Form(...)):
+    person = ensure_person(request)
+    write_entry(person_relative_path(person, path), content)
     success, msg = git_commit_and_push("Update file")
     return {"success": success, "message": "File saved" if success else msg}
 
 
 @app.post("/api/files/delete", response_class=HTMLResponse)
 async def delete_file(request: Request, path: str = Form(...)):
+    person = ensure_person(request)
     try:
-        delete_entry(path)
+        delete_entry(person_relative_path(person, path))
     except IsADirectoryError:
         return templates.TemplateResponse(
             "file_editor.html",
@@ -827,9 +874,10 @@ async def delete_file(request: Request, path: str = Form(...)):
 
 
 @app.post("/api/files/delete-json")
-async def delete_file_json(path: str = Form(...)):
+async def delete_file_json(request: Request, path: str = Form(...)):
+    person = ensure_person(request)
     try:
-        delete_entry(path)
+        delete_entry(person_relative_path(person, path))
     except IsADirectoryError:
         return {"success": False, "message": "Cannot delete a directory"}
     success, msg = git_commit_and_push("Delete file")
@@ -837,7 +885,8 @@ async def delete_file_json(path: str = Form(...)):
 
 
 @app.post("/api/tools/claude", response_class=HTMLResponse)
-async def run_claude(prompt: str = Form(...)):
+async def run_claude(request: Request, prompt: str = Form(...)):
+    ensure_person(request)
     command = [
         "claude",
         "--print",
@@ -888,7 +937,8 @@ async def run_claude(prompt: str = Form(...)):
 
 
 @app.post("/api/tools/claude-json")
-async def run_claude_json(prompt: str = Form(...)):
+async def run_claude_json(request: Request, prompt: str = Form(...)):
+    ensure_person(request)
     command = [
         "claude",
         "--print",

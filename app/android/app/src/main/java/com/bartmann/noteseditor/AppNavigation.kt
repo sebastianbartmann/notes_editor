@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
@@ -37,6 +38,7 @@ sealed class Screen(val route: String, val label: String) {
     data object Files : Screen("files", "Files")
     data object Sleep : Screen("sleep", "Sleep")
     data object Tools : Screen("tools", "Tools")
+    data object Settings : Screen("settings", "Settings")
     data object ToolClaude : Screen("tool-claude", "Claude")
     data object ToolNoise : Screen("tool-noise", "Noise")
     data object ToolNotifications : Screen("tool-notifications", "Notifications")
@@ -44,6 +46,7 @@ sealed class Screen(val route: String, val label: String) {
 
 @Composable
 fun NotesEditorApp() {
+    val person = UserSettings.person
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -61,6 +64,15 @@ fun NotesEditorApp() {
         Screen.Tools to Icons.Default.Build
     )
 
+    LaunchedEffect(person) {
+        if (person != null && currentRoute == Screen.Settings.route) {
+            navController.navigate(Screen.Daily.route) {
+                popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -74,8 +86,11 @@ fun NotesEditorApp() {
         ) {
             NavHost(
                 navController = navController,
-                startDestination = Screen.Daily.route
+                startDestination = if (person == null) Screen.Settings.route else Screen.Daily.route
             ) {
+                composable(Screen.Settings.route) {
+                    SettingsScreen(Modifier, androidx.compose.foundation.layout.PaddingValues())
+                }
                 composable(Screen.Daily.route) {
                     DailyScreen(
                         Modifier,
@@ -90,7 +105,8 @@ fun NotesEditorApp() {
                         androidx.compose.foundation.layout.PaddingValues(),
                         onOpenClaude = { navController.navigate(Screen.ToolClaude.route) },
                         onOpenNoise = { navController.navigate(Screen.ToolNoise.route) },
-                        onOpenNotifications = { navController.navigate(Screen.ToolNotifications.route) }
+                        onOpenNotifications = { navController.navigate(Screen.ToolNotifications.route) },
+                        onOpenSettings = { navController.navigate(Screen.Settings.route) }
                     )
                 }
                 composable(Screen.ToolClaude.route) { ToolClaudeScreen(Modifier, androidx.compose.foundation.layout.PaddingValues()) }
@@ -98,29 +114,29 @@ fun NotesEditorApp() {
                 composable(Screen.ToolNotifications.route) { ToolNotificationsScreen(Modifier, androidx.compose.foundation.layout.PaddingValues()) }
             }
         }
-        BottomNavBar(
-            items = items,
-            icons = icons,
-            currentRoute = currentDestination,
-            onNavigate = { screen ->
-                if (currentRoute == screen.route) {
-                    return@BottomNavBar
-                }
-                val popped = navController.popBackStack(screen.route, inclusive = false)
-                if (!popped) {
-                    navController.navigate(screen.route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
+        if (person != null) {
+            Box(modifier = Modifier.padding(bottom = 8.dp)) {
+                BottomNavBar(
+                    items = items,
+                    icons = icons,
+                    currentRoute = currentDestination,
+                    onNavigate = { screen ->
+                        if (currentRoute == screen.route) {
+                            return@BottomNavBar
                         }
-                        launchSingleTop = true
-                        restoreState = true
+                        val popped = navController.popBackStack(screen.route, inclusive = false)
+                        if (!popped) {
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
                     }
-                }
+                )
             }
-        ).let { bottomNav ->
-            Box(
-                modifier = Modifier.padding(bottom = 8.dp)
-            ) { bottomNav }
         }
     }
 }

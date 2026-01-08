@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
+    <link rel="stylesheet" href="/static/style.css?v=2025-01-01">
+</head>
+<body>
+    <main class="container">
+        <nav class="topbar">
+            <div class="brand">
+                <strong>Settings</strong>
+                <a class="button ghost" href="/tools">Tools</a>
+            </div>
+            <div class="today">
+                {% if current_person %}
+                    Person: {{ current_person }}
+                {% else %}
+                    No person selected
+                {% endif %}
+            </div>
+        </nav>
+
+        <article class="panel">
+            <div class="panel-header">
+                <h3>Person</h3>
+            </div>
+            <p class="muted">
+                Select the person root for this device. This choice is stored locally until changed.
+            </p>
+            <form method="post" action="/settings" class="form-row">
+                {% for person in people %}
+                    <button type="submit" name="person" value="{{ person }}" class="button ghost">
+                        {{ person | capitalize }}
+                    </button>
+                {% endfor %}
+            </form>
+            {% if not current_person %}
+                <p class="muted">Pick a person to unlock the rest of the app.</p>
+            {% endif %}
+        </article>
+    </main>
+</body>
+</html>

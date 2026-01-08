@@ -7,14 +7,14 @@
     <link rel="stylesheet" href="/static/style.css?v=2025-01-01">
     <script src="/static/htmx.min.js?v=2025-01-01"></script>
 </head>
-<body class="theme-petra">
+<body>
     <main class="container">
         <nav class="topbar">
             <div class="brand">
                 <strong>Sleep Times</strong>
-                <a class="button ghost" href="/petra">Petra Notes</a>
-                <button class="button ghost" type="button" id="theme-toggle">Night</button>
+                <a class="button ghost" href="/tools">Tools</a>
             </div>
+            <div class="today">Person: {{ person }}</div>
         </nav>
 
         <article class="panel">
@@ -180,29 +180,6 @@
             sleepAdd.addEventListener('click', addSleepTime);
         }
 
-        const themeToggle = document.getElementById('theme-toggle');
-        if (themeToggle) {
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const stored = localStorage.getItem('sleep-theme');
-            const useDark = stored ? stored === 'dark' : prefersDark;
-            if (useDark) {
-                document.body.classList.remove('theme-petra');
-                themeToggle.textContent = 'Day';
-            }
-
-            themeToggle.addEventListener('click', function() {
-                const isPetra = document.body.classList.contains('theme-petra');
-                if (isPetra) {
-                    document.body.classList.remove('theme-petra');
-                    localStorage.setItem('sleep-theme', 'dark');
-                    themeToggle.textContent = 'Day';
-                } else {
-                    document.body.classList.add('theme-petra');
-                    localStorage.setItem('sleep-theme', 'light');
-                    themeToggle.textContent = 'Night';
-                }
-            });
-        }
     </script>
 </body>
 </html>
