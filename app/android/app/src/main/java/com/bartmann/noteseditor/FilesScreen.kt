@@ -1,15 +1,13 @@
 package com.bartmann.noteseditor
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,30 +16,39 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.launch
 
 @Composable
 fun FilesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
-    var currentPath by remember { mutableStateOf(".") }
-    var entries by remember { mutableStateOf(listOf<FileEntry>()) }
+    var rootPath by remember { mutableStateOf(".") }
+    var entriesByPath by remember { mutableStateOf(mapOf<String, List<FileEntry>>()) }
+    var expandedDirs by remember { mutableStateOf(setOf<String>()) }
     var selectedFilePath by remember { mutableStateOf<String?>(null) }
     var fileContent by remember { mutableStateOf("") }
+    var isEditing by remember { mutableStateOf(false) }
     var newFilePath by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
-    var pinnedItems by remember { mutableStateOf(listOf<PinnedItem>()) }
     val scope = rememberCoroutineScope()
 
-    fun loadEntries() {
+    fun loadEntries(path: String) {
         scope.launch {
             try {
-                val response = ApiClient.listFiles(currentPath)
-                entries = response.entries
+                val response = ApiClient.listFiles(path)
+                entriesByPath = entriesByPath.toMutableMap().apply { put(path, response.entries) }
                 message = "Loaded."
             } catch (exc: Exception) {
                 message = "Load failed: ${exc.message}"
             }
         }
+    }
+
+    fun refresh() {
+        expandedDirs = emptySet()
+        entriesByPath = emptyMap()
+        loadEntries(rootPath)
     }
 
     fun openFile(path: String) {
@@ -50,7 +57,7 @@ fun FilesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.
                 val response = ApiClient.readFile(path)
                 selectedFilePath = response.path
                 fileContent = response.content
-                pinnedItems = parsePinned(response.content)
+                isEditing = false
                 message = "Loaded file."
             } catch (exc: Exception) {
                 message = "Read failed: ${exc.message}"
@@ -62,140 +69,232 @@ fun FilesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.
         if (selectedFilePath != null) {
             selectedFilePath = null
             fileContent = ""
-            pinnedItems = emptyList()
+            isEditing = false
             return
         }
-        if (currentPath == "." || currentPath.isBlank()) return
-        currentPath = parentPath(currentPath)
-        loadEntries()
+        if (rootPath == "." || rootPath.isBlank()) return
+        rootPath = parentPath(rootPath)
+        refresh()
     }
 
-    LaunchedEffect(currentPath) {
-        loadEntries()
+    fun toggleDir(path: String) {
+        if (expandedDirs.contains(path)) {
+            expandedDirs = expandedDirs - path
+        } else {
+            expandedDirs = expandedDirs + path
+            loadEntries(path)
+        }
     }
 
-    Column(
-        modifier = modifier
-            .padding(padding)
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    LaunchedEffect(rootPath) {
+        refresh()
+    }
+
+    BackHandler(enabled = selectedFilePath != null) {
+        if (isEditing) {
+            isEditing = false
+        } else {
+            goBack()
+        }
+    }
+
+    ScreenLayout(
+        modifier = modifier,
+        padding = padding,
+        scrollable = selectedFilePath == null
     ) {
-        ScreenTitle(text = "Files")
-        Panel {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                CompactButton(text = "Refresh") { loadEntries() }
-                CompactButton(text = "Back") { goBack() }
-            }
-
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ScreenTitle(text = "Files")
+            CompactTextButton(text = "Reload") { refresh() }
+        }
+        val panelModifier = if (selectedFilePath != null) {
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        } else {
+            Modifier.fillMaxWidth()
+        }
+        Panel(modifier = panelModifier) {
             if (selectedFilePath == null) {
-                Text(text = "Path: $currentPath", color = MaterialTheme.colorScheme.secondary)
-                CompactDivider()
-                entries.forEach { entry ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(text = if (entry.isDir) "[DIR] ${entry.name}" else "[FILE] ${entry.name}")
-                        CompactTextButton(text = "Open") {
-                            if (entry.isDir) {
-                                currentPath = entry.path
-                            } else {
-                                openFile(entry.path)
-                            }
-                        }
-                    }
-                }
-                CompactDivider()
                 SectionTitle(text = "Create file")
-                CompactOutlinedTextField(
-                    value = newFilePath,
-                    onValueChange = { newFilePath = it },
-                    label = "Vault path",
-                    modifier = Modifier.fillMaxWidth()
-                )
-                CompactButton(text = "Create") {
-                    scope.launch {
-                        try {
-                            val response = ApiClient.createFile(newFilePath.trim())
-                            message = response.message
-                            newFilePath = ""
-                            loadEntries()
-                        } catch (exc: Exception) {
-                            message = "Create failed: ${exc.message}"
-                        }
-                    }
-                }
-            } else {
-                Text(text = "Editing: $selectedFilePath", color = MaterialTheme.colorScheme.secondary)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CompactButton(text = "Save") {
-                        scope.launch {
-                            try {
-                                val response = ApiClient.saveFile(selectedFilePath ?: "", fileContent)
-                                message = response.message
-                            } catch (exc: Exception) {
-                                message = "Save failed: ${exc.message}"
-                            }
-                        }
-                    }
-                    CompactTextButton(text = "Delete") {
-                        scope.launch {
-                            try {
-                                val response = ApiClient.deleteFile(selectedFilePath ?: "")
-                                message = response.message
-                                selectedFilePath = null
-                                fileContent = ""
-                                pinnedItems = emptyList()
-                                loadEntries()
-                            } catch (exc: Exception) {
-                                message = "Delete failed: ${exc.message}"
-                            }
-                        }
-                    }
-                }
-                CompactOutlinedTextField(
-                    value = fileContent,
-                    onValueChange = { fileContent = it },
-                    label = "File content",
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 7
-                )
-                CompactDivider()
-                SectionTitle(text = "Pinned entries")
-                if (pinnedItems.isEmpty()) {
-                    Text(text = "No pinned entries found.", color = MaterialTheme.colorScheme.secondary)
-                } else {
-                    pinnedItems.forEach { pinnedItem ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(text = pinnedItem.header, modifier = Modifier.weight(1f))
-                            CompactTextButton(text = "Unpin") {
-                                scope.launch {
-                                    try {
-                                        val response = ApiClient.unpinEntry(
-                                            selectedFilePath ?: "",
-                                            pinnedItem.lineNo
-                                        )
-                                        message = response.message
-                                        openFile(selectedFilePath ?: "")
-                                    } catch (exc: Exception) {
-                                        message = "Unpin failed: ${exc.message}"
-                                    }
+                    horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.xs),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CompactTextField(
+                        value = newFilePath,
+                        onValueChange = { newFilePath = it },
+                        placeholder = "Vault path",
+                        modifier = Modifier.weight(1f)
+                    )
+                    CompactButton(
+                        text = "Create",
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    val response = ApiClient.createFile(newFilePath.trim())
+                                    message = response.message
+                                    newFilePath = ""
+                                    refresh()
+                                } catch (exc: Exception) {
+                                    message = "Create failed: ${exc.message}"
                                 }
                             }
                         }
+                    )
+                }
+                CompactDivider()
+                FileTree(
+                    entries = entriesByPath[rootPath].orEmpty(),
+                    entriesByPath = entriesByPath,
+                    expandedDirs = expandedDirs,
+                    onToggleDir = ::toggleDir,
+                    onOpenFile = ::openFile,
+                    level = 0
+                )
+            } else {
+                AppText(
+                    text = if (isEditing) "Editing: $selectedFilePath" else "File: $selectedFilePath",
+                    style = AppTheme.typography.label,
+                    color = AppTheme.colors.muted
+                )
+                if (isEditing) {
+                    CompactTextField(
+                        value = fileContent,
+                        onValueChange = { fileContent = it },
+                        placeholder = "File content",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        minLines = 7
+                    )
+                } else {
+                    NoteView(
+                        content = fileContent,
+                        onToggleTask = {},
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!isEditing) {
+                        CompactButton(
+                            text = "Delete",
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val response = ApiClient.deleteFile(selectedFilePath ?: "")
+                                        message = response.message
+                                        selectedFilePath = null
+                                        fileContent = ""
+                                        refresh()
+                                    } catch (exc: Exception) {
+                                        message = "Delete failed: ${exc.message}"
+                                    }
+                                }
+                            },
+                            background = AppTheme.colors.danger,
+                            border = AppTheme.colors.danger,
+                            textColor = AppTheme.colors.text
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.xs)) {
+                        if (isEditing) {
+                            CompactButton(
+                                text = "Save",
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            val response = ApiClient.saveFile(selectedFilePath ?: "", fileContent)
+                                            message = response.message
+                                            isEditing = false
+                                        } catch (exc: Exception) {
+                                            message = "Save failed: ${exc.message}"
+                                        }
+                                    }
+                                }
+                            )
+                            CompactTextButton(text = "Cancel") { isEditing = false }
+                        } else {
+                            CompactButton(text = "Edit", onClick = { isEditing = true })
+                        }
                     }
                 }
             }
 
-            if (message.isNotBlank()) {
-                CompactDivider()
-                Text(text = message, color = MaterialTheme.colorScheme.secondary)
+            StatusMessage(text = message)
+        }
+    }
+}
+
+@Composable
+private fun FileTree(
+    entries: List<FileEntry>,
+    entriesByPath: Map<String, List<FileEntry>>,
+    expandedDirs: Set<String>,
+    onToggleDir: (String) -> Unit,
+    onOpenFile: (String) -> Unit,
+    level: Int
+) {
+    entries.forEach { entry ->
+        val isExpanded = entry.isDir && expandedDirs.contains(entry.path)
+        val prefix = if (entry.isDir) {
+            if (isExpanded) "-" else "+"
+        } else {
+            ""
+        }
+        val displayName = if (entry.isDir && !entry.name.endsWith("/")) {
+            "${entry.name}/"
+        } else {
+            entry.name
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    if (entry.isDir) {
+                        onToggleDir(entry.path)
+                    } else {
+                        onOpenFile(entry.path)
+                    }
+                }
+                .padding(
+                    PaddingValues(start = (level * 14).dp, top = 2.dp, bottom = 2.dp)
+                ),
+            horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.xs)
+        ) {
+            Box(modifier = Modifier.width(10.dp)) {
+                AppText(
+                    text = prefix,
+                    style = AppTheme.typography.label,
+                    color = AppTheme.colors.muted
+                )
             }
+            AppText(
+                text = displayName,
+                style = AppTheme.typography.bodySmall,
+                color = AppTheme.colors.text
+            )
+        }
+        if (entry.isDir && isExpanded) {
+            FileTree(
+                entries = entriesByPath[entry.path].orEmpty(),
+                entriesByPath = entriesByPath,
+                expandedDirs = expandedDirs,
+                onToggleDir = onToggleDir,
+                onOpenFile = onOpenFile,
+                level = level + 1
+            )
         }
     }
 }

@@ -1,17 +1,8 @@
 package com.bartmann.noteseditor
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,53 +40,49 @@ fun SleepTimesScreen(modifier: Modifier, padding: androidx.compose.foundation.la
         refresh()
     }
 
-    Column(
-        modifier = modifier
-            .padding(padding)
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ScreenLayout(
+        modifier = modifier,
+        padding = padding
     ) {
         ScreenTitle(text = "Sleep Times")
         Panel {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.xs)) {
                 CompactButton(text = "Refresh") { refresh() }
             }
-            CompactOutlinedTextField(
+            CompactTextField(
                 value = child,
                 onValueChange = { child = it },
-                label = "Child",
+                placeholder = "Child",
                 modifier = Modifier.fillMaxWidth()
             )
-            CompactOutlinedTextField(
+            CompactTextField(
                 value = entryText,
                 onValueChange = { entryText = it },
-                label = "Entry (19:30-06:10 | night)",
+                placeholder = "Entry (19:30-06:10 | night)",
                 modifier = Modifier.fillMaxWidth()
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row {
-                    Checkbox(
+                    AppCheckbox(
                         checked = asleep,
-                        onCheckedChange = { asleep = it },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary,
-                            uncheckedColor = MaterialTheme.colorScheme.secondary
-                        )
+                        onCheckedChange = { asleep = it }
                     )
-                    Text(text = "Eingeschlafen")
+                    AppText(
+                        text = "Eingeschlafen",
+                        style = AppTheme.typography.label,
+                        color = AppTheme.colors.text
+                    )
                 }
                 Row {
-                    Checkbox(
+                    AppCheckbox(
                         checked = woke,
-                        onCheckedChange = { woke = it },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary,
-                            uncheckedColor = MaterialTheme.colorScheme.secondary
-                        )
+                        onCheckedChange = { woke = it }
                     )
-                    Text(text = "Aufgewacht")
+                    AppText(
+                        text = "Aufgewacht",
+                        style = AppTheme.typography.label,
+                        color = AppTheme.colors.text
+                    )
                 }
             }
             CompactButton(text = "Append") {
@@ -115,14 +102,23 @@ fun SleepTimesScreen(modifier: Modifier, padding: androidx.compose.foundation.la
             CompactDivider()
             SectionTitle(text = "Recent entries")
             if (entries.isEmpty()) {
-                Text(text = "No entries found.", color = MaterialTheme.colorScheme.secondary)
+                AppText(
+                    text = "No entries found.",
+                    style = AppTheme.typography.label,
+                    color = AppTheme.colors.muted
+                )
             } else {
                 entries.forEach { entry ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(text = entry.text, modifier = Modifier.weight(1f))
+                        AppText(
+                            text = entry.text,
+                            style = AppTheme.typography.bodySmall,
+                            color = AppTheme.colors.text,
+                            modifier = Modifier.weight(1f)
+                        )
                         CompactButton(text = "Delete") {
                             scope.launch {
                                 try {
@@ -137,10 +133,7 @@ fun SleepTimesScreen(modifier: Modifier, padding: androidx.compose.foundation.la
                     }
                 }
             }
-            if (message.isNotBlank()) {
-                CompactDivider()
-                Text(text = message, color = MaterialTheme.colorScheme.secondary)
-            }
+            StatusMessage(text = message)
         }
     }
 }

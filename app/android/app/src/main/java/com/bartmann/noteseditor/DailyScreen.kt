@@ -1,17 +1,10 @@
 package com.bartmann.noteseditor
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,29 +14,33 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.launch
 
 @Composable
-fun DailyScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
+fun DailyScreen(
+    modifier: Modifier,
+    padding: androidx.compose.foundation.layout.PaddingValues
+) {
     var content by remember { mutableStateOf("") }
     var appendText by remember { mutableStateOf("") }
     var pinned by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var path by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("") }
-    var todos by remember { mutableStateOf(listOf<TodoItem>()) }
-    var pinnedItems by remember { mutableStateOf(listOf<PinnedItem>()) }
+    var isEditing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    fun refresh() {
+    fun refresh(keepEditing: Boolean = false) {
         scope.launch {
             try {
                 val daily = ApiClient.fetchDaily()
                 content = daily.content
                 path = daily.path
                 date = daily.date
-                todos = parseTodos(daily.content)
-                pinnedItems = parsePinned(daily.content)
+                if (!keepEditing) {
+                    isEditing = false
+                }
                 message = "Loaded."
             } catch (exc: Exception) {
                 message = "Failed to load: ${exc.message}"
@@ -55,175 +52,170 @@ fun DailyScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.
         refresh()
     }
 
-    Column(
-        modifier = modifier
-            .padding(padding)
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    BackHandler(enabled = isEditing) {
+        isEditing = false
+    }
+
+    ScreenLayout(
+        modifier = modifier,
+        padding = padding,
+        scrollable = false
     ) {
-        ScreenTitle(text = "Daily $date")
-        Panel {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                CompactButton(text = "Refresh") { refresh() }
-                CompactButton(text = "Save") {
-                    scope.launch {
-                        try {
-                            val response = ApiClient.saveDaily(content)
-                            message = response.message
-                        } catch (exc: Exception) {
-                            message = "Save failed: ${exc.message}"
-                        }
-                    }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.xs),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ScreenTitle(text = "Daily Notes")
+                    CompactTextButton(text = "Reload") { refresh() }
                 }
-                CompactTextButton(text = "Clear pinned") {
-                    scope.launch {
-                        try {
-                            val response = ApiClient.clearPinned()
-                            message = response.message
-                            refresh()
-                        } catch (exc: Exception) {
-                            message = "Clear failed: ${exc.message}"
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.weight(1f))
+                AppText(
+                    text = "Today: $date",
+                    style = AppTheme.typography.label,
+                    color = AppTheme.colors.muted
+                )
             }
-            CompactDivider()
-            SectionTitle(text = "Current note")
-            CompactOutlinedTextField(
-                value = content,
-                onValueChange = { content = it },
-                label = "Daily note",
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 7
-            )
-            CompactDivider()
-            SectionTitle(text = "Quick append")
-            CompactOutlinedTextField(
-                value = appendText,
-                onValueChange = { appendText = it },
-                label = "Append text",
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row {
-                    Checkbox(
-                        checked = pinned,
-                        onCheckedChange = { pinned = it },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary,
-                            uncheckedColor = MaterialTheme.colorScheme.secondary
-                        )
+            Panel(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                SectionTitle(text = "Current note")
+                if (isEditing) {
+                    CompactTextField(
+                        value = content,
+                        onValueChange = { content = it },
+                        placeholder = "Edit note",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        minLines = 10
                     )
-                    Text(text = "Pinned")
-                }
-                CompactButton(text = "Append") {
-                    scope.launch {
-                        try {
-                            val response = ApiClient.appendDaily(appendText, pinned)
-                            message = response.message
-                            appendText = ""
-                            pinned = false
-                            refresh()
-                        } catch (exc: Exception) {
-                            message = "Append failed: ${exc.message}"
-                        }
-                    }
-                }
-            }
-        }
-        Panel {
-            SectionTitle(text = "Todos")
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                CompactButton(text = "Add work") {
-                    scope.launch {
-                        try {
-                            val response = ApiClient.addTodo("work")
-                            message = response.message
-                            refresh()
-                        } catch (exc: Exception) {
-                            message = "Add failed: ${exc.message}"
-                        }
-                    }
-                }
-                CompactButton(text = "Add priv") {
-                    scope.launch {
-                        try {
-                            val response = ApiClient.addTodo("priv")
-                            message = response.message
-                            refresh()
-                        } catch (exc: Exception) {
-                            message = "Add failed: ${exc.message}"
-                        }
-                    }
-                }
-            }
-            if (todos.isEmpty()) {
-                Text(text = "No todos found.", color = MaterialTheme.colorScheme.secondary)
-            } else {
-                todos.forEach { todo ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Checkbox(
-                            checked = todo.done,
-                            onCheckedChange = {
-                                if (path.isNotBlank()) {
-                                    scope.launch {
-                                        try {
-                                            val response = ApiClient.toggleTodo(path, todo.lineNo)
-                                            message = response.message
-                                            refresh()
-                                        } catch (exc: Exception) {
-                                            message = "Toggle failed: ${exc.message}"
-                                        }
-                                    }
-                                }
-                            },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = MaterialTheme.colorScheme.primary,
-                                uncheckedColor = MaterialTheme.colorScheme.secondary
-                            )
-                        )
-                        Text(text = todo.text)
-                    }
-                }
-            }
-        }
-        Panel {
-            SectionTitle(text = "Pinned entries")
-            if (pinnedItems.isEmpty()) {
-                Text(text = "No pinned entries found.", color = MaterialTheme.colorScheme.secondary)
-            } else {
-                pinnedItems.forEach { pinnedItem ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(text = pinnedItem.header, modifier = Modifier.weight(1f))
-                        CompactTextButton(text = "Unpin") {
+                } else {
+                    NoteView(
+                        content = content,
+                        onToggleTask = { lineNo ->
                             if (path.isNotBlank()) {
                                 scope.launch {
                                     try {
-                                        val response = ApiClient.unpinEntry(path, pinnedItem.lineNo)
+                                        val response = ApiClient.toggleTodo(path, lineNo)
                                         message = response.message
                                         refresh()
                                     } catch (exc: Exception) {
-                                        message = "Unpin failed: ${exc.message}"
+                                        message = "Toggle failed: ${exc.message}"
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (isEditing) {
+                            CompactButton(text = "Save") {
+                                scope.launch {
+                                    try {
+                                        val response = ApiClient.saveDaily(content)
+                                        message = response.message
+                                        refresh()
+                                    } catch (exc: Exception) {
+                                        message = "Save failed: ${exc.message}"
+                                    }
+                                }
+                            }
+                            CompactTextButton(text = "Cancel") { isEditing = false }
+                        } else {
+                            CompactButton(text = "Edit") { isEditing = true }
+                            CompactTextButton(text = "Work task") {
+                                scope.launch {
+                                    try {
+                                        val response = ApiClient.addTodo("work")
+                                        message = response.message
+                                        refresh(keepEditing = true)
+                                        isEditing = true
+                                    } catch (exc: Exception) {
+                                        message = "Add failed: ${exc.message}"
+                                    }
+                                }
+                            }
+                            CompactTextButton(text = "Priv task") {
+                                scope.launch {
+                                    try {
+                                        val response = ApiClient.addTodo("priv")
+                                        message = response.message
+                                        refresh(keepEditing = true)
+                                        isEditing = true
+                                    } catch (exc: Exception) {
+                                        message = "Add failed: ${exc.message}"
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
-            if (message.isNotBlank()) {
                 CompactDivider()
-                Text(text = message)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CompactTextButton(text = "Clear") {
+                            scope.launch {
+                                try {
+                                    val response = ApiClient.clearPinned()
+                                    message = response.message
+                                    refresh()
+                                } catch (exc: Exception) {
+                                    message = "Clear failed: ${exc.message}"
+                                }
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppCheckbox(
+                                checked = pinned,
+                                onCheckedChange = { pinned = it }
+                            )
+                            AppText(
+                                text = "Pin",
+                                style = AppTheme.typography.label,
+                                color = AppTheme.colors.text
+                            )
+                        }
+                        CompactButton(text = "Add") {
+                            scope.launch {
+                                try {
+                                    val response = ApiClient.appendDaily(appendText, pinned)
+                                    message = response.message
+                                    appendText = ""
+                                    pinned = false
+                                    refresh()
+                                } catch (exc: Exception) {
+                                    message = "Append failed: ${exc.message}"
+                                }
+                            }
+                        }
+                    }
+                }
+                CompactTextField(
+                    value = appendText,
+                    onValueChange = { appendText = it },
+                    placeholder = "Write something...",
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 6
+                )
+                StatusMessage(text = message, showDivider = false)
             }
-        }
     }
 }

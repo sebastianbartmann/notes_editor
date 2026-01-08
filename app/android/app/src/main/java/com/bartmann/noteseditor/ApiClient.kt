@@ -89,12 +89,6 @@ object ApiClient {
     suspend fun clearPinned(): ApiMessage =
         postForm("/api/clear-pinned", emptyMap())
 
-    suspend fun fetchPetra(): PetraNote = getJson("/api/petra")
-    suspend fun savePetra(content: String): ApiMessage =
-        postForm("/api/petra/save", mapOf("content" to content))
-
-    suspend fun appendPetra(content: String): ApiMessage =
-        postForm("/api/petra/append", mapOf("content" to content))
 
     suspend fun fetchSleepTimes(): SleepTimesResponse = getJson("/api/sleep-times")
 

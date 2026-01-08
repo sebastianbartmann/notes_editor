@@ -1,122 +1,239 @@
 package com.bartmann.noteseditor
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
-private val PanelColor = Color(0xFF15171A)
-private val PanelBorder = Color(0xFF2A2D33)
-private val MutedText = Color(0xFF9AA0A6)
-private val Accent = Color(0xFFD9832B)
-private val InputBg = Color(0xFF0F1114)
+@Composable
+fun AppText(text: String, style: TextStyle, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    BasicText(text = text, style = style.copy(color = color), modifier = modifier)
+}
 
 @Composable
 fun ScreenTitle(text: String) {
-    Text(text = text, fontSize = 16.sp, color = MaterialTheme.colorScheme.onBackground)
+    AppText(text = text, style = AppTheme.typography.title, color = AppTheme.colors.text)
 }
 
 @Composable
 fun SectionTitle(text: String) {
-    Text(text = text, fontSize = 12.sp, color = MutedText)
+    AppText(text = text.uppercase(), style = AppTheme.typography.section, color = AppTheme.colors.muted)
+}
+
+@Composable
+fun ScreenLayout(
+    modifier: Modifier = Modifier,
+    padding: androidx.compose.foundation.layout.PaddingValues,
+    scrollable: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val baseModifier = modifier
+        .padding(padding)
+        .fillMaxSize()
+        .padding(AppTheme.spacing.sm)
+    val layoutModifier = if (scrollable) {
+        baseModifier.verticalScroll(rememberScrollState())
+    } else {
+        baseModifier
+    }
+    Column(
+        modifier = layoutModifier,
+        verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm),
+        content = content
+    )
 }
 
 @Composable
 fun CompactDivider() {
-    HorizontalDivider(thickness = 1.dp, color = PanelBorder)
+    Column {
+        Spacer(modifier = Modifier.height(AppTheme.spacing.sm))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(AppTheme.colors.panelBorder)
+                .height(1.dp)
+        )
+        Spacer(modifier = Modifier.height(AppTheme.spacing.sm))
+    }
 }
 
 @Composable
-fun CompactButton(text: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(6.dp),
-        border = BorderStroke(1.dp, PanelBorder),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF1E2227),
-            contentColor = Color(0xFFE6E6E6)
-        )
+fun CompactButton(
+    text: String,
+    modifier: Modifier = Modifier,
+    background: Color = AppTheme.colors.button,
+    border: Color = AppTheme.colors.panelBorder,
+    textColor: Color = AppTheme.colors.buttonText,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(6.dp)
+    Box(
+        modifier = modifier
+            .border(1.dp, border, shape)
+            .background(background, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = AppTheme.spacing.sm, vertical = 3.dp)
     ) {
-        Text(text = text, fontSize = 11.sp)
+        AppText(text = text, style = AppTheme.typography.label, color = textColor)
     }
 }
 
 @Composable
 fun CompactTextButton(text: String, onClick: () -> Unit) {
-    TextButton(
-        onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-        colors = ButtonDefaults.textButtonColors(contentColor = MutedText)
-    ) {
-        Text(text = text, fontSize = 11.sp)
-    }
+    CompactButton(text = text, onClick = onClick)
 }
 
 @Composable
-fun CompactOutlinedTextField(
+fun CompactTextField(
     value: String,
     onValueChange: (String) -> Unit,
-    label: String,
+    placeholder: String,
     modifier: Modifier,
-    minLines: Int = 1
+    minLines: Int = 1,
+    readOnly: Boolean = false
 ) {
-    OutlinedTextField(
+    var isFocused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(6.dp)
+    val borderColor = if (isFocused) AppTheme.colors.accent else AppTheme.colors.panelBorder
+
+    BasicTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label, fontSize = 11.sp, color = MutedText) },
-        textStyle = TextStyle(fontSize = 12.sp, color = Color(0xFFE6E6E6)),
-        modifier = modifier,
+        textStyle = AppTheme.typography.body.copy(color = AppTheme.colors.text),
+        readOnly = readOnly,
+        modifier = modifier
+            .border(1.dp, borderColor, shape)
+            .background(AppTheme.colors.input, shape)
+            .padding(AppTheme.spacing.sm)
+            .onFocusChanged { isFocused = it.isFocused },
         minLines = minLines,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Accent,
-            unfocusedBorderColor = PanelBorder,
-            focusedTextColor = Color(0xFFE6E6E6),
-            unfocusedTextColor = Color(0xFFE6E6E6),
-            focusedContainerColor = InputBg,
-            unfocusedContainerColor = InputBg,
-            focusedLabelColor = MutedText,
-            unfocusedLabelColor = MutedText,
-            cursorColor = Accent
-        ),
-        shape = RoundedCornerShape(6.dp)
+        decorationBox = { innerTextField ->
+            Box {
+                if (value.isBlank()) {
+                    AppText(
+                        text = placeholder,
+                        style = AppTheme.typography.bodySmall,
+                        color = AppTheme.colors.muted
+                    )
+                }
+                innerTextField()
+            }
+        }
     )
 }
 
 @Composable
-fun Panel(content: @Composable () -> Unit) {
-    Surface(
-        color = PanelColor,
-        shape = RoundedCornerShape(6.dp),
-        border = BorderStroke(1.dp, PanelBorder),
-        shadowElevation = 6.dp,
-        modifier = Modifier.padding(2.dp)
+fun AppCheckbox(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    size: Int = 14
+) {
+    val shape = RoundedCornerShape(3.dp)
+    Box(
+        modifier = modifier
+            .size(size.dp)
+            .border(1.dp, AppTheme.colors.panelBorder, shape)
+            .background(AppTheme.colors.text, shape)
+            .clickable { onCheckedChange(!checked) },
+        contentAlignment = androidx.compose.ui.Alignment.Center
     ) {
-        androidx.compose.foundation.layout.Column(
-            modifier = Modifier.padding(10.dp),
-            content = { content() }
-        )
+        if (checked) {
+            AppText(
+                text = "✓",
+                style = AppTheme.typography.label,
+                color = AppTheme.colors.accent
+            )
+        }
     }
 }
 
+@Composable
+fun Panel(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val shape = RoundedCornerShape(6.dp)
+    Box(
+        modifier = modifier
+            .shadow(6.dp, shape)
+            .background(AppTheme.colors.panel, shape)
+            .border(1.dp, AppTheme.colors.panelBorder, shape)
+            .padding(AppTheme.spacing.sm)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm)
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
 fun appBackgroundBrush(): Brush =
     Brush.radialGradient(
-        colors = listOf(Color(0xFF1A1C20), Color(0xFF0F1012)),
+        colors = listOf(Color(0xFF1A1C20), AppTheme.colors.background),
         radius = 900f
     )
+
+@Composable
+fun MessageBadge(text: String) {
+    val shape = RoundedCornerShape(6.dp)
+    Box(
+        modifier = Modifier
+            .background(AppTheme.colors.panel, shape)
+            .border(1.dp, AppTheme.colors.panelBorder, shape)
+            .padding(horizontal = AppTheme.spacing.sm, vertical = 4.dp)
+    ) {
+        AppText(text = text, style = AppTheme.typography.label, color = AppTheme.colors.text)
+    }
+}
+
+@Composable
+fun StatusMessage(text: String, showDivider: Boolean = true) {
+    if (text.isBlank()) return
+    if (showDivider) {
+        CompactDivider()
+    }
+    MessageBadge(text = text)
+}
+
+@Composable
+fun NoteSurface(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val shape = RoundedCornerShape(6.dp)
+    Box(
+        modifier = modifier
+            .background(AppTheme.colors.note, shape)
+            .border(1.dp, AppTheme.colors.panelBorder, shape)
+            .padding(AppTheme.spacing.xs)
+    ) {
+        content()
+    }
+}

@@ -10,11 +10,6 @@ data class DailyNote(
     val content: String
 )
 
-@Serializable
-data class PetraNote(
-    val path: String,
-    val content: String
-)
 
 @Serializable
 data class SleepTimesResponse(
@@ -58,15 +53,4 @@ data class ClaudeResponse(
     val success: Boolean,
     val message: String,
     val response: String
-)
-
-data class TodoItem(
-    val lineNo: Int,
-    val text: String,
-    val done: Boolean
-)
-
-data class PinnedItem(
-    val lineNo: Int,
-    val header: String
 )
