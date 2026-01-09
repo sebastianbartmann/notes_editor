@@ -66,6 +66,19 @@ fun NotesEditorApp() {
         Screen.Tools to Icons.Default.Build
     )
 
+    // Preserve actual history across top-level screens; edit/view back handling stays inside screens.
+    fun navigateTopLevel(screen: Screen) {
+        if (currentRoute == screen.route) {
+            return
+        }
+        val popped = navController.popBackStack(screen.route, inclusive = false)
+        if (!popped) {
+            navController.navigate(screen.route) {
+                launchSingleTop = true
+            }
+        }
+    }
+
     LaunchedEffect(person) {
         if (person != null && currentRoute == Screen.Settings.route) {
             navController.navigate(Screen.Daily.route) {
@@ -123,21 +136,7 @@ fun NotesEditorApp() {
                     items = items,
                     icons = icons,
                     currentRoute = currentDestination,
-                    onNavigate = { screen ->
-                        if (currentRoute == screen.route) {
-                            return@BottomNavBar
-                        }
-                        val popped = navController.popBackStack(screen.route, inclusive = false)
-                        if (!popped) {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
-                    }
+                    onNavigate = { screen -> navigateTopLevel(screen) }
                 )
             }
         }

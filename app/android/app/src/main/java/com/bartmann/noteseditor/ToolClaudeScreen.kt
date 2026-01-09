@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -35,10 +34,9 @@ import kotlinx.serialization.json.contentOrNull
 @Composable
 fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
     var inputText by remember { mutableStateOf("") }
-    var sessionId by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("") }
-    val messages = remember { mutableStateListOf<ChatMessage>() }
+    val messages = ClaudeSessionStore.messages
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
@@ -55,7 +53,7 @@ fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.la
                 val assistantIndex = messages.size
                 messages.add(ChatMessage(role = "assistant", content = ""))
                 var assistantText = ""
-                ApiClient.claudeChatStream(text, sessionId).collect { event ->
+                ApiClient.claudeChatStream(text, ClaudeSessionStore.sessionId).collect { event ->
                     when (event.type) {
                         "text" -> {
                             assistantText += event.delta.orEmpty()
@@ -75,7 +73,7 @@ fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.la
                         }
                         "done" -> {
                             if (!event.sessionId.isNullOrBlank()) {
-                                sessionId = event.sessionId
+                                ClaudeSessionStore.sessionId = event.sessionId
                             }
                             statusMessage = ""
                         }
@@ -97,9 +95,11 @@ fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.la
 
     fun clearChat() {
         scope.launch {
-            sessionId?.let { ApiClient.claudeClear(it) }
-            sessionId = null
-            messages.clear()
+            val currentSessionId = ClaudeSessionStore.sessionId
+            if (currentSessionId != null) {
+                ApiClient.claudeClear(currentSessionId)
+            }
+            ClaudeSessionStore.clear()
             statusMessage = ""
         }
     }

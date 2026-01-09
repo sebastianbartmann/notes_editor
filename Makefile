@@ -1,4 +1,4 @@
-.PHONY: help run install status android-build android-install deploy-android debug-android
+.PHONY: help run install status build android-build android-install deploy-android debug-android
 
 .DEFAULT_GOAL := help
 
@@ -7,6 +7,7 @@ help:
 	@echo "  run      Run the dev server"
 	@echo "  install  Install/update systemd service"
 	@echo "  status   Show systemd service status"
+	@echo "  build    Build the Android debug APK"
 	@echo "  android-build  Build the Android debug APK"
 	@echo "  android-install  Install the debug APK via adb (USB)"
 	@echo "  deploy-android  Build and install the debug APK"
@@ -24,9 +25,11 @@ install:
 status:
 	sudo systemctl status notes-editor
 
+build: android-build
+
 android-build:
 	GRADLE_USER_HOME="$(PWD)/.gradle" \
-	$(PWD)/app/gradle-8.7/bin/gradle --no-daemon -p $(PWD)/app/android :app:assembleDebug
+	$(PWD)/app/gradle-8.7/bin/gradle --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
 
 android-install:
 	ADB_SERVER_SOCKET=tcp:localhost:5038 \
