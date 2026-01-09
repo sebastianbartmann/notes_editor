@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Request, HTTPException, Form, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
+import json
 import os
 import re
 import secrets
@@ -950,6 +951,24 @@ async def claude_chat(
         import traceback
         traceback.print_exc()
         return {"success": False, "message": str(e), "response": "", "history": []}
+
+
+@app.post("/api/claude/chat-stream")
+async def claude_chat_stream(
+    request: Request,
+    message: str = Form(...),
+    session_id: str = Form(None),
+):
+    person = ensure_person(request)
+
+    async def event_stream():
+        try:
+            async for event in claude_service.chat_stream(session_id, message, person):
+                yield json.dumps(event, default=str) + "\n"
+        except Exception as e:
+            yield json.dumps({"type": "error", "message": str(e)}, default=str) + "\n"
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
 
 @app.get("/api/claude/history")

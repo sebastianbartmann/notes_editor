@@ -3,10 +3,15 @@ package com.bartmann.noteseditor
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okio.BufferedSource
 
 object ApiClient {
     private val json = Json { ignoreUnknownKeys = true }
@@ -15,6 +20,8 @@ object ApiClient {
     private val baseUrls = AppConfig.BASE_URLS
     private val authHeader = "Bearer ${AppConfig.AUTH_TOKEN}"
     private const val PERSON_HEADER = "X-Notes-Person"
+
+    class ApiHttpException(message: String) : Exception(message)
 
     private suspend fun <T> executeRequest(
         buildRequest: (String) -> Request,
@@ -27,7 +34,7 @@ object ApiClient {
                 client.newCall(request).execute().use { response ->
                     val body = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
-                        throw IOException("HTTP ${response.code}: $body")
+                        throw ApiHttpException("HTTP ${response.code}: $body")
                     }
                     return@withContext parse(body)
                 }
@@ -36,6 +43,60 @@ object ApiClient {
             }
         }
         throw (lastError ?: IOException("No reachable servers"))
+    }
+
+    private fun executeStream(
+        buildRequest: (String) -> Request
+    ): Flow<ClaudeStreamEvent> = channelFlow {
+        val job = launch(Dispatchers.IO) {
+            var lastError: IOException? = null
+            for (baseUrl in baseUrls) {
+                val request = buildRequest(baseUrl)
+                val call = client.newCall(request)
+                val response = try {
+                    call.execute()
+                } catch (exc: IOException) {
+                    lastError = exc
+                    continue
+                }
+
+                if (!response.isSuccessful) {
+                    val body = response.body?.string().orEmpty()
+                    response.close()
+                    close(ApiHttpException("HTTP ${response.code}: $body"))
+                    return@launch
+                }
+
+                val source: BufferedSource = response.body?.source()
+                    ?: run {
+                        response.close()
+                        close(IOException("Empty response body"))
+                        return@launch
+                    }
+
+                try {
+                    while (!source.exhausted()) {
+                        val line = source.readUtf8Line() ?: break
+                        if (line.isBlank()) continue
+                        val event = json.decodeFromString<ClaudeStreamEvent>(line)
+                        send(event)
+                    }
+                } catch (exc: Exception) {
+                    close(exc)
+                    response.close()
+                    return@launch
+                }
+
+                response.close()
+                close()
+                return@launch
+            }
+            close(lastError ?: IOException("No reachable servers"))
+        }
+
+        awaitClose {
+            job.cancel()
+        }
     }
 
     private inline fun <reified T> decode(body: String): T =
@@ -140,6 +201,27 @@ object ApiClient {
         val params = mutableMapOf("message" to message)
         if (sessionId != null) params["session_id"] = sessionId
         return postForm("/api/claude/chat", params)
+    }
+
+    fun claudeChatStream(message: String, sessionId: String?): Flow<ClaudeStreamEvent> {
+        val params = mutableMapOf("message" to message)
+        if (sessionId != null) params["session_id"] = sessionId
+        return executeStream { baseUrl ->
+            val formBuilder = FormBody.Builder()
+            for ((key, value) in params) {
+                formBuilder.add(key, value)
+            }
+            val builder = Request.Builder()
+                .url("$baseUrl/api/claude/chat-stream")
+                .header("Authorization", authHeader)
+                .header("Accept", "application/x-ndjson")
+                .post(formBuilder.build())
+            val person = UserSettings.person
+            if (person != null) {
+                builder.header(PERSON_HEADER, person)
+            }
+            builder.build()
+        }
     }
 
     suspend fun claudeClear(sessionId: String): ApiMessage =

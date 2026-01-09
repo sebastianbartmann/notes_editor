@@ -23,6 +23,7 @@
                 <button type="button" class="button ghost" id="clear-btn">Clear</button>
             </div>
             <div id="chat-messages" class="chat-messages"></div>
+            <div id="chat-status" class="chat-status"></div>
             <form id="chat-form" class="chat-form">
                 <textarea name="message" rows="3" placeholder="Ask Claude..." required></textarea>
                 <button type="submit" class="button" id="send-btn">Send</button>
@@ -38,12 +39,24 @@
         const textarea = form.querySelector('textarea');
         const sendBtn = document.getElementById('send-btn');
         const clearBtn = document.getElementById('clear-btn');
+        const statusDiv = document.getElementById('chat-status');
 
         function addMessage(role, content) {
             const msg = document.createElement('div');
             msg.className = `chat-message ${role}`;
             msg.innerHTML = `<div class="chat-role">${role === 'user' ? 'You' : 'Claude'}</div><div class="chat-content">${escapeHtml(content)}</div>`;
             messagesDiv.appendChild(msg);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return msg.querySelector('.chat-content');
+        }
+
+        function setStatus(text) {
+            statusDiv.textContent = text;
+            statusDiv.style.display = text ? 'block' : 'none';
+        }
+
+        function updateMessage(contentEl, text) {
+            contentEl.innerHTML = escapeHtml(text);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
@@ -67,25 +80,66 @@
             addMessage('user', message);
             textarea.value = '';
             setLoading(true);
+            setStatus('Connecting...');
 
             const formData = new FormData();
             formData.append('message', message);
             if (sessionId) formData.append('session_id', sessionId);
 
             try {
-                const res = await fetch('/api/claude/chat', {
+                const res = await fetch('/api/claude/chat-stream', {
                     method: 'POST',
                     body: formData,
                 });
-                const data = await res.json();
-                if (data.success) {
-                    sessionId = data.session_id;
-                    addMessage('assistant', data.response);
-                } else {
-                    addMessage('assistant', `Error: ${data.message}`);
+                if (!res.ok || !res.body) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+
+                const contentEl = addMessage('assistant', '');
+                let assistantText = '';
+                let buffer = '';
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+
+                setStatus('Waiting for Claude...');
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed) continue;
+                        let event;
+                        try {
+                            event = JSON.parse(trimmed);
+                        } catch (err) {
+                            continue;
+                        }
+
+                        if (event.type === 'text') {
+                            assistantText += event.delta || '';
+                            updateMessage(contentEl, assistantText);
+                        } else if (event.type === 'tool') {
+                            const toolDetail = event.input?.url ? ` ${event.input.url}` : '';
+                            setStatus(`Tool: ${event.name}${toolDetail}`);
+                        } else if (event.type === 'done') {
+                            if (event.session_id) {
+                                sessionId = event.session_id;
+                            }
+                            setStatus('');
+                        } else if (event.type === 'error') {
+                            assistantText += `\nError: ${event.message}`;
+                            updateMessage(contentEl, assistantText);
+                            setStatus('');
+                        }
+                    }
                 }
             } catch (err) {
                 addMessage('assistant', `Error: ${err.message}`);
+                setStatus('');
             } finally {
                 setLoading(false);
                 textarea.focus();

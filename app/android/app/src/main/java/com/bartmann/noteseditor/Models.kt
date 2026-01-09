@@ -2,6 +2,7 @@ package com.bartmann.noteseditor
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class DailyNote(
@@ -62,4 +63,15 @@ data class ClaudeChatResponse(
     @SerialName("session_id")
     val sessionId: String = "",
     val history: List<ChatMessage> = emptyList()
+)
+
+@Serializable
+data class ClaudeStreamEvent(
+    val type: String,
+    val delta: String? = null,
+    val name: String? = null,
+    val input: JsonElement? = null,
+    @SerialName("session_id")
+    val sessionId: String? = null,
+    val message: String? = null
 )

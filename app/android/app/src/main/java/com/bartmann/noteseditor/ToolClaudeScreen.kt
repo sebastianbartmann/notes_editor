@@ -24,7 +24,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 @Composable
 fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
@@ -41,22 +45,50 @@ fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.la
         if (text.isEmpty() || isLoading) return
         inputText = ""
         isLoading = true
-        statusMessage = ""
+        statusMessage = "Connecting..."
         messages.add(ChatMessage(role = "user", content = text))
 
         scope.launch {
             try {
-                val response = ApiClient.claudeChat(text, sessionId)
-                if (response.success) {
-                    sessionId = response.sessionId
-                    messages.add(ChatMessage(role = "assistant", content = response.response))
-                } else {
-                    statusMessage = "Error: ${response.message}"
+                val assistantIndex = messages.size
+                messages.add(ChatMessage(role = "assistant", content = ""))
+                var assistantText = ""
+                ApiClient.claudeChatStream(text, sessionId).collect { event ->
+                    when (event.type) {
+                        "text" -> {
+                            assistantText += event.delta.orEmpty()
+                            messages[assistantIndex] = ChatMessage(role = "assistant", content = assistantText)
+                        }
+                        "tool" -> {
+                            val url = event.input
+                                ?.jsonObject
+                                ?.get("url")
+                                ?.jsonPrimitive
+                                ?.contentOrNull
+                            statusMessage = if (url != null) {
+                                "Tool: ${event.name} $url"
+                            } else {
+                                "Tool: ${event.name ?: "working"}"
+                            }
+                        }
+                        "done" -> {
+                            if (!event.sessionId.isNullOrBlank()) {
+                                sessionId = event.sessionId
+                            }
+                            statusMessage = ""
+                        }
+                        "error" -> {
+                            statusMessage = "Error: ${event.message}"
+                        }
+                    }
                 }
             } catch (exc: Exception) {
                 statusMessage = "Error: ${exc.message}"
             } finally {
                 isLoading = false
+                if (!statusMessage.startsWith("Error")) {
+                    statusMessage = ""
+                }
             }
         }
     }
@@ -95,6 +127,11 @@ fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.la
                 items(messages) { message ->
                     ChatBubble(message = message)
                 }
+                if (isLoading) {
+                    item {
+                        ChatBubble(message = ChatMessage(role = "assistant", content = "..."))
+                    }
+                }
             }
         }
 
@@ -116,7 +153,9 @@ fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.la
                     onClick = { if (!isLoading && inputText.isNotBlank()) sendMessage() }
                 )
             }
-            if (statusMessage.isNotEmpty()) {
+            if (isLoading) {
+                StatusMessage(text = "Sending...")
+            } else if (statusMessage.isNotEmpty()) {
                 StatusMessage(text = statusMessage)
             }
         }
