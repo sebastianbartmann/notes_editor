@@ -947,6 +947,8 @@ async def claude_chat(
             "history": [{"role": m.role, "content": m.content} for m in session.messages],
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return {"success": False, "message": str(e), "response": "", "history": []}
 
 
