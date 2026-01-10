@@ -17,7 +17,8 @@ import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 
 class NoiseService : Service() {
-    private var player: MediaPlayer? = null
+    private var currentPlayer: MediaPlayer? = null
+    private var nextPlayer: MediaPlayer? = null
     private var mediaSession: MediaSessionCompat? = null
     private var isPlaying = false
 
@@ -54,9 +55,7 @@ class NoiseService : Service() {
     }
 
     override fun onDestroy() {
-        player?.stop()
-        player?.release()
-        player = null
+        stopPlayers()
         super.onDestroy()
     }
 
@@ -138,31 +137,53 @@ class NoiseService : Service() {
     }
 
     private fun ensurePlayer() {
-        if (player == null) {
-            player = MediaPlayer.create(this, R.raw.noise).apply {
-                isLooping = true
-            }
+        if (currentPlayer == null) {
+            currentPlayer = createPlayer().also { attachCompletionListener(it) }
         }
+        if (nextPlayer == null) {
+            nextPlayer = createPlayer()
+        }
+        currentPlayer?.setNextMediaPlayer(nextPlayer)
+    }
+
+    private fun createPlayer(): MediaPlayer = MediaPlayer.create(this, R.raw.noise)
+
+    private fun attachCompletionListener(player: MediaPlayer) {
+        player.setOnCompletionListener {
+            val completed = currentPlayer
+            if (completed != player) return@setOnCompletionListener
+            val previous = currentPlayer
+            currentPlayer = nextPlayer
+            currentPlayer?.let { attachCompletionListener(it) }
+            nextPlayer = createPlayer()
+            currentPlayer?.setNextMediaPlayer(nextPlayer)
+            previous?.release()
+        }
+    }
+
+    private fun stopPlayers() {
+        currentPlayer?.release()
+        currentPlayer = null
+        nextPlayer?.release()
+        nextPlayer = null
     }
 
     private fun handlePlay() {
         ensurePlayer()
-        player?.start()
+        currentPlayer?.start()
         isPlaying = true
         startForeground(NOTIFICATION_ID, buildNotification())
     }
 
     private fun handlePause() {
-        player?.pause()
+        currentPlayer?.pause()
         isPlaying = false
         startForeground(NOTIFICATION_ID, buildNotification())
     }
 
     private fun handleStop() {
         isPlaying = false
-        player?.stop()
-        player?.release()
-        player = null
+        stopPlayers()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
