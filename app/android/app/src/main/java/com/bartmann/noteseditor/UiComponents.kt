@@ -172,6 +172,7 @@ fun AppCheckbox(
 @Composable
 fun Panel(
     modifier: Modifier = Modifier,
+    fill: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val shape = RoundedCornerShape(6.dp)
@@ -182,8 +183,13 @@ fun Panel(
             .border(1.dp, AppTheme.colors.panelBorder, shape)
             .padding(AppTheme.spacing.sm)
     ) {
+        val columnModifier = if (fill) {
+            Modifier.fillMaxSize()
+        } else {
+            Modifier.fillMaxWidth()
+        }
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = columnModifier,
             verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm)
         ) {
             content()

@@ -26,7 +26,7 @@ fun ToolsScreen(
     ) {
         ScreenTitle(text = "Tools")
         Spacer(modifier = Modifier.weight(1f))
-        Panel {
+        Panel(fill = false) {
             ToolGrid(
                 tools = listOf(
                     "Claude" to onOpenClaude,
