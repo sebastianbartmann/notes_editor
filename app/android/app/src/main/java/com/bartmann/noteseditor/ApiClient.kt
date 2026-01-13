@@ -1,6 +1,7 @@
 package com.bartmann.noteseditor
 
 import java.io.IOException
+import java.net.URLEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.channels.awaitClose
@@ -180,10 +181,10 @@ object ApiClient {
         postForm("/api/sleep-times/delete", mapOf("line" to line.toString()))
 
     suspend fun listFiles(path: String): FilesResponse =
-        getJson("/api/files/list?path=$path")
+        getJson("/api/files/list?path=${URLEncoder.encode(path, "UTF-8")}")
 
     suspend fun readFile(path: String): FileReadResponse =
-        getJson("/api/files/read?path=$path")
+        getJson("/api/files/read?path=${URLEncoder.encode(path, "UTF-8")}")
 
     suspend fun createFile(path: String): ApiMessage =
         postForm("/api/files/create", mapOf("path" to path))
