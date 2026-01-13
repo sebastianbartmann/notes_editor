@@ -2,6 +2,7 @@ package com.bartmann.noteseditor
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -20,9 +21,11 @@ fun ToolsScreen(
 ) {
     ScreenLayout(
         modifier = modifier,
-        padding = padding
+        padding = padding,
+        scrollable = false
     ) {
         ScreenTitle(text = "Tools")
+        Spacer(modifier = Modifier.weight(1f))
         Panel {
             ToolGrid(
                 tools = listOf(
