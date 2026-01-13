@@ -145,10 +145,14 @@ async def chat_stream(
     session.messages.append(ChatMessage(role="user", content=message))
 
     response_text = ""
+    pending_tool: str | None = None
     async for msg in query(prompt=_stream_prompt(message), options=options):
         if isinstance(msg, AssistantMessage):
             for block in msg.content:
                 if isinstance(block, TextBlock):
+                    if pending_tool:
+                        yield {"type": "status", "message": f"Tool finished: {pending_tool}"}
+                        pending_tool = None
                     response_text += block.text
                     if block.text:
                         yield {"type": "text", "delta": block.text}
@@ -159,7 +163,14 @@ async def chat_stream(
                             log_webfetch(url, person)
                         except Exception as e:
                             print(f"Error logging WebFetch: {e}")
+                    tool_detail = ""
+                    if block.input and isinstance(block.input, dict):
+                        url = block.input.get("url")
+                        if url:
+                            tool_detail = f" {url}"
+                    yield {"type": "status", "message": f"Running tool: {block.name}{tool_detail}"}
                     yield {"type": "tool", "name": block.name, "input": block.input}
+                    pending_tool = block.name
         if hasattr(msg, "session_id") and msg.session_id:
             session.agent_session_id = msg.session_id
 

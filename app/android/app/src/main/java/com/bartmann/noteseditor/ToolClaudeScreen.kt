@@ -59,6 +59,9 @@ fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.la
                             assistantText += event.delta.orEmpty()
                             messages[assistantIndex] = ChatMessage(role = "assistant", content = assistantText)
                         }
+                        "status" -> {
+                            statusMessage = event.message ?: "Working..."
+                        }
                         "tool" -> {
                             val url = event.input
                                 ?.jsonObject
@@ -70,6 +73,9 @@ fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.la
                             } else {
                                 "Tool: ${event.name ?: "working"}"
                             }
+                        }
+                        "ping" -> {
+                            // Keep-alive event; no UI update.
                         }
                         "done" -> {
                             if (!event.sessionId.isNullOrBlank()) {

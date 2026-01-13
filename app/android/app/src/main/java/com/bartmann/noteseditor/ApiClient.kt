@@ -2,6 +2,7 @@ package com.bartmann.noteseditor
 
 import java.io.IOException
 import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.channels.awaitClose
@@ -17,6 +18,9 @@ import okio.BufferedSource
 object ApiClient {
     private val json = Json { ignoreUnknownKeys = true }
     private val client = OkHttpClient.Builder().build()
+    private val streamClient = OkHttpClient.Builder()
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .build()
 
     private val baseUrls = AppConfig.BASE_URLS
     private val authHeader = "Bearer ${AppConfig.AUTH_TOKEN}"
@@ -53,7 +57,7 @@ object ApiClient {
             var lastError: IOException? = null
             for (baseUrl in baseUrls) {
                 val request = buildRequest(baseUrl)
-                val call = client.newCall(request)
+                val call = streamClient.newCall(request)
                 val response = try {
                     call.execute()
                 } catch (exc: IOException) {

@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from datetime import datetime
+import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
 import json
@@ -962,11 +963,31 @@ async def claude_chat_stream(
     person = ensure_person(request)
 
     async def event_stream():
+        queue: asyncio.Queue[dict] = asyncio.Queue()
+        done_marker = {"type": "_stream_done"}
+
+        async def producer():
+            try:
+                async for event in claude_service.chat_stream(session_id, message, person):
+                    await queue.put(event)
+            except Exception as e:
+                await queue.put({"type": "error", "message": str(e)})
+            finally:
+                await queue.put(done_marker)
+
+        task = asyncio.create_task(producer())
         try:
-            async for event in claude_service.chat_stream(session_id, message, person):
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=5)
+                except asyncio.TimeoutError:
+                    yield json.dumps({"type": "ping"}, default=str) + "\n"
+                    continue
+                if event is done_marker:
+                    break
                 yield json.dumps(event, default=str) + "\n"
-        except Exception as e:
-            yield json.dumps({"type": "error", "message": str(e)}, default=str) + "\n"
+        finally:
+            task.cancel()
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 

@@ -122,9 +122,13 @@
                         if (event.type === 'text') {
                             assistantText += event.delta || '';
                             updateMessage(contentEl, assistantText);
+                        } else if (event.type === 'status') {
+                            setStatus(event.message || 'Working...');
                         } else if (event.type === 'tool') {
                             const toolDetail = event.input?.url ? ` ${event.input.url}` : '';
                             setStatus(`Tool: ${event.name}${toolDetail}`);
+                        } else if (event.type === 'ping') {
+                            // Keep-alive event; no UI update.
                         } else if (event.type === 'done') {
                             if (event.session_id) {
                                 sessionId = event.session_id;
