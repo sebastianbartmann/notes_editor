@@ -16,7 +16,7 @@ ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
 LINKEDIN_API_BASE = "https://api.linkedin.com"
-LINKEDIN_VERSION = "202401"
+LINKEDIN_VERSION = os.getenv("LINKEDIN_VERSION", "202405")
 
 CSV_HEADERS = [
     "timestamp",
@@ -111,6 +111,7 @@ def _request(method: str, url: str, token: str, **kwargs) -> requests.Response:
         **kwargs,
     )
     if not response.ok:
+        print(f"LinkedIn API error {response.status_code}: {response.text}")
         raise RuntimeError(f"LinkedIn API error: {response.status_code} {response.text}")
     return response
 
