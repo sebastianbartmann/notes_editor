@@ -16,7 +16,7 @@ ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
 LINKEDIN_API_BASE = "https://api.linkedin.com"
-LINKEDIN_VERSION = os.getenv("LINKEDIN_VERSION", "202401").strip()
+LINKEDIN_VERSION = ""
 
 CSV_HEADERS = [
     "timestamp",
@@ -96,8 +96,6 @@ def get_access_token() -> str:
 def get_headers(token: str) -> dict:
     headers = {
         "Authorization": f"Bearer {token}",
-        "LinkedIn-Version": LINKEDIN_VERSION,
-        "X-Restli-Protocol-Version": "2.0.0",
         "Content-Type": "application/json",
     }
     return headers
@@ -113,10 +111,7 @@ def _request(method: str, url: str, token: str, **kwargs) -> requests.Response:
     )
     if not response.ok:
         print(f"LinkedIn API error {response.status_code}: {response.text}")
-        raise RuntimeError(
-            f"LinkedIn API error: {response.status_code} {response.text} "
-            f"(LinkedIn-Version={LINKEDIN_VERSION})"
-        )
+        raise RuntimeError(f"LinkedIn API error: {response.status_code} {response.text}")
     return response
 
 
@@ -135,20 +130,19 @@ def create_post(text: str) -> dict:
 
     payload = {
         "author": person_urn,
-        "commentary": text,
-        "visibility": "PUBLIC",
-        "distribution": {
-            "feedDistribution": "MAIN_FEED",
-            "targetEntities": [],
-            "thirdPartyDistributionChannels": [],
-        },
         "lifecycleState": "PUBLISHED",
-        "isReshareDisabledByAuthor": False,
+        "specificContent": {
+            "com.linkedin.ugc.ShareContent": {
+                "shareCommentary": {"text": text},
+                "shareMediaCategory": "NONE",
+            }
+        },
+        "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"},
     }
 
     response = _request(
         "POST",
-        f"{LINKEDIN_API_BASE}/rest/posts",
+        f"{LINKEDIN_API_BASE}/v2/ugcPosts",
         token,
         json=payload,
     )
@@ -160,7 +154,7 @@ def read_comments(post_urn: str) -> dict:
     encoded_urn = quote(post_urn, safe="")
     response = _request(
         "GET",
-        f"{LINKEDIN_API_BASE}/rest/socialActions/{encoded_urn}/comments",
+        f"{LINKEDIN_API_BASE}/v2/socialActions/{encoded_urn}/comments",
         token,
     )
     return response.json()
@@ -180,7 +174,7 @@ def create_comment(post_urn: str, text: str, parent_comment_urn: str | None = No
 
     response = _request(
         "POST",
-        f"{LINKEDIN_API_BASE}/rest/socialActions/{encoded_urn}/comments",
+        f"{LINKEDIN_API_BASE}/v2/socialActions/{encoded_urn}/comments",
         token,
         json=payload,
     )
