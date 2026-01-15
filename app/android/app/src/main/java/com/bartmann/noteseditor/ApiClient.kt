@@ -231,4 +231,9 @@ object ApiClient {
 
     suspend fun claudeClear(sessionId: String): ApiMessage =
         postForm("/api/claude/clear", mapOf("session_id" to sessionId))
+
+    suspend fun fetchEnv(): EnvResponse = getJson("/api/settings/env")
+
+    suspend fun saveEnv(content: String): ApiMessage =
+        postForm("/api/settings/env", mapOf("env_content" to content))
 }

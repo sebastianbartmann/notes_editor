@@ -83,6 +83,21 @@ def get_theme(request: Request) -> str:
     return theme if theme in THEMES else "dark"
 
 
+def read_env_content() -> str:
+    env_path = BASE_DIR / ".env"
+    return env_path.read_text() if env_path.exists() else ""
+
+
+def write_env_content(env_content: str) -> None:
+    env_path = BASE_DIR / ".env"
+    normalized = env_content.replace("\r\n", "\n")
+    if normalized and not normalized.endswith("\n"):
+        normalized += "\n"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    env_path.write_text(normalized)
+    load_dotenv(env_path, override=True)
+
+
 def person_root_path(person: str) -> Path:
     return VAULT_ROOT / person
 
@@ -396,8 +411,6 @@ async def login(token: str = Form(...)):
 async def settings_page(request: Request):
     current_person = get_person(request)
     current_theme = get_theme(request)
-    env_path = BASE_DIR / ".env"
-    env_content = env_path.read_text() if env_path.exists() else ""
     return templates.TemplateResponse(
         "settings.html",
         {
@@ -407,7 +420,7 @@ async def settings_page(request: Request):
             "people": sorted(PERSONS),
             "themes": sorted(THEMES),
             "theme_class": f"theme-{current_theme}",
-            "env_content": env_content,
+            "env_content": read_env_content(),
         },
     )
 
@@ -436,14 +449,19 @@ async def save_settings(
 
 @app.post("/settings/env")
 async def save_env_settings(env_content: str = Form(...)):
-    env_path = BASE_DIR / ".env"
-    normalized = env_content.replace("\r\n", "\n")
-    if normalized and not normalized.endswith("\n"):
-        normalized += "\n"
-    env_path.parent.mkdir(parents=True, exist_ok=True)
-    env_path.write_text(normalized)
-    load_dotenv(env_path, override=True)
+    write_env_content(env_content)
     return RedirectResponse("/settings", status_code=302)
+
+
+@app.get("/api/settings/env")
+async def get_env_settings():
+    return {"success": True, "content": read_env_content()}
+
+
+@app.post("/api/settings/env")
+async def save_env_settings_json(env_content: str = Form(...)):
+    write_env_content(env_content)
+    return {"success": True, "message": "Saved"}
 
 
 @app.get("/api/daily")

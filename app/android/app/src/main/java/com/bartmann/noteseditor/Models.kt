@@ -50,6 +50,13 @@ data class ApiMessage(
 )
 
 @Serializable
+data class EnvResponse(
+    val success: Boolean,
+    val content: String = "",
+    val message: String = ""
+)
+
+@Serializable
 data class ChatMessage(
     val role: String,
     val content: String
