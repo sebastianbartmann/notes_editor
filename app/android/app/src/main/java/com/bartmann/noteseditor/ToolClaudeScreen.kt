@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -195,11 +196,13 @@ private fun ChatBubble(message: ChatMessage) {
                 style = AppTheme.typography.label,
                 color = AppTheme.colors.muted
             )
-            AppText(
-                text = message.content,
-                style = AppTheme.typography.bodySmall,
-                color = AppTheme.colors.text
-            )
+            SelectionContainer {
+                AppText(
+                    text = message.content,
+                    style = AppTheme.typography.bodySmall,
+                    color = AppTheme.colors.text
+                )
+            }
         }
     }
 }
