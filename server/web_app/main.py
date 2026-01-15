@@ -13,15 +13,15 @@ import re
 import secrets
 import subprocess
 
-load_dotenv()
-
 from .renderers.pinned import render_with_pinned_buttons
 from .renderers.file_tree import render_tree
 from .services.git_sync import git_pull, git_commit_and_push
 from .services.vault_store import VAULT_ROOT, write_entry, append_entry, resolve_path, read_entry, list_dir, delete_entry
 from .services import claude_service
+from .services import linkedin_service
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 NOTES_TOKEN = os.environ.get("NOTES_TOKEN", "VJY9EoAf1xx1bO-LaduCmItwRitCFm9BPuQZ8jd0tcg")
 security = HTTPBearer(auto_error=False)
 
@@ -31,6 +31,8 @@ def require_auth(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> None:
     if request.url.path.startswith("/login"):
+        return
+    if request.url.path.startswith("/api/linkedin/oauth/callback"):
         return
     if credentials is not None and credentials.scheme.lower() == "bearer":
         if secrets.compare_digest(credentials.credentials, NOTES_TOKEN):
@@ -394,6 +396,8 @@ async def login(token: str = Form(...)):
 async def settings_page(request: Request):
     current_person = get_person(request)
     current_theme = get_theme(request)
+    env_path = BASE_DIR / ".env"
+    env_content = env_path.read_text() if env_path.exists() else ""
     return templates.TemplateResponse(
         "settings.html",
         {
@@ -403,6 +407,7 @@ async def settings_page(request: Request):
             "people": sorted(PERSONS),
             "themes": sorted(THEMES),
             "theme_class": f"theme-{current_theme}",
+            "env_content": env_content,
         },
     )
 
@@ -427,6 +432,18 @@ async def save_settings(
     if not person and not theme:
         return HTMLResponse("Nothing to update", status_code=400)
     return response
+
+
+@app.post("/settings/env")
+async def save_env_settings(env_content: str = Form(...)):
+    env_path = BASE_DIR / ".env"
+    normalized = env_content.replace("\r\n", "\n")
+    if normalized and not normalized.endswith("\n"):
+        normalized += "\n"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    env_path.write_text(normalized)
+    load_dotenv(env_path, override=True)
+    return RedirectResponse("/settings", status_code=302)
 
 
 @app.get("/api/daily")
@@ -952,6 +969,19 @@ async def claude_chat(
         import traceback
         traceback.print_exc()
         return {"success": False, "message": str(e), "response": "", "history": []}
+
+
+@app.get("/api/linkedin/oauth/callback")
+async def linkedin_oauth_callback(code: str):
+    try:
+        token_data = linkedin_service.exchange_code_for_token(code)
+        access_token = token_data.get("access_token", "")
+        if not access_token:
+            raise RuntimeError("LinkedIn response missing access_token")
+        linkedin_service.persist_access_token(access_token)
+        return {"success": True, "expires_in": token_data.get("expires_in")}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post("/api/claude/chat-stream")

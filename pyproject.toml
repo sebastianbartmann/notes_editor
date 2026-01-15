@@ -10,4 +10,5 @@ dependencies = [
     "python-multipart",
     "claude-agent-sdk",
     "python-dotenv",
+    "requests",
 ]
