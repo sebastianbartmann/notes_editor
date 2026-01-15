@@ -16,7 +16,7 @@ ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
 LINKEDIN_API_BASE = "https://api.linkedin.com"
-LINKEDIN_VERSION = os.getenv("LINKEDIN_VERSION", "202405")
+LINKEDIN_VERSION = os.getenv("LINKEDIN_VERSION", "202401")
 
 CSV_HEADERS = [
     "timestamp",
