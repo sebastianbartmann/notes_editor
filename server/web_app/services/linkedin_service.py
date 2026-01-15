@@ -16,7 +16,7 @@ ENV_PATH = BASE_DIR / ".env"
 load_dotenv(ENV_PATH)
 
 LINKEDIN_API_BASE = "https://api.linkedin.com"
-LINKEDIN_VERSION = os.getenv("LINKEDIN_VERSION", "202401")
+LINKEDIN_VERSION = os.getenv("LINKEDIN_VERSION", "202401").strip()
 
 CSV_HEADERS = [
     "timestamp",
@@ -94,12 +94,13 @@ def get_access_token() -> str:
 
 
 def get_headers(token: str) -> dict:
-    return {
+    headers = {
         "Authorization": f"Bearer {token}",
         "LinkedIn-Version": LINKEDIN_VERSION,
         "X-Restli-Protocol-Version": "2.0.0",
         "Content-Type": "application/json",
     }
+    return headers
 
 
 def _request(method: str, url: str, token: str, **kwargs) -> requests.Response:
@@ -112,7 +113,10 @@ def _request(method: str, url: str, token: str, **kwargs) -> requests.Response:
     )
     if not response.ok:
         print(f"LinkedIn API error {response.status_code}: {response.text}")
-        raise RuntimeError(f"LinkedIn API error: {response.status_code} {response.text}")
+        raise RuntimeError(
+            f"LinkedIn API error: {response.status_code} {response.text} "
+            f"(LinkedIn-Version={LINKEDIN_VERSION})"
+        )
     return response
 
 
