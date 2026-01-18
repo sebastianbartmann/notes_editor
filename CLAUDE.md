@@ -1,3 +1,1 @@
-Notes Editor is a personal/family “second brain” app with a FastAPI + HTMX web UI and a native Android client. The backend serves daily notes, files browsing/editing, and shared tools, and stores data in a local vault with per-person subfolders (e.g., `sebastian/`, `petra/`). Each client selects a person root and a theme locally, and the server remains user‑agnostic.
-
-Core features include daily notes with tasks and pinned entries, a file tree editor scoped to the selected person root, and shared tools like sleep tracking, noise playback, and a Claude tool. The Android app mirrors the web layout, adds native controls (including media‑style noise controls), and uses persistent local settings for person/theme selection.
+agents.md
