@@ -3,16 +3,16 @@
 }
 
 :root {
-    --bg: #0f1012;
-    --panel: #15171a;
-    --panel-border: #2a2d33;
+    --bg: #1a1c1f;
+    --panel: #282b31;
+    --panel-border: #3a3e46;
     --text: #e6e6e6;
     --muted: #9aa0a6;
     --accent: #d9832b;
     --accent-dim: #7a4a1d;
     --danger: #d66b6b;
-    --input: #0f1114;
-    --note: #101317;
+    --input: #1e2024;
+    --note: #1f2226;
     --shadow: rgba(0, 0, 0, 0.35);
     --radius: 6px;
     --space-1: 6px;
@@ -24,7 +24,7 @@
 
 body {
     margin: 0;
-    background: radial-gradient(circle at 20% 20%, #1a1c20 0%, #0f1012 55%);
+    background: radial-gradient(circle at 20% 20%, #252830 0%, #1a1c1f 55%);
     color: var(--text);
     font-family: var(--font);
     font-size: 14px;
