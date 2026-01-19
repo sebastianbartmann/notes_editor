@@ -11,13 +11,18 @@
 
 ## Current Sprint
 
-_No current tasks_
+_No active tasks_
 
 ## Backlog
 
 _Future work goes here_
 
 ## Completed
+
+### Fix: Android Noise Screen State Sync - 2026-01-19
+- [x] Create `NoisePlaybackState` singleton object with shared `isPlaying` state
+- [x] Update `NoiseService` to write `NoisePlaybackState.isPlaying` on play/pause/stop actions
+- [x] Update `NoiseScreen` to observe `NoisePlaybackState.isPlaying` instead of local `remember` state
 
 ### Android Keyboard Accessory Bar Buttons Update - 2026-01-19
 - [x] Replace `/` button with `(` and `)` buttons in KeyboardAccessoryBar.kt
