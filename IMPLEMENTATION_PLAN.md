@@ -11,25 +11,26 @@
 
 ## Current Sprint
 
-### Android Bottom Info Bar (spec: 16-android-bottom-info-bar.md) - 2026-01-19
-
-- [ ] Create `BottomInfoBar` composable in AppNavigation.kt with route-to-title mapping
-- [ ] Integrate `BottomInfoBar` with existing `ArcMenu` as unified bottom section
-- [ ] Add keyboard visibility hiding (reuse existing `isKeyboardVisible` state)
-- [ ] Remove `ScreenTitle` from DailyScreen, add pull-to-refresh for Reload
-- [ ] Remove `ScreenTitle` from FilesScreen, add pull-to-refresh for Reload
-- [ ] Remove `ScreenTitle` from ClaudeScreen, move Clear button to input area
-- [ ] Remove `ScreenTitle` from SleepTimesScreen, add pull-to-refresh for Reload
-- [ ] Remove `ScreenTitle` from SettingsScreen
-- [ ] Remove `ScreenTitle` from NoiseScreen
-- [ ] Remove `ScreenTitle` from NotificationsScreen
-- [ ] Update ScreenLayout.kt to remove top header support
+_No active work_
 
 ## Backlog
 
 _Future work goes here_
 
 ## Completed
+
+### Android Bottom Info Bar (spec: 16-android-bottom-info-bar.md) - 2026-01-19
+
+- [x] Create `BottomInfoBar` composable in AppNavigation.kt with route-to-title mapping
+- [x] Integrate `BottomInfoBar` with existing `ArcMenu` as unified bottom section
+- [x] Add keyboard visibility hiding (reuse existing `isKeyboardVisible` state)
+- [x] Remove `ScreenTitle` from DailyScreen, add pull-to-refresh for Reload
+- [x] Remove `ScreenTitle` from FilesScreen, add pull-to-refresh for Reload
+- [x] Remove `ScreenTitle` from ClaudeScreen, move Clear button to input area
+- [x] Remove `ScreenTitle` from SleepTimesScreen, add pull-to-refresh for Reload
+- [x] Remove `ScreenTitle` from SettingsScreen
+- [x] Remove `ScreenTitle` from NoiseScreen
+- [x] Remove `ScreenTitle` from NotificationsScreen
 
 ### Android Arc Menu Navigation (spec: 15-android-arc-menu-navigation.md) - 2026-01-19
 

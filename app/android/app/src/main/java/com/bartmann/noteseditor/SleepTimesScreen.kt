@@ -3,6 +3,7 @@ package com.bartmann.noteseditor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
@@ -15,8 +16,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepTimesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
     var entries by remember { mutableStateOf(listOf<SleepEntry>()) }
@@ -25,6 +29,7 @@ fun SleepTimesScreen(modifier: Modifier, padding: androidx.compose.foundation.la
     var asleep by remember { mutableStateOf(false) }
     var woke by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     fun refresh() {
@@ -36,6 +41,7 @@ fun SleepTimesScreen(modifier: Modifier, padding: androidx.compose.foundation.la
             } catch (exc: Exception) {
                 message = "Load failed: ${exc.message}"
             }
+            isRefreshing = false
         }
     }
 
@@ -43,19 +49,19 @@ fun SleepTimesScreen(modifier: Modifier, padding: androidx.compose.foundation.la
         refresh()
     }
 
-    ScreenLayout(
-        modifier = modifier,
-        padding = padding
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            refresh()
+        },
+        modifier = modifier.fillMaxSize()
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        ScreenLayout(
+            modifier = Modifier,
+            padding = padding
         ) {
-            ScreenTitle(text = "Sleep Times")
-            CompactTextButton(text = "Reload", onClick = { refresh() })
-        }
-        Panel {
+            Panel {
             SectionTitle(text = "Recent entries")
             if (entries.isEmpty()) {
                 AppText(
@@ -207,6 +213,7 @@ fun SleepTimesScreen(modifier: Modifier, padding: androidx.compose.foundation.la
                 )
             }
             StatusMessage(text = message)
+        }
         }
     }
 }

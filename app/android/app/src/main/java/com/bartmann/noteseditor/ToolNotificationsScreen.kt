@@ -18,7 +18,6 @@ fun ToolNotificationsScreen(modifier: Modifier, padding: androidx.compose.founda
         modifier = modifier,
         padding = padding
     ) {
-        ScreenTitle(text = "Notifications")
         Panel {
             SectionTitle(text = "Test")
             CompactButton(text = "Send test notification") {

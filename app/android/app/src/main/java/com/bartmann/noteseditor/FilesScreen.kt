@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -19,8 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
     var rootPath by remember { mutableStateOf(".") }
@@ -31,6 +35,7 @@ fun FilesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.
     var isEditing by remember { mutableStateOf(false) }
     var newFilePath by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
+    var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     fun loadEntries(path: String) {
@@ -42,6 +47,7 @@ fun FilesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.
             } catch (exc: Exception) {
                 message = "Load failed: ${exc.message}"
             }
+            isRefreshing = false
         }
     }
 
@@ -98,20 +104,20 @@ fun FilesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.
         }
     }
 
-    ScreenLayout(
-        modifier = modifier,
-        padding = padding,
-        scrollable = selectedFilePath == null
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            refresh()
+        },
+        modifier = modifier.fillMaxSize()
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        ScreenLayout(
+            modifier = Modifier,
+            padding = padding,
+            scrollable = selectedFilePath == null
         ) {
-            ScreenTitle(text = "Files")
-            CompactTextButton(text = "Reload") { refresh() }
-        }
-        val panelModifier = if (selectedFilePath != null) {
+            val panelModifier = if (selectedFilePath != null) {
             Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -233,6 +239,7 @@ fun FilesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.
             }
 
             StatusMessage(text = message)
+        }
         }
     }
 }

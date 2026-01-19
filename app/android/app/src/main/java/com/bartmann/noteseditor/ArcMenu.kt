@@ -167,7 +167,8 @@ fun ArcMenu(
     onStateChange: (ArcMenuState) -> Unit,
     onNavigate: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showButton: Boolean = true
 ) {
     val density = LocalDensity.current
     val expandProgress = remember { Animatable(0f) }
@@ -227,11 +228,11 @@ fun ArcMenu(
             )
         }
 
-        // Menu positioned in bottom-right corner
+        // Menu positioned to align with BottomInfoBar button
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp)
+                .padding(start = 16.dp, end = 80.dp, top = 16.dp, bottom = 16.dp)
         ) {
             val level1RadiusPx = with(density) { ARC_RADIUS_LEVEL1.toPx() }
             val level2RadiusPx = with(density) { ARC_RADIUS_LEVEL2.toPx() }
@@ -287,16 +288,18 @@ fun ArcMenu(
                 }
             }
 
-            // Menu button (always visible)
-            ArcMenuButton(
-                isExpanded = menuState != ArcMenuState.COLLAPSED,
-                onClick = {
-                    when (menuState) {
-                        ArcMenuState.COLLAPSED -> onStateChange(ArcMenuState.LEVEL1)
-                        else -> onStateChange(ArcMenuState.COLLAPSED)
+            // Menu button (conditionally rendered)
+            if (showButton) {
+                ArcMenuButton(
+                    isExpanded = menuState != ArcMenuState.COLLAPSED,
+                    onClick = {
+                        when (menuState) {
+                            ArcMenuState.COLLAPSED -> onStateChange(ArcMenuState.LEVEL1)
+                            else -> onStateChange(ArcMenuState.COLLAPSED)
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 }

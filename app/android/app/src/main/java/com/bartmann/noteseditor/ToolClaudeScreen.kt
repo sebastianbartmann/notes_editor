@@ -120,13 +120,15 @@ fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.la
     ScreenLayout(modifier = modifier, padding = padding) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.End
         ) {
-            ScreenTitle(text = "Claude")
-            CompactButton(text = "Clear", onClick = ::clearChat)
+            CompactButton(
+                text = "Clear",
+                background = AppTheme.colors.danger,
+                border = AppTheme.colors.danger,
+                onClick = ::clearChat
+            )
         }
-
         Panel(modifier = Modifier.weight(1f)) {
             LazyColumn(
                 state = listState,

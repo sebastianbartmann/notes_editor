@@ -3,6 +3,7 @@ package com.bartmann.noteseditor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
@@ -16,8 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DailyScreen(
     modifier: Modifier,
@@ -30,6 +34,7 @@ fun DailyScreen(
     var path by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("") }
     var isEditing by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     fun refresh(keepEditing: Boolean = false) {
@@ -46,6 +51,7 @@ fun DailyScreen(
             } catch (exc: Exception) {
                 message = "Failed to load: ${exc.message}"
             }
+            isRefreshing = false
         }
     }
 
@@ -57,24 +63,23 @@ fun DailyScreen(
         isEditing = false
     }
 
-    ScreenLayout(
-        modifier = modifier,
-        padding = padding,
-        scrollable = false
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            refresh()
+        },
+        modifier = modifier.fillMaxSize()
     ) {
+        ScreenLayout(
+            modifier = Modifier,
+            padding = padding,
+            scrollable = false
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.End
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.xs),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ScreenTitle(text = "Daily Notes")
-                    CompactTextButton(text = "Reload") { refresh() }
-                }
-                Spacer(modifier = Modifier.weight(1f))
                 AppText(
                     text = "Today: $date",
                     style = AppTheme.typography.label,
@@ -226,5 +231,6 @@ fun DailyScreen(
                 )
                 StatusMessage(text = message, showDivider = false)
             }
+        }
     }
 }

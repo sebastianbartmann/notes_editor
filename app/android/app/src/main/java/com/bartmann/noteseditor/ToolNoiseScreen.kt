@@ -33,7 +33,6 @@ fun ToolNoiseScreen(modifier: Modifier, padding: androidx.compose.foundation.lay
         padding = padding,
         scrollable = false
     ) {
-        ScreenTitle(text = "Noise")
         Panel(
             modifier = Modifier
                 .fillMaxWidth()
