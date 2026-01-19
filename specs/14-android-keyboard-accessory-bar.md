@@ -26,10 +26,10 @@ The Android app had keyboard overlap issues:
    - Applies to all screens with text input
 
 2. **Keyboard Accessory Bar**
-   - Display a toolbar with 7 keys when the soft keyboard is open
+   - Display a toolbar with 8 keys when the soft keyboard is open
    - Keys:
      - Arrow keys: `↑`, `↓`, `←`, `→` (4 keys)
-     - Special characters: `/`, `[`, `]` (3 keys)
+     - Special characters: `(`, `)`, `[`, `]` (4 keys)
    - Bar must be visible only when soft keyboard is open
    - Bar positioned above the keyboard, replacing bottom navigation
 
@@ -60,7 +60,7 @@ When keyboard is visible:
 |     (resized via imePadding)     |
 +----------------------------------+
 |      Keyboard Accessory Bar      |
-|    [↑] [↓] [←] [→] [/] [[] []]   |
+|  [↑] [↓] [←] [→] [(] [)] [[] []] |
 +----------------------------------+
 |          Soft Keyboard           |
 +----------------------------------+

@@ -11,13 +11,16 @@
 
 ## Current Sprint
 
-_No active work_
+_No current tasks_
 
 ## Backlog
 
 _Future work goes here_
 
 ## Completed
+
+### Android Keyboard Accessory Bar Buttons Update - 2026-01-19
+- [x] Replace `/` button with `(` and `)` buttons in KeyboardAccessoryBar.kt
 
 ### Android Bottom Info Bar (spec: 16-android-bottom-info-bar.md) - 2026-01-19
 

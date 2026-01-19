@@ -49,7 +49,8 @@ fun KeyboardAccessoryBar(
         AccessoryButton("↓") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_DOWN) }
         AccessoryButton("←") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_LEFT) }
         AccessoryButton("→") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_RIGHT) }
-        AccessoryButton("/") { commitText(view, "/") }
+        AccessoryButton("(") { commitText(view, "(") }
+        AccessoryButton(")") { commitText(view, ")") }
         AccessoryButton("[") { commitText(view, "[") }
         AccessoryButton("]") { commitText(view, "]") }
         }
