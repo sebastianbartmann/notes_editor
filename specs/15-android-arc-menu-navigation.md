@@ -1,6 +1,6 @@
 # Android Arc Menu Navigation Specification
 
-> Status: Draft
+> Status: Implemented
 > Version: 1.0
 > Last Updated: 2026-01-19
 
@@ -11,6 +11,7 @@ This document specifies the replacement of the current static 4-button bottom na
 **Related Specifications:**
 - `03-android-app-architecture.md` - Overall app architecture and navigation
 - `14-android-keyboard-accessory-bar.md` - Keyboard handling patterns to reuse
+- `16-android-bottom-info-bar.md` - Bottom info bar that contains the arc menu FAB
 
 ---
 
@@ -520,6 +521,17 @@ This ensures:
 1. Arc menu doesn't overlap with keyboard
 2. Keyboard accessory bar remains visible and functional
 3. Consistent behavior with existing implementation
+
+---
+
+## Integration with Bottom Info Bar
+
+As of spec 16, the Arc Menu FAB is integrated into a unified bottom bar:
+- Screen title displayed on the left
+- Arc Menu FAB on the right
+- Both hide together when keyboard is visible
+
+See `16-android-bottom-info-bar.md` for details.
 
 ---
 

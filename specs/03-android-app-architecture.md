@@ -11,6 +11,8 @@ This document specifies the architecture of the Notes Editor Android application
 **Related Specifications:**
 - `01-rest-api-contract.md` - REST API endpoints consumed by this app
 - `02-vault-storage-git-sync.md` - Server-side storage layer
+- `15-android-arc-menu-navigation.md` - Arc menu navigation system
+- `16-android-bottom-info-bar.md` - Bottom info bar with screen titles
 
 ---
 
@@ -129,7 +131,7 @@ sealed class Screen(val route: String, val label: String) {
 
 **Navigation Behavior:**
 - Start destination: `Settings` if no person selected, `Daily` otherwise
-- Bottom navigation: Daily, Files, Sleep, Tools (hidden until person is set)
+- Arc menu navigation: collapsed FAB in bottom-right, expands to show all destinations (see specs 15 and 16)
 - Top-level navigation preserves back stack by popping to existing screens
 
 ---
@@ -486,9 +488,9 @@ Common UI components used across screens.
 | Component | Purpose |
 |-----------|---------|
 | `AppText` | Styled text with theme typography |
-| `ScreenTitle` | Screen title header |
+| `ScreenTitle` | **Deprecated** - Screen titles now shown in BottomInfoBar |
 | `SectionTitle` | Section header within screens |
-| `ScreenLayout` | Standard screen container (optional scroll) |
+| `ScreenLayout` | Standard screen container (optional scroll, no longer handles headers) |
 | `CompactDivider` | Thin horizontal divider |
 | `CompactButton` | Primary button style |
 | `CompactTextButton` | Text-only button |
@@ -638,32 +640,24 @@ Test notification functionality.
 └─────────────────┘       └─────────────────┘
                                   │
                           ┌───────┴───────┐
-                          │ Bottom Nav    │
+                          │   Arc Menu    │
+                          │ (FAB bottom-R)│
                           └───────────────┘
                                   │
-         ┌────────────┬───────────┼───────────┬────────────┐
-         ▼            ▼           ▼           ▼            │
-    ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        │
-    │  Daily  │ │  Files  │ │  Sleep  │ │  Tools  │        │
-    └─────────┘ └─────────┘ └─────────┘ └────┬────┘        │
-                                             │             │
-                          ┌──────────────────┼─────────┐   │
-                          ▼                  ▼         ▼   │
-                    ┌──────────┐      ┌─────────┐ ┌──────┐ │
-                    │  Claude  │      │  Noise  │ │Notif.│ │
-                    └──────────┘      └─────────┘ └──────┘ │
-                                                           │
-                                                           ▼
-                                                    ┌───────────┐
-                                                    │ Settings  │
-                                                    │ (via nav) │
-                                                    └───────────┘
+                    ┌─────────────┼─────────────┐
+                    │ Level 1     │ Level 2     │
+                    ▼             ▼             ▼
+         ┌──────────────────────────────────────────────┐
+         │  All screens accessible directly:            │
+         │  Daily, Files, Sleep, Claude, Noise,         │
+         │  Notifications, Settings                     │
+         └──────────────────────────────────────────────┘
 ```
 
 **Navigation Rules:**
-1. Bottom nav items (Daily, Files, Sleep, Tools) preserve their back stacks
-2. Tool sub-screens push onto the Tools back stack
-3. Settings is accessible but not shown in bottom nav when person is selected
+1. Arc Menu Level 1 items (Daily, Files, Sleep) are primary destinations
+2. Arc Menu Level 2 items (Claude, Noise, Notifications, Settings) are secondary destinations
+3. All screens are directly accessible from the Arc Menu without intermediate navigation
 4. When person is null, only Settings screen is accessible
 
 ---
@@ -693,7 +687,7 @@ mutableStateOf triggers recomposition
 NotesEditorApp recomposes
         │
         ├── Navigation start destination updates
-        ├── Bottom nav visibility updates
+        ├── Arc menu/bottom bar visibility updates
         └── ApiClient headers update (next request)
 ```
 

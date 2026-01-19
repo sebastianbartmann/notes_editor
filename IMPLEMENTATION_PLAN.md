@@ -11,7 +11,19 @@
 
 ## Current Sprint
 
-_No active sprint tasks_
+### Android Bottom Info Bar (spec: 16-android-bottom-info-bar.md) - 2026-01-19
+
+- [ ] Create `BottomInfoBar` composable in AppNavigation.kt with route-to-title mapping
+- [ ] Integrate `BottomInfoBar` with existing `ArcMenu` as unified bottom section
+- [ ] Add keyboard visibility hiding (reuse existing `isKeyboardVisible` state)
+- [ ] Remove `ScreenTitle` from DailyScreen, add pull-to-refresh for Reload
+- [ ] Remove `ScreenTitle` from FilesScreen, add pull-to-refresh for Reload
+- [ ] Remove `ScreenTitle` from ClaudeScreen, move Clear button to input area
+- [ ] Remove `ScreenTitle` from SleepTimesScreen, add pull-to-refresh for Reload
+- [ ] Remove `ScreenTitle` from SettingsScreen
+- [ ] Remove `ScreenTitle` from NoiseScreen
+- [ ] Remove `ScreenTitle` from NotificationsScreen
+- [ ] Update ScreenLayout.kt to remove top header support
 
 ## Backlog
 

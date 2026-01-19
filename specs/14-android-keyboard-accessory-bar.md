@@ -34,8 +34,8 @@ The Android app had keyboard overlap issues:
    - Bar positioned above the keyboard, replacing bottom navigation
 
 3. **Bottom Navigation Behavior**
-   - Hide bottom navigation when keyboard is visible
-   - Show bottom navigation when keyboard is hidden
+   - Hide bottom info bar (title + arc menu) when keyboard is visible
+   - Show bottom info bar when keyboard is hidden
 
 ---
 
@@ -49,7 +49,7 @@ When keyboard is hidden:
 |           App Content            |
 |        (NavHost + Screens)       |
 +----------------------------------+
-|         Bottom Nav Bar           |
+|        Bottom Info Bar           |
 +----------------------------------+
 ```
 
@@ -168,3 +168,9 @@ private fun sendKeyEvent(view: View, keyCode: Int) {
 - Android API 31+ (minSdk)
 - AndroidX Core library (for WindowCompat)
 - Compose Foundation (for imePadding, WindowInsets)
+
+---
+
+## Related Specifications
+
+- `16-android-bottom-info-bar.md`
