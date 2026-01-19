@@ -11,13 +11,29 @@
 
 ## Current Sprint
 
-_No current sprint items_
+_No active sprint tasks_
 
 ## Backlog
 
 _Future work goes here_
 
 ## Completed
+
+### Android Arc Menu Navigation (spec: 15-android-arc-menu-navigation.md) - 2026-01-19
+
+- [x] Create `ArcMenuItem` data class and menu configuration in `ArcMenuConfig.kt`
+- [x] Implement `ArcMenuButton` composable (collapsed state FAB)
+- [x] Implement `ArcMenuItem` composable (icon + label with active state)
+- [x] Implement polar coordinate positioning logic (`calculateItemPosition`)
+- [x] Implement `ArcMenu` composable with state management (collapsed/level1/level2)
+- [x] Add expand/collapse animations (150ms fan-out along arc)
+- [x] Add level transition animation (level1 ↔ level2)
+- [x] Implement tap-outside-to-close scrim overlay
+- [x] Integrate `ArcMenu` into `AppNavigation.kt`
+- [x] Remove `BottomNavBar` from `AppNavigation.kt`
+- [x] Delete `ToolsScreen.kt` (no longer needed)
+- [x] Handle external URL opening (Kiosk item)
+- [x] Add keyboard visibility handling (hide menu when keyboard visible)
 
 ### Android Keyboard Accessory Bar (spec: 14-android-keyboard-accessory-bar.md) - 2026-01-19
 
