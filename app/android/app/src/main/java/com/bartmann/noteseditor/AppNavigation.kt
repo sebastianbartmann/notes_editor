@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.Build
@@ -101,6 +102,7 @@ fun NotesEditorApp() {
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(top = 32.dp)
+                .imePadding()
         ) {
             NavHost(
                 navController = navController,
@@ -133,6 +135,7 @@ fun NotesEditorApp() {
                 composable(Screen.ToolNotifications.route) { ToolNotificationsScreen(Modifier, androidx.compose.foundation.layout.PaddingValues()) }
             }
         }
+        KeyboardAccessoryBar()
         if (person != null) {
             Box(
                 modifier = Modifier
