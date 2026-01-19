@@ -12,7 +12,7 @@
 ## Current Sprint
 
 ### Fix: Android Dark Theme Cursor Visibility - 2026-01-19
-- [ ] Add `cursorBrush` parameter to `CompactTextField` in `UiComponents.kt` using accent color (`AppTheme.colors.accent`)
+- [x] Add `cursorBrush` parameter to `CompactTextField` in `UiComponents.kt` using accent color (`AppTheme.colors.accent`)
 
 ## Backlog
 

@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 
@@ -132,6 +133,7 @@ fun CompactTextField(
         value = value,
         onValueChange = onValueChange,
         textStyle = AppTheme.typography.body.copy(color = AppTheme.colors.text),
+        cursorBrush = SolidColor(AppTheme.colors.accent),
         readOnly = readOnly,
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,

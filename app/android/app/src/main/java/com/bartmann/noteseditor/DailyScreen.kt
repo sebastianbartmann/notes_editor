@@ -93,22 +93,23 @@ fun DailyScreen(
             padding = padding,
             scrollable = false
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                AppText(
-                    text = "Today: $date",
-                    style = AppTheme.typography.label,
-                    color = AppTheme.colors.muted
-                )
-            }
             Panel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                SectionTitle(text = "Current note")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SectionTitle(text = "Current note")
+                    AppText(
+                        text = "Today: $date",
+                        style = AppTheme.typography.label,
+                        color = AppTheme.colors.muted
+                    )
+                }
                 if (isEditing) {
                     CompactTextField(
                         value = content,
