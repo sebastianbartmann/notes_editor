@@ -27,14 +27,13 @@
                 <div id="note-display" class="note-view">{{ note_html | safe }}</div>
                 <div class="actions view-actions" id="view-actions">
                     <button id="edit-btn" class="button" onclick="toggleEditMode()">Edit</button>
-                    <form class="inline-form" hx-post="/api/todos/add" hx-target="#message" hx-swap="innerHTML">
-                        <input type="hidden" name="category" value="work">
-                        <button type="submit" class="button ghost">Work task</button>
-                    </form>
-                    <form class="inline-form" hx-post="/api/todos/add" hx-target="#message" hx-swap="innerHTML">
-                        <input type="hidden" name="category" value="priv">
-                        <button type="submit" class="button ghost">Priv task</button>
-                    </form>
+                    <button class="button ghost" onclick="showTaskInput('work')">Work task</button>
+                    <button class="button ghost" onclick="showTaskInput('priv')">Priv task</button>
+                </div>
+                <div id="task-input" class="task-input-row" style="display: none;">
+                    <input type="text" id="task-text" placeholder="Task description" class="task-input">
+                    <button class="button" onclick="saveTask()">Save</button>
+                    <button class="button ghost" onclick="cancelTaskInput()">Cancel</button>
                 </div>
                 <form id="edit-form" class="edit-form" style="display: none;" hx-post="/api/save" hx-target="#save-message" hx-swap="innerHTML">
                     <textarea id="note-editor" name="content" rows="20">{{ content }}</textarea>
@@ -103,6 +102,63 @@
             setTimeout(() => location.reload(), 1000);
         }
 
+        let currentTaskCategory = null;
+
+        function showTaskInput(category) {
+            currentTaskCategory = category;
+            document.getElementById('view-actions').style.display = 'none';
+            document.getElementById('task-input').style.display = 'flex';
+            document.getElementById('task-text').value = '';
+            document.getElementById('task-text').focus();
+        }
+
+        function cancelTaskInput() {
+            currentTaskCategory = null;
+            document.getElementById('task-input').style.display = 'none';
+            document.getElementById('view-actions').style.display = 'flex';
+        }
+
+        function saveTask() {
+            const text = document.getElementById('task-text').value;
+            const messageDiv = document.getElementById('message');
+
+            fetch('/api/todos/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    category: currentTaskCategory,
+                    text: text
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                messageDiv.innerHTML = `<mark>${data.message}</mark>`;
+                if (data.success) {
+                    setTimeout(() => location.reload(), 300);
+                }
+            })
+            .catch(err => {
+                messageDiv.innerHTML = `<mark class="error">Error: ${err.message}</mark>`;
+            });
+
+            cancelTaskInput();
+        }
+
+        // Handle Enter/Escape key in task input
+        document.addEventListener('DOMContentLoaded', function() {
+            const taskInput = document.getElementById('task-text');
+            if (taskInput) {
+                taskInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveTask();
+                    } else if (e.key === 'Escape') {
+                        cancelTaskInput();
+                    }
+                });
+            }
+        });
+
         // Handle append response
         document.body.addEventListener('htmx:afterRequest', function(evt) {
             if (evt.detail.xhr.responseURL.includes('/api/append')) {
@@ -133,22 +189,6 @@
                     }, 600);
                 } else {
                     messageDiv.innerHTML = `<mark class="error">Error unpinning</mark>`;
-                }
-            }
-        });
-
-        document.body.addEventListener('htmx:afterRequest', function(evt) {
-            if (evt.detail.xhr.responseURL.includes('/api/todos/add')) {
-                const messageDiv = document.getElementById('message');
-                if (evt.detail.successful) {
-                    const response = JSON.parse(evt.detail.xhr.response);
-                    messageDiv.innerHTML = `<mark>${response.message}</mark>`;
-                    sessionStorage.setItem('openEditAfterReload', 'true');
-                    setTimeout(() => {
-                        location.reload();
-                    }, 300);
-                } else {
-                    messageDiv.innerHTML = `<mark class="error">Error adding task</mark>`;
                 }
             }
         });
@@ -186,10 +226,6 @@
             }
         });
 
-        if (sessionStorage.getItem('openEditAfterReload') === 'true') {
-            sessionStorage.removeItem('openEditAfterReload');
-            toggleEditMode();
-        }
     </script>
 </body>
 </html>

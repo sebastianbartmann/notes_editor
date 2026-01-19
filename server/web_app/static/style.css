@@ -768,3 +768,26 @@ mark.error {
         align-self: flex-end;
     }
 }
+
+/* Task input row styles */
+.task-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.task-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    font-size: 14px;
+    background: var(--input);
+    color: var(--text);
+}
+
+.task-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}

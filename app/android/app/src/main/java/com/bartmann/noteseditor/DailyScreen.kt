@@ -2,10 +2,13 @@ package com.bartmann.noteseditor
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,8 +20,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,6 +45,8 @@ fun DailyScreen(
     var date by remember { mutableStateOf("") }
     var isEditing by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
+    var taskInputMode by remember { mutableStateOf<String?>(null) }
+    var taskInputText by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     fun refresh(keepEditing: Boolean = false) {
@@ -59,8 +71,13 @@ fun DailyScreen(
         refresh()
     }
 
-    BackHandler(enabled = isEditing) {
-        isEditing = false
+    BackHandler(enabled = isEditing || taskInputMode != null) {
+        if (taskInputMode != null) {
+            taskInputMode = null
+            taskInputText = ""
+        } else {
+            isEditing = false
+        }
     }
 
     PullToRefreshBox(
@@ -141,32 +158,87 @@ fun DailyScreen(
                                 }
                             }
                             CompactTextButton(text = "Cancel") { isEditing = false }
+                        } else if (taskInputMode != null) {
+                            val focusRequester = remember { FocusRequester() }
+                            LaunchedEffect(Unit) {
+                                focusRequester.requestFocus()
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CompactTextField(
+                                    value = taskInputText,
+                                    onValueChange = { taskInputText = it },
+                                    placeholder = "Task description",
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(focusRequester),
+                                    minLines = 1,
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = {
+                                            val category = taskInputMode
+                                            if (category != null) {
+                                                scope.launch {
+                                                    try {
+                                                        val response = ApiClient.addTodo(category, taskInputText)
+                                                        message = response.message
+                                                        refresh()
+                                                    } catch (exc: Exception) {
+                                                        message = "Add failed: ${exc.message}"
+                                                    }
+                                                }
+                                            }
+                                            taskInputMode = null
+                                            taskInputText = ""
+                                        }
+                                    )
+                                )
+                                IconButton(
+                                    onClick = {
+                                        val category = taskInputMode
+                                        if (category != null) {
+                                            scope.launch {
+                                                try {
+                                                    val response = ApiClient.addTodo(category, taskInputText)
+                                                    message = response.message
+                                                    refresh()
+                                                } catch (exc: Exception) {
+                                                    message = "Add failed: ${exc.message}"
+                                                }
+                                            }
+                                        }
+                                        taskInputMode = null
+                                        taskInputText = ""
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = "Save",
+                                        tint = AppTheme.colors.accent
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        taskInputMode = null
+                                        taskInputText = ""
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Cancel",
+                                        tint = AppTheme.colors.muted
+                                    )
+                                }
+                            }
                         } else {
                             CompactButton(text = "Edit") { isEditing = true }
-                            CompactTextButton(text = "Work task") {
-                                scope.launch {
-                                    try {
-                                        val response = ApiClient.addTodo("work")
-                                        message = response.message
-                                        refresh(keepEditing = true)
-                                        isEditing = true
-                                    } catch (exc: Exception) {
-                                        message = "Add failed: ${exc.message}"
-                                    }
-                                }
-                            }
-                            CompactTextButton(text = "Priv task") {
-                                scope.launch {
-                                    try {
-                                        val response = ApiClient.addTodo("priv")
-                                        message = response.message
-                                        refresh(keepEditing = true)
-                                        isEditing = true
-                                    } catch (exc: Exception) {
-                                        message = "Add failed: ${exc.message}"
-                                    }
-                                }
-                            }
+                            CompactTextButton(text = "Work task") { taskInputMode = "work" }
+                            CompactTextButton(text = "Priv task") { taskInputMode = "priv" }
                         }
                     }
                 }

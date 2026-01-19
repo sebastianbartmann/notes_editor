@@ -154,8 +154,8 @@ object ApiClient {
             mapOf("content" to content, "pinned" to if (pinned) "on" else "")
         )
 
-    suspend fun addTodo(category: String): ApiMessage =
-        postForm("/api/todos/add", mapOf("category" to category))
+    suspend fun addTodo(category: String, text: String = ""): ApiMessage =
+        postForm("/api/todos/add", mapOf("category" to category, "text" to text))
 
     suspend fun toggleTodo(path: String, line: Int): ApiMessage =
         postForm("/api/todos/toggle", mapOf("path" to path, "line" to line.toString()))

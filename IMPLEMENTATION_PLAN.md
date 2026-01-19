@@ -11,13 +11,26 @@
 
 ## Current Sprint
 
-_No active tasks_
+_No active sprint_
 
 ## Backlog
 
 _Future work goes here_
 
 ## Completed
+
+### Add Task Inline Input (spec: 17-add-task-inline-input.md) - 2026-01-19
+
+- [x] Server: Add optional `text` param to `POST /api/todos/add` endpoint in main.py
+- [x] Server: Update `add_task_to_todos()` to insert `- [ ] {text}` line instead of blank
+- [x] Android: Add `taskInputMode` and `taskInputText` state to DailyScreen.kt
+- [x] Android: Create `TaskInputRow` composable (TextField + Save/Cancel buttons)
+- [x] Android: Replace button handlers with conditional input mode UI
+- [x] Android: Update `ApiClient.addTodo()` to accept optional `text` param
+- [x] Web: Replace HTMX forms with JS-driven button elements in editor.html
+- [x] Web: Add `showTaskInput()`, `cancelTaskInput()`, `saveTask()` JavaScript functions
+- [x] Web: Add Enter/Escape key handlers for task input
+- [x] Web: Add `.task-input-row` CSS styles
 
 ### Fix: Hide Append Section in Daily Notes Edit Mode - 2026-01-19
 - [x] Android: Wrap append section in `if (!isEditing)` conditional in `DailyScreen.kt`

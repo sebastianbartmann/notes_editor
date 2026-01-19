@@ -253,10 +253,11 @@ def ensure_file_exists(person: str, filepath: Path) -> None:
         git_commit_and_push(f"Create daily note {date_str}")
 
 
-def add_task_to_todos(filepath: Path, category: str) -> None:
+def add_task_to_todos(filepath: Path, category: str, text: str = "") -> None:
     content = filepath.read_text() if filepath.exists() else ""
     lines = content.splitlines()
     had_trailing = content.endswith("\n")
+    task_line = f"- [ ] {text}" if text.strip() else "- [ ]"
 
     todo_index = None
     for idx, line in enumerate(lines):
@@ -271,7 +272,7 @@ def add_task_to_todos(filepath: Path, category: str) -> None:
         lines.append("")
         lines.append(f"### {category}")
         lines.append("")
-        lines.append("- [ ]")
+        lines.append(task_line)
         lines.append("")
     else:
         next_section = None
@@ -294,13 +295,13 @@ def add_task_to_todos(filepath: Path, category: str) -> None:
                 insert_at += 1
             lines.insert(insert_at, f"### {category}")
             lines.insert(insert_at + 1, "")
-            lines.insert(insert_at + 2, "- [ ]")
+            lines.insert(insert_at + 2, task_line)
             lines.insert(insert_at + 3, "")
         else:
             insert_at = sub_index + 1
             if insert_at < len(lines) and lines[insert_at].strip() == "":
                 insert_at += 1
-            lines.insert(insert_at, "- [ ]")
+            lines.insert(insert_at, task_line)
 
     updated = "\n".join(lines)
     if had_trailing:
@@ -519,7 +520,7 @@ async def append_note(request: Request, content: str = Form(...), pinned: str = 
 
 
 @app.post("/api/todos/add")
-async def add_todo(request: Request, category: str = Form(...)):
+async def add_todo(request: Request, category: str = Form(...), text: str = Form("")):
     category = category.strip().lower()
     if category not in {"work", "priv"}:
         raise HTTPException(status_code=400, detail="Invalid category")
@@ -527,7 +528,7 @@ async def add_todo(request: Request, category: str = Form(...)):
     person = ensure_person(request)
     filepath = get_today_filepath(person)
     ensure_file_exists(person, filepath)
-    add_task_to_todos(filepath, category)
+    add_task_to_todos(filepath, category, text)
     success, msg = git_commit_and_push(f"Add {category} task")
 
     return {
