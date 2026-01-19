@@ -28,7 +28,9 @@ fun KeyboardAccessoryBar(
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
-    val isKeyboardVisible = isKeyboardVisible()
+    val density = LocalDensity.current
+    val imeBottom = WindowInsets.ime.getBottom(density)
+    val isKeyboardVisible = imeBottom > 0
 
     AnimatedVisibility(
         visible = isKeyboardVisible,
@@ -36,20 +38,20 @@ fun KeyboardAccessoryBar(
         exit = slideOutVertically { it }
     ) {
         Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .background(AppTheme.colors.panel)
-                .border(1.dp, AppTheme.colors.panelBorder)
-                .padding(horizontal = AppTheme.spacing.sm, vertical = AppTheme.spacing.xs),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            AccessoryButton("↑") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_UP) }
-            AccessoryButton("↓") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_DOWN) }
-            AccessoryButton("←") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_LEFT) }
-            AccessoryButton("→") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_RIGHT) }
-            AccessoryButton("/") { commitText(view, "/") }
-            AccessoryButton("[") { commitText(view, "[") }
-            AccessoryButton("]") { commitText(view, "]") }
+        modifier = modifier
+            .fillMaxWidth()
+            .background(AppTheme.colors.panel)
+            .border(1.dp, AppTheme.colors.panelBorder)
+            .padding(horizontal = AppTheme.spacing.sm, vertical = AppTheme.spacing.xs),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        AccessoryButton("↑") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_UP) }
+        AccessoryButton("↓") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_DOWN) }
+        AccessoryButton("←") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_LEFT) }
+        AccessoryButton("→") { sendKeyEvent(view, KeyEvent.KEYCODE_DPAD_RIGHT) }
+        AccessoryButton("/") { commitText(view, "/") }
+        AccessoryButton("[") { commitText(view, "[") }
+        AccessoryButton("]") { commitText(view, "]") }
         }
     }
 }
@@ -70,14 +72,6 @@ private fun AccessoryButton(
     ) {
         AppText(text = text, style = AppTheme.typography.body, color = AppTheme.colors.buttonText)
     }
-}
-
-@Composable
-fun isKeyboardVisible(): Boolean {
-    val density = LocalDensity.current
-    val imeInsets = WindowInsets.ime
-    val imeBottom = imeInsets.getBottom(density)
-    return imeBottom > 0
 }
 
 private fun sendKeyEvent(view: android.view.View, keyCode: Int) {

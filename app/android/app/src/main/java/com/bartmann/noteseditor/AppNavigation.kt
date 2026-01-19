@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.Build
@@ -52,6 +55,8 @@ sealed class Screen(val route: String, val label: String) {
 @Composable
 fun NotesEditorApp() {
     val person = UserSettings.person
+    val density = LocalDensity.current
+    val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -96,13 +101,13 @@ fun NotesEditorApp() {
         modifier = Modifier
             .fillMaxSize()
             .background(appBackgroundBrush())
+            .imePadding()
     ) {
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(top = 32.dp)
-                .imePadding()
+                .windowInsetsPadding(WindowInsets.statusBars)
         ) {
             NavHost(
                 navController = navController,
@@ -136,7 +141,7 @@ fun NotesEditorApp() {
             }
         }
         KeyboardAccessoryBar()
-        if (person != null) {
+        if (person != null && !isKeyboardVisible) {
             Box(
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars)

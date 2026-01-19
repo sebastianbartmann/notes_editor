@@ -1,11 +1,11 @@
 # Implementation Plan
 
 > Last updated: 2026-01-19
-> Status: Planning
+> Status: Active
 
 ## Instructions
 - Tasks marked `- [ ]` are incomplete
-- Tasks marked `- [x]` are complete  
+- Tasks marked `- [x]` are complete
 - Work from top to bottom (highest priority first)
 - Add new tasks as you discover them
 
@@ -19,33 +19,15 @@ _Future work goes here_
 
 ## Completed
 
-_Completed tasks stay here for reference, will be cleaned up periodically_
+### Android Keyboard Accessory Bar (spec: 14-android-keyboard-accessory-bar.md) - 2026-01-19
 
-### Android Keyboard Accessory Bar (spec: 14-android-keyboard-accessory-bar.md)
-
-**Phase 1: Fix Keyboard Overlap**
-- [x] Add `android:windowSoftInputMode="adjustResize"` to AndroidManifest.xml
-- [x] Add `WindowCompat.setDecorFitsSystemWindows(window, false)` in MainActivity.onCreate()
-- [x] Add `imePadding()` modifier to main content in AppNavigation.kt
-- [x] Test content scrolls/resizes correctly when keyboard appears
-
-**Phase 2: Implement Keyboard Accessory Bar**
-- [x] Create `KeyboardAccessoryBar.kt` with basic UI (7 buttons: ↑↓←→/[])
-- [x] Implement keyboard visibility detection using `WindowInsets.isImeVisible`
-- [x] Add `AnimatedVisibility` for smooth show/hide transitions
-- [x] Integrate accessory bar into AppNavigation.kt layout
-
-**Phase 3: Input Injection**
-- [x] Implement text character insertion for `/`, `[`, `]`
-- [x] Implement arrow key simulation for cursor movement
-- [x] Test input injection works with CompactTextField
-
-**Phase 4: Polish**
-- [x] Style the accessory bar to match app theme (AppTheme colors)
-- [x] Add touch feedback/ripple effects to buttons
-- [x] Test across all 6 screens with text inputs
-- [x] Verify keyboard + bar don't overlap app content
-
-6. specs/.gitkeep
-# This folder contains specification documents
-# Create one .md file per major feature or concern
+- [x] Enable edge-to-edge mode in MainActivity
+- [x] Add `windowSoftInputMode="adjustResize"` to AndroidManifest
+- [x] Add `imePadding()` to main Column in AppNavigation
+- [x] Add `statusBars` inset padding to content area
+- [x] Create KeyboardAccessoryBar composable with 7 buttons (↑↓←→/[])
+- [x] Implement keyboard visibility detection via `WindowInsets.ime`
+- [x] Implement text injection using KeyCharacterMap
+- [x] Implement arrow key injection using KeyEvent dispatch
+- [x] Hide bottom navigation when keyboard is visible
+- [x] Style accessory bar to match app theme

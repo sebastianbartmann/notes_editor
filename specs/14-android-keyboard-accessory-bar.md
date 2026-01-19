@@ -1,20 +1,20 @@
 # Android Keyboard Accessory Bar Specification
 
-> Status: Draft
-> Version: 1.0
+> Status: Implemented
+> Version: 1.1
 > Last Updated: 2026-01-19
 
 ## Overview
 
-This document specifies the implementation of a keyboard accessory bar for the Notes Editor Android application. The primary goal is to fix keyboard overlap issues where the soft keyboard covers input fields, making text invisible while typing. Additionally, a toolbar with special keys will be added above the keyboard for improved text input efficiency.
+This document specifies the implementation of a keyboard accessory bar for the Notes Editor Android application. The primary goal is to fix keyboard overlap issues where the soft keyboard covers input fields, making text invisible while typing. Additionally, a toolbar with special keys is added above the keyboard for improved text input efficiency.
 
 ## Problem Statement
 
-Currently, the Android app has keyboard overlap issues:
+The Android app had keyboard overlap issues:
 - No `windowSoftInputMode` set in AndroidManifest
-- No IME insets handling (only `navigationBars` insets are handled)
-- When the soft keyboard appears, it overlaps with text input fields
-- This is particularly problematic in the Claude chat screen
+- No IME insets handling (only `navigationBars` insets were handled)
+- When the soft keyboard appeared, it overlapped with text input fields
+- This was particularly problematic in the Claude chat screen
 
 ## Requirements
 
@@ -28,24 +28,14 @@ Currently, the Android app has keyboard overlap issues:
 2. **Keyboard Accessory Bar**
    - Display a toolbar with 7 keys when the soft keyboard is open
    - Keys:
-     - Arrow keys: `Up`, `Down`, `Left`, `Right` (4 keys)
+     - Arrow keys: `↑`, `↓`, `←`, `→` (4 keys)
      - Special characters: `/`, `[`, `]` (3 keys)
    - Bar must be visible only when soft keyboard is open
-   - Bar positioned above the keyboard, below app content
+   - Bar positioned above the keyboard, replacing bottom navigation
 
-3. **Affected Screens**
-   - Claude chat
-   - Daily notes
-   - Files editor
-   - Sleep times
-   - Settings
-   - UiComponents (CompactTextField used across screens)
-
-### Non-Functional Requirements
-
-- Smooth animations when keyboard appears/disappears
-- Minimal visual footprint for the accessory bar
-- No performance impact on text input responsiveness
+3. **Bottom Navigation Behavior**
+   - Hide bottom navigation when keyboard is visible
+   - Show bottom navigation when keyboard is hidden
 
 ---
 
@@ -53,25 +43,41 @@ Currently, the Android app has keyboard overlap issues:
 
 ### Architecture Overview
 
+When keyboard is hidden:
 ```
 +----------------------------------+
 |           App Content            |
 |        (NavHost + Screens)       |
 +----------------------------------+
-|      Keyboard Accessory Bar      |  <- Only visible when IME is open
-|   [Up][Dn][Lt][Rt] [/] [[] []]   |
-+----------------------------------+
 |         Bottom Nav Bar           |
-+----------------------------------+
-|          Soft Keyboard           |  <- System IME
 +----------------------------------+
 ```
 
-### Key Components
+When keyboard is visible:
+```
++----------------------------------+
+|           App Content            |
+|     (resized via imePadding)     |
++----------------------------------+
+|      Keyboard Accessory Bar      |
+|    [↑] [↓] [←] [→] [/] [[] []]   |
++----------------------------------+
+|          Soft Keyboard           |
++----------------------------------+
+```
 
-#### 1. AndroidManifest Configuration
+### Key Implementation Details
 
-Add `windowSoftInputMode` to the main activity:
+#### 1. Edge-to-Edge Mode (Required)
+
+Edge-to-edge mode must be enabled for `WindowInsets.ime` to be reported to the app. Without this, the system consumes IME insets and the app cannot detect or respond to keyboard visibility.
+
+```kotlin
+// MainActivity.kt
+WindowCompat.setDecorFitsSystemWindows(window, false)
+```
+
+#### 2. AndroidManifest Configuration
 
 ```xml
 <activity
@@ -80,236 +86,85 @@ Add `windowSoftInputMode` to the main activity:
     ...>
 ```
 
-#### 2. Edge-to-Edge Display Setup
+Note: `adjustResize` alone does NOT resize the window when edge-to-edge is enabled. The app must use `imePadding()` to handle the resize.
 
-In `MainActivity.kt`, enable edge-to-edge mode:
+#### 3. IME Padding on Main Layout
 
-```kotlin
-override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    WindowCompat.setDecorFitsSystemWindows(window, false)
-    // ... rest of setup
-}
-```
-
-#### 3. IME Insets Handling
-
-Apply `imePadding()` modifier to the main content container in `AppNavigation.kt`:
+Apply `imePadding()` to the root Column so the entire layout moves above the keyboard:
 
 ```kotlin
 Column(
     modifier = Modifier
         .fillMaxSize()
-        .imePadding()  // Add this
+        .imePadding()  // Pushes content above keyboard
 ) {
-    NavHost(...)
-    BottomNavBar(...)
+    // Content, accessory bar, bottom nav
 }
 ```
 
-#### 4. KeyboardAccessoryBar Composable
+#### 4. Keyboard Visibility Detection
 
-New composable that:
-- Detects keyboard visibility via `WindowInsets.isImeVisible`
-- Renders a row of buttons for the 7 keys
-- Injects characters/cursor movements into the focused TextField
+Use `WindowInsets.ime.getBottom(density)` to detect keyboard visibility:
 
 ```kotlin
-@Composable
-fun KeyboardAccessoryBar(
-    modifier: Modifier = Modifier
-) {
-    val isKeyboardVisible = WindowInsets.isImeVisible
+val density = LocalDensity.current
+val imeBottom = WindowInsets.ime.getBottom(density)
+val isKeyboardVisible = imeBottom > 0
+```
 
-    AnimatedVisibility(visible = isKeyboardVisible) {
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            // Arrow keys
-            AccessoryKey("Up") { sendKeyEvent(KeyEvent.KEYCODE_DPAD_UP) }
-            AccessoryKey("Dn") { sendKeyEvent(KeyEvent.KEYCODE_DPAD_DOWN) }
-            AccessoryKey("Lt") { sendKeyEvent(KeyEvent.KEYCODE_DPAD_LEFT) }
-            AccessoryKey("Rt") { sendKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT) }
+This only works when edge-to-edge mode is enabled.
 
-            Spacer(modifier = Modifier.width(16.dp))
+#### 5. Input Injection via KeyCharacterMap
 
-            // Special characters
-            AccessoryKey("/") { insertText("/") }
-            AccessoryKey("[") { insertText("[") }
-            AccessoryKey("]") { insertText("]") }
-        }
+Text characters are injected using `KeyCharacterMap` which converts characters to key events:
+
+```kotlin
+private fun commitText(view: View, text: String) {
+    val charMap = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD)
+    val events = charMap.getEvents(text.toCharArray())
+    events?.forEach { event ->
+        view.dispatchKeyEvent(event)
     }
 }
 ```
 
-#### 5. Text Injection Mechanism
-
-Two approaches for injecting input:
-
-**Option A: InputConnection (Recommended)**
-Use `BaseInputConnection` to send text/key events to the currently focused view:
+Arrow keys use direct `KeyEvent` dispatch:
 
 ```kotlin
-private fun getCurrentInputConnection(context: Context): InputConnection? {
-    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-    val focusedView = (context as? Activity)?.currentFocus
-    return focusedView?.onCreateInputConnection(EditorInfo())
-}
-
-private fun insertText(text: String) {
-    getCurrentInputConnection(context)?.commitText(text, 1)
-}
-
-private fun sendKeyEvent(keyCode: Int) {
-    getCurrentInputConnection(context)?.apply {
-        sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-        sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
-    }
-}
-```
-
-**Option B: Compose State Hoisting**
-Pass `TextFieldValue` state up and inject characters directly:
-
-```kotlin
-@Composable
-fun KeyboardAccessoryBar(
-    textFieldValue: TextFieldValue,
-    onValueChange: (TextFieldValue) -> Unit
-) {
-    // Insert character at cursor position
-    fun insertChar(char: String) {
-        val selection = textFieldValue.selection
-        val newText = textFieldValue.text.replaceRange(
-            selection.start, selection.end, char
-        )
-        onValueChange(TextFieldValue(
-            text = newText,
-            selection = TextRange(selection.start + char.length)
-        ))
-    }
-}
-```
-
-### Layout Structure
-
-Updated `AppNavigation.kt` layout:
-
-```kotlin
-@Composable
-fun AppNavigation(...) {
-    Scaffold(
-        modifier = Modifier.imePadding(),
-        bottomBar = {
-            Column {
-                KeyboardAccessoryBar()
-                BottomNavBar(navController)
-            }
-        }
-    ) { paddingValues ->
-        NavHost(
-            modifier = Modifier.padding(paddingValues),
-            ...
-        )
-    }
+private fun sendKeyEvent(view: View, keyCode: Int) {
+    val eventTime = SystemClock.uptimeMillis()
+    view.dispatchKeyEvent(KeyEvent(eventTime, eventTime, KeyEvent.ACTION_DOWN, keyCode, 0))
+    view.dispatchKeyEvent(KeyEvent(eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0))
 }
 ```
 
 ---
 
-## Files to Modify
+## Files Modified
 
 | File | Changes |
 |------|---------|
-| `app/android/app/src/main/AndroidManifest.xml` | Add `android:windowSoftInputMode="adjustResize"` |
-| `app/android/app/src/main/java/com/bartmann/noteseditor/MainActivity.kt` | Enable edge-to-edge with `WindowCompat.setDecorFitsSystemWindows(window, false)` |
-| `app/android/app/src/main/java/com/bartmann/noteseditor/AppNavigation.kt` | Add `imePadding()`, integrate `KeyboardAccessoryBar` |
-| `app/android/app/src/main/java/com/bartmann/noteseditor/ui/KeyboardAccessoryBar.kt` | New file: `KeyboardAccessoryBar` composable |
+| `AndroidManifest.xml` | Added `android:windowSoftInputMode="adjustResize"` |
+| `MainActivity.kt` | Added `WindowCompat.setDecorFitsSystemWindows(window, false)` |
+| `AppNavigation.kt` | Added `imePadding()` to Column, hide bottom nav when keyboard visible |
+| `KeyboardAccessoryBar.kt` | New file with accessory bar composable |
 
 ---
 
-## Implementation Steps
+## Key Learnings
 
-### Phase 1: Fix Keyboard Overlap
+1. **Edge-to-edge is required** for `WindowInsets.ime` to work. Without it, IME insets are consumed by the system.
 
-1. Add `android:windowSoftInputMode="adjustResize"` to AndroidManifest.xml
-2. Add `WindowCompat.setDecorFitsSystemWindows(window, false)` in MainActivity.onCreate()
-3. Add `imePadding()` modifier to main content in AppNavigation.kt
-4. Test that content scrolls/resizes correctly when keyboard appears
+2. **Don't mix adjustResize with imePadding incorrectly** - with edge-to-edge enabled, `adjustResize` doesn't automatically resize the window. You must use `imePadding()` to handle the resize manually.
 
-### Phase 2: Implement Keyboard Accessory Bar
+3. **imePadding placement matters** - apply it to the root container so all content moves up together.
 
-5. Create `KeyboardAccessoryBar.kt` with basic UI (7 buttons in a row)
-6. Implement keyboard visibility detection using `WindowInsets.isImeVisible`
-7. Add `AnimatedVisibility` for smooth show/hide transitions
-8. Integrate accessory bar into AppNavigation.kt layout
-
-### Phase 3: Input Injection
-
-9. Implement text character insertion for `/`, `[`, `]`
-10. Implement arrow key simulation for cursor movement
-11. Test input injection works with CompactTextField and other text fields
-
-### Phase 4: Polish
-
-12. Style the accessory bar to match app theme
-13. Add touch feedback/ripple effects to buttons
-14. Test across all 6 screens with text inputs
-15. Verify keyboard + bar don't overlap app content
-
----
-
-## Testing Considerations
-
-### Manual Testing
-
-1. **Keyboard Overlap**
-   - Open each screen with text input
-   - Tap input field to bring up keyboard
-   - Verify content scrolls and input remains visible
-   - Type long text to ensure cursor stays visible
-
-2. **Accessory Bar Visibility**
-   - Verify bar appears when keyboard opens
-   - Verify bar disappears when keyboard closes
-   - Test on different screen sizes
-
-3. **Key Functionality**
-   - Test `/`, `[`, `]` insert correct characters
-   - Test arrow keys move cursor correctly
-   - Test in single-line and multi-line text fields
-
-4. **Screen-Specific Testing**
-   - Claude chat: Test during message composition
-   - Daily notes: Test in note editor
-   - Files: Test in file content editor
-   - Sleep times: Test in time input
-   - Settings: Test in env content editor
-
-### Edge Cases
-
-- Rotating device with keyboard open
-- Switching between apps while keyboard is visible
-- Hardware keyboard connected (accessory bar should still work)
-- Multi-window mode on tablets
+4. **KeyCharacterMap is reliable** for injecting text characters across different keyboard layouts.
 
 ---
 
 ## Dependencies
 
-- Android API 30+ (for modern WindowInsets API)
+- Android API 31+ (minSdk)
 - AndroidX Core library (for WindowCompat)
 - Compose Foundation (for imePadding, WindowInsets)
-
----
-
-## Notes
-
-- The accessory bar implementation should be purely additive and not modify existing TextField behavior
-- Arrow keys should work in both single-line and multi-line text fields
-- Consider adding haptic feedback on key press for better UX
-- Future enhancement: Make the key set configurable in settings
