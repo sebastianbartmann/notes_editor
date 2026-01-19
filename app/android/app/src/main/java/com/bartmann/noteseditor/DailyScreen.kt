@@ -170,65 +170,67 @@ fun DailyScreen(
                         }
                     }
                 }
-                CompactDivider()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CompactButton(
-                        text = "Clear",
-                        background = AppTheme.colors.danger,
-                        border = AppTheme.colors.danger,
-                        textColor = AppTheme.colors.text,
-                        onClick = {
-                            scope.launch {
-                                try {
-                                    val response = ApiClient.clearPinned()
-                                    message = response.message
-                                    refresh()
-                                } catch (exc: Exception) {
-                                    message = "Clear failed: ${exc.message}"
+                if (!isEditing) {
+                    CompactDivider()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CompactButton(
+                            text = "Clear",
+                            background = AppTheme.colors.danger,
+                            border = AppTheme.colors.danger,
+                            textColor = AppTheme.colors.text,
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val response = ApiClient.clearPinned()
+                                        message = response.message
+                                        refresh()
+                                    } catch (exc: Exception) {
+                                        message = "Clear failed: ${exc.message}"
+                                    }
                                 }
                             }
-                        }
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { pinned = !pinned }
-                        ) {
-                            AppCheckbox(
-                                checked = pinned
-                            )
-                            AppText(
-                                text = "Pin",
-                                style = AppTheme.typography.label,
-                                color = AppTheme.colors.text
-                            )
-                        }
-                        CompactButton(text = "Add") {
-                            scope.launch {
-                                try {
-                                    val response = ApiClient.appendDaily(appendText, pinned)
-                                    message = response.message
-                                    appendText = ""
-                                    pinned = false
-                                    refresh()
-                                } catch (exc: Exception) {
-                                    message = "Append failed: ${exc.message}"
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable { pinned = !pinned }
+                            ) {
+                                AppCheckbox(
+                                    checked = pinned
+                                )
+                                AppText(
+                                    text = "Pin",
+                                    style = AppTheme.typography.label,
+                                    color = AppTheme.colors.text
+                                )
+                            }
+                            CompactButton(text = "Add") {
+                                scope.launch {
+                                    try {
+                                        val response = ApiClient.appendDaily(appendText, pinned)
+                                        message = response.message
+                                        appendText = ""
+                                        pinned = false
+                                        refresh()
+                                    } catch (exc: Exception) {
+                                        message = "Append failed: ${exc.message}"
+                                    }
                                 }
                             }
                         }
                     }
+                    CompactTextField(
+                        value = appendText,
+                        onValueChange = { appendText = it },
+                        placeholder = "Write something...",
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 6
+                    )
                 }
-                CompactTextField(
-                    value = appendText,
-                    onValueChange = { appendText = it },
-                    placeholder = "Write something...",
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 6
-                )
                 StatusMessage(text = message, showDivider = false)
             }
         }

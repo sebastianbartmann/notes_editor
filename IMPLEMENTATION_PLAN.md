@@ -19,6 +19,10 @@ _Future work goes here_
 
 ## Completed
 
+### Fix: Hide Append Section in Daily Notes Edit Mode - 2026-01-19
+- [x] Android: Wrap append section in `if (!isEditing)` conditional in `DailyScreen.kt`
+- [x] Web: Hide append form via JavaScript when `toggleEditMode()` is called, show on `cancelEdit()` in `editor.html`
+
 ### Fix: Android Noise Screen State Sync - 2026-01-19
 - [x] Create `NoisePlaybackState` singleton object with shared `isPlaying` state
 - [x] Update `NoiseService` to write `NoisePlaybackState.isPlaying` on play/pause/stop actions

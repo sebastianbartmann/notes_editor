@@ -46,6 +46,7 @@
                 <div id="save-message"></div>
             </div>
 
+            <div id="append-section">
             <hr>
 
             <form hx-post="/api/append"
@@ -70,6 +71,7 @@
                     placeholder="Write something..."
                     required></textarea>
             </form>
+            </div>
 
             <div id="message"></div>
         </article>
@@ -81,6 +83,7 @@
             document.getElementById('edit-form').style.display = 'block';
             document.getElementById('edit-btn').style.display = 'none';
             document.getElementById('view-actions').style.display = 'none';
+            document.getElementById('append-section').style.display = 'none';
         }
 
         function cancelEdit() {
@@ -89,6 +92,7 @@
             document.getElementById('edit-btn').style.display = 'inline-block';
             document.getElementById('view-actions').style.display = 'flex';
             document.getElementById('save-message').innerHTML = '';
+            document.getElementById('append-section').style.display = 'block';
         }
 
         async function clearPinned() {
