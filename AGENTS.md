@@ -18,7 +18,7 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 - `make run` starts the dev server with auto-reload at `0.0.0.0:8000`.
 - `make install` installs/refreshes the systemd unit and restarts the service.
 - `make status` checks the systemd service status.
-- `make android-build` builds the Android debug APK.
+- `make build-android` builds the Android debug APK.
 - `make deploy-android` builds and installs the debug APK via adb.
 
 ## Coding Style & Naming Conventions

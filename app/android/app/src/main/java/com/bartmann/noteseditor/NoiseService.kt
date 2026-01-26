@@ -172,17 +172,20 @@ class NoiseService : Service() {
         ensurePlayer()
         currentPlayer?.start()
         isPlaying = true
+        NoisePlaybackState.isPlaying = true
         startForeground(NOTIFICATION_ID, buildNotification())
     }
 
     private fun handlePause() {
         currentPlayer?.pause()
         isPlaying = false
+        NoisePlaybackState.isPlaying = false
         startForeground(NOTIFICATION_ID, buildNotification())
     }
 
     private fun handleStop() {
         isPlaying = false
+        NoisePlaybackState.isPlaying = false
         stopPlayers()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()

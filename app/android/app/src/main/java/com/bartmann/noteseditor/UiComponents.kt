@@ -18,6 +18,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +31,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 
@@ -118,7 +121,9 @@ fun CompactTextField(
     placeholder: String,
     modifier: Modifier,
     minLines: Int = 1,
-    readOnly: Boolean = false
+    readOnly: Boolean = false,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(6.dp)
@@ -128,7 +133,10 @@ fun CompactTextField(
         value = value,
         onValueChange = onValueChange,
         textStyle = AppTheme.typography.body.copy(color = AppTheme.colors.text),
+        cursorBrush = SolidColor(AppTheme.colors.accent),
         readOnly = readOnly,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
         modifier = modifier
             .border(1.dp, borderColor, shape)
             .background(AppTheme.colors.input, shape)

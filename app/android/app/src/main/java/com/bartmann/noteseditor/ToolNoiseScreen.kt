@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
@@ -26,14 +23,13 @@ import androidx.core.content.ContextCompat
 @Composable
 fun ToolNoiseScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
     val context = LocalContext.current
-    var noisePlaying by remember { mutableStateOf(false) }
+    val noisePlaying by NoisePlaybackState::isPlaying
 
     ScreenLayout(
         modifier = modifier,
         padding = padding,
         scrollable = false
     ) {
-        ScreenTitle(text = "Noise")
         Panel(
             modifier = Modifier
                 .fillMaxWidth()
@@ -65,10 +61,7 @@ fun ToolNoiseScreen(modifier: Modifier, padding: androidx.compose.foundation.lay
                     text = if (noisePlaying) "Pause" else "Play",
                     background = AppTheme.colors.accentDim,
                     border = AppTheme.colors.accent,
-                    onClick = {
-                        toggleNoise(context)
-                        noisePlaying = !noisePlaying
-                    },
+                    onClick = { toggleNoise(context) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -77,10 +70,7 @@ fun ToolNoiseScreen(modifier: Modifier, padding: androidx.compose.foundation.lay
                     text = "Stop",
                     background = AppTheme.colors.danger,
                     border = AppTheme.colors.danger,
-                    onClick = {
-                        stopNoise(context)
-                        noisePlaying = false
-                    },
+                    onClick = { stopNoise(context) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)

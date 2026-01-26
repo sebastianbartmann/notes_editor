@@ -8,7 +8,10 @@
       "Bash(uv sync:*)",
       "Bash(uv run python:*)",
       "Bash(make android-build:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(grep:*)",
+      "Bash(make build-android:*)",
+      "Bash(make install-android:*)"
     ],
     "deny": [],
     "ask": []

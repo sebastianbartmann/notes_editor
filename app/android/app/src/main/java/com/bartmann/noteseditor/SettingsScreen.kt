@@ -38,7 +38,6 @@ fun SettingsScreen(modifier: Modifier, padding: androidx.compose.foundation.layo
         modifier = modifier,
         padding = padding
     ) {
-        ScreenTitle(text = "Settings")
         Panel {
             SectionTitle(text = "Person")
             AppText(
