@@ -9,9 +9,7 @@
       "Bash(uv run python:*)",
       "Bash(make android-build:*)",
       "WebSearch",
-      "Bash(grep:*)",
-      "Bash(make build-android:*)",
-      "Bash(make install-android:*)"
+      "Bash(git ls-tree:*)"
     ],
     "deny": [],
     "ask": []

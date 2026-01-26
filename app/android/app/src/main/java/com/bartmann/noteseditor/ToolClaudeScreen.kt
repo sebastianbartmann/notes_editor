@@ -15,6 +15,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,7 +37,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 @Composable
-fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
+fun ToolClaudeScreen(modifier: Modifier, onClear: () -> Unit) {
     var inputText by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("") }
@@ -117,18 +121,20 @@ fun ToolClaudeScreen(modifier: Modifier, padding: androidx.compose.foundation.la
         }
     }
 
-    ScreenLayout(modifier = modifier, padding = padding) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            CompactButton(
-                text = "Clear",
-                background = AppTheme.colors.danger,
-                border = AppTheme.colors.danger,
-                onClick = ::clearChat
-            )
-        }
+    ScreenLayout(modifier = modifier) {
+        ScreenHeader(
+            title = "Claude",
+            actionButton = {
+                IconButton(onClick = ::clearChat) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Clear",
+                        tint = AppTheme.colors.danger
+                    )
+                }
+            }
+        )
+
         Panel(modifier = Modifier.weight(1f)) {
             LazyColumn(
                 state = listState,

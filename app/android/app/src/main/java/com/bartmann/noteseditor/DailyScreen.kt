@@ -23,6 +23,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,7 +36,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun DailyScreen(
     modifier: Modifier,
-    padding: androidx.compose.foundation.layout.PaddingValues
+    onReload: () -> Unit
 ) {
     var content by remember { mutableStateOf("") }
     var appendText by remember { mutableStateOf("") }
@@ -90,9 +91,24 @@ fun DailyScreen(
     ) {
         ScreenLayout(
             modifier = Modifier,
-            padding = padding,
             scrollable = false
         ) {
+            ScreenHeader(
+                title = "Daily",
+                actionButton = {
+                    IconButton(onClick = {
+                        isRefreshing = true
+                        refresh()
+                    }) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Reload",
+                            tint = AppTheme.colors.accent
+                        )
+                    }
+                }
+            )
+
             Panel(
                 modifier = Modifier
                     .fillMaxWidth()

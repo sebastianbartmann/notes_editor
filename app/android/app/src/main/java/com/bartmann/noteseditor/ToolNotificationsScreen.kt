@@ -11,13 +11,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
 @Composable
-fun ToolNotificationsScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
+fun ToolNotificationsScreen(modifier: Modifier) {
     val context = LocalContext.current
 
-    ScreenLayout(
-        modifier = modifier,
-        padding = padding
-    ) {
+    ScreenLayout(modifier = modifier) {
+        ScreenHeader(title = "Notifications")
+
         Panel {
             SectionTitle(text = "Test")
             CompactButton(text = "Send test notification") {

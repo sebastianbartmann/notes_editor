@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,8 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -46,6 +47,30 @@ fun ScreenTitle(text: String) {
 }
 
 @Composable
+fun ScreenHeader(
+    title: String,
+    actionButton: @Composable (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AppText(
+            text = title,
+            style = AppTheme.typography.title,
+            color = AppTheme.colors.text
+        )
+        if (actionButton != null) {
+            actionButton()
+        }
+    }
+}
+
+@Composable
 fun SectionTitle(text: String) {
     AppText(text = text.uppercase(), style = AppTheme.typography.section, color = AppTheme.colors.muted)
 }
@@ -53,12 +78,10 @@ fun SectionTitle(text: String) {
 @Composable
 fun ScreenLayout(
     modifier: Modifier = Modifier,
-    padding: androidx.compose.foundation.layout.PaddingValues,
     scrollable: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val baseModifier = modifier
-        .padding(padding)
         .fillMaxSize()
         .padding(AppTheme.spacing.sm)
     val layoutModifier = if (scrollable) {

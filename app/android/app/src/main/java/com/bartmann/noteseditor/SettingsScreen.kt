@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
+fun SettingsScreen(modifier: Modifier) {
     val currentPerson = UserSettings.person
     val scope = rememberCoroutineScope()
     var envContent by remember { mutableStateOf("") }
@@ -34,10 +34,9 @@ fun SettingsScreen(modifier: Modifier, padding: androidx.compose.foundation.layo
             envStatus = "Failed to load .env: ${exc.message}"
         }
     }
-    ScreenLayout(
-        modifier = modifier,
-        padding = padding
-    ) {
+    ScreenLayout(modifier = modifier) {
+        ScreenHeader(title = "Settings")
+
         Panel {
             SectionTitle(text = "Person")
             AppText(

@@ -20,13 +20,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
+fun FilesScreen(modifier: Modifier, onReload: () -> Unit) {
     var rootPath by remember { mutableStateOf(".") }
     var entriesByPath by remember { mutableStateOf(mapOf<String, List<FileEntry>>()) }
     var expandedDirs by remember { mutableStateOf(setOf<String>()) }
@@ -114,9 +118,24 @@ fun FilesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.
     ) {
         ScreenLayout(
             modifier = Modifier,
-            padding = padding,
             scrollable = selectedFilePath == null
         ) {
+            ScreenHeader(
+                title = "Files",
+                actionButton = {
+                    IconButton(onClick = {
+                        isRefreshing = true
+                        refresh()
+                    }) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Reload",
+                            tint = AppTheme.colors.accent
+                        )
+                    }
+                }
+            )
+
             val panelModifier = if (selectedFilePath != null) {
             Modifier
                 .fillMaxWidth()

@@ -21,15 +21,16 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 
 @Composable
-fun ToolNoiseScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
+fun ToolNoiseScreen(modifier: Modifier) {
     val context = LocalContext.current
     val noisePlaying by NoisePlaybackState::isPlaying
 
     ScreenLayout(
         modifier = modifier,
-        padding = padding,
         scrollable = false
     ) {
+        ScreenHeader(title = "Noise")
+
         Panel(
             modifier = Modifier
                 .fillMaxWidth()

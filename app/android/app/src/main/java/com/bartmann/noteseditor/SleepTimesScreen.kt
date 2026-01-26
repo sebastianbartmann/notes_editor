@@ -16,13 +16,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SleepTimesScreen(modifier: Modifier, padding: androidx.compose.foundation.layout.PaddingValues) {
+fun SleepTimesScreen(modifier: Modifier, onReload: () -> Unit) {
     var entries by remember { mutableStateOf(listOf<SleepEntry>()) }
     var child by remember { mutableStateOf("Fabian") }
     var entryText by remember { mutableStateOf("") }
@@ -57,10 +61,23 @@ fun SleepTimesScreen(modifier: Modifier, padding: androidx.compose.foundation.la
         },
         modifier = modifier.fillMaxSize()
     ) {
-        ScreenLayout(
-            modifier = Modifier,
-            padding = padding
-        ) {
+        ScreenLayout(modifier = Modifier) {
+            ScreenHeader(
+                title = "Sleep",
+                actionButton = {
+                    IconButton(onClick = {
+                        isRefreshing = true
+                        refresh()
+                    }) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Reload",
+                            tint = AppTheme.colors.accent
+                        )
+                    }
+                }
+            )
+
             Panel {
             SectionTitle(text = "Recent entries")
             if (entries.isEmpty()) {
