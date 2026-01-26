@@ -100,6 +100,26 @@ Completion listener rotation:
 - PlaybackState updated with current state
 - Supported actions: PLAY, PAUSE, PLAY_PAUSE, STOP
 
+### NoisePlaybackState.kt
+
+Singleton state object for sharing playback state between NoiseService and UI.
+
+**Package:** `com.bartmann.noteseditor`
+
+**Object:** `NoisePlaybackState`
+
+```kotlin
+object NoisePlaybackState {
+    var isPlaying by mutableStateOf(false)
+        internal set  // Only NoiseService can modify
+}
+```
+
+**Purpose:**
+- Bridges NoiseService state to Compose UI reactively
+- `internal set` ensures only the service updates the state
+- UI observes `isPlaying` to reflect current playback status
+
 ### ToolNoiseScreen.kt
 
 Compose UI for controlling the noise service.
@@ -109,7 +129,7 @@ Compose UI for controlling the noise service.
 #### State
 
 ```kotlin
-var noisePlaying by remember { mutableStateOf(false) }
+// Observes NoisePlaybackState.isPlaying for reactive updates
 ```
 
 #### UI Elements

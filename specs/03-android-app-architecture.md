@@ -614,8 +614,10 @@ White noise player control.
 Test notification functionality.
 
 **Features:**
-- Send test notifications
-- Verify notification permissions
+- Send test notification button
+- Creates "notes_general" notification channel ("Notes alerts", IMPORTANCE_DEFAULT)
+- Test notification: title "Notes Editor", body "Notification test"
+- Auto-cancel on tap
 
 ---
 
