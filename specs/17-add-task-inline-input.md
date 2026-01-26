@@ -1,6 +1,6 @@
 # Add Task Inline Input
 
-> Status: Draft
+> Status: Implemented
 > Version: 1.0
 > Last Updated: 2026-01-19
 

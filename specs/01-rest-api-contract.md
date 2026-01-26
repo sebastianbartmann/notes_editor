@@ -156,7 +156,7 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 ### Todos
 
 #### `POST /api/todos/add`
-**Purpose**: Add a new empty todo item to a category in today's note.
+**Purpose**: Add a new todo item to a category in today's note.
 
 **Authentication**: Required
 **Person Header**: Required
@@ -165,6 +165,7 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `category` | string | Yes | `"work"` or `"priv"` |
+| `text` | string | No | Task text (blank line if not provided) |
 
 **Response (200)**:
 ```json
@@ -184,7 +185,8 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 **Behavior**:
 - Creates `## todos` section if needed
 - Creates `### <category>` subsection if needed
-- Adds `- [ ]` line
+- If `text` is provided: adds `- [ ] {text}` line
+- If `text` is empty/missing: adds `- [ ]` line (backwards compatible)
 
 ---
 
