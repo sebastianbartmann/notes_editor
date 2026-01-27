@@ -29,19 +29,23 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 ## Build, Test, and Development Commands
 
 ### Go Backend (server/)
+- Go 1.22.5 installed at `~/go-sdk/go/` (add to PATH: `export PATH=$HOME/go-sdk/go/bin:$PATH`)
 - `cd server && go mod tidy` downloads dependencies
+- `cd server && go test ./...` runs all tests
 - `cd server && make build` compiles to `bin/server`
-- `cd server && make test` runs all tests
-- `cd server && make test-coverage` generates coverage report
 - `cd server && make run` starts the server on port 8080
-- Requires Go 1.22+
+- Key test files:
+  - `api/middleware_test.go` (auth, person validation)
+  - `api/security_test.go` (path traversal, person isolation)
+  - `auth/auth_test.go` (constant-time token comparison)
+  - `vault/daily_test.go` (daily note operations)
 
 ### React Web Client (clients/web/)
 - `cd clients/web && npm install` installs dependencies
 - `cd clients/web && npm run dev` starts Vite dev server with API proxy to localhost:8080
 - `cd clients/web && npm run build` creates production build in `dist/`
 - `cd clients/web && npm run preview` previews production build
-- `cd clients/web && npm test` runs Vitest tests (61 tests)
+- `cd clients/web && npm test` runs Vitest tests (96 tests)
 - `cd clients/web && npm run test:watch` runs tests in watch mode
 - TypeScript strict mode enabled
 

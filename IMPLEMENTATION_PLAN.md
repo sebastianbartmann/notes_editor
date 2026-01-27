@@ -13,14 +13,14 @@
 
 ## Phase 1: Go Backend (spec 19) - COMPLETE
 
-> **Note:** Go runtime not available on development machine. Code is complete and ready for testing once Go 1.22+ is installed. Run `cd server && go mod tidy && make test` to verify.
+> **Note:** Go 1.22.5 installed at `~/go-sdk/go/`. Run `cd server && go test ./...` to verify.
 
-### 1.9 Go Backend Testing
-- [ ] Run tests once Go is installed (`make test`)
-- [ ] Integration tests for full request/response cycles
-- [ ] Test authentication flow
-- [ ] Test person context isolation
-- [ ] Test concurrent request handling
+### 1.9 Go Backend Testing - COMPLETE
+- [x] Run tests once Go is installed (`make test`)
+- [x] Integration tests for full request/response cycles
+- [x] Test authentication flow
+- [x] Test person context isolation
+- [x] Test concurrent request handling (Claude session thread safety)
 
 ---
 
@@ -203,11 +203,11 @@
 
 ## Phase 4: Testing
 
-### 4.1 Go Backend Tests - Security Critical
-- [ ] Test path traversal prevention (../../../etc/passwd attacks)
-- [ ] Test person context isolation (sebastian can't access petra's files)
-- [ ] Test constant-time token comparison
-- [ ] Test authentication middleware rejects invalid tokens
+### 4.1 Go Backend Tests - Security Critical - COMPLETE
+- [x] Test path traversal prevention (../../../etc/passwd attacks)
+- [x] Test person context isolation (sebastian can't access petra's files)
+- [x] Test constant-time token comparison
+- [x] Test authentication middleware rejects invalid tokens
 
 ### 4.2 Go Backend Fixes - API Alignment - COMPLETE
 - [x] Fix `/api/todos/add`: rename `task` field to `text` per spec 01
@@ -215,18 +215,18 @@
 - [x] Fix `/api/todos/add`: auto-determine today's daily note path (remove required `path` field)
 - [x] Add form-encoded request support for Android compatibility (todos endpoints)
 
-### 4.3 Go Backend Tests - Core Logic
-- [ ] Test daily note creation with inherited todos
-- [ ] Test daily note creation with inherited pinned notes
-- [ ] Test todo toggle (checked/unchecked)
-- [ ] Test task addition to categories
-- [ ] Test pinned marker operations
-- [ ] Test git pull with conflict resolution
-- [ ] Test git commit and push with retry
+### 4.3 Go Backend Tests - Core Logic - COMPLETE
+- [x] Test daily note creation with inherited todos
+- [x] Test daily note creation with inherited pinned notes
+- [x] Test todo toggle (checked/unchecked)
+- [x] Test task addition to categories
+- [x] Test pinned marker operations
+- [ ] Test git pull with conflict resolution (requires git repo setup)
+- [ ] Test git commit and push with retry (requires git repo setup)
 
-### 4.4 Go Backend Tests - Services
-- [ ] Test Claude session management (concurrent access)
-- [ ] Test Claude tool execution
+### 4.4 Go Backend Tests - Services - PARTIAL
+- [x] Test Claude session management (concurrent access)
+- [ ] Test Claude tool execution (requires mock Claude API)
 - [ ] Test NDJSON streaming format
 - [ ] Test 5-second keepalive ping in streaming
 - [ ] Test LinkedIn OAuth token exchange
@@ -304,6 +304,25 @@
 ---
 
 ## Completed
+
+### Go Backend Security Tests - 2026-01-27
+- [x] Installed Go 1.22.5 at `~/go-sdk/go/`
+- [x] **Middleware Tests** (`api/middleware_test.go`):
+  - AuthMiddleware: valid/invalid tokens, missing auth, Bearer format validation
+  - PersonMiddleware: valid/invalid persons, case sensitivity, context propagation
+  - RequirePerson helper function
+  - RecovererMiddleware panic handling
+- [x] **Security Integration Tests** (`api/security_test.go`):
+  - Path traversal prevention (6 attack vectors for read, 3 each for create/save/delete)
+  - Person context isolation (sebastian can't access petra's files)
+  - Authentication required for all protected endpoints (20 endpoints)
+  - LinkedIn callback skips auth (OAuth flow)
+  - Invalid person rejection (7 test cases)
+  - Person required for protected endpoints (10 endpoints)
+- [x] **Constant-time token comparison tests** (`auth/auth_test.go`):
+  - Mismatch at different positions (start/middle/end)
+  - Length differences, null bytes, edge cases
+- [x] All existing vault tests pass: path validation, store operations, daily note operations
 
 ### React Web Client Testing - 2026-01-27
 - [x] Set up Vitest testing framework with jsdom and testing-library

@@ -139,3 +139,44 @@ func TestValidPersonsList(t *testing.T) {
 		}
 	}
 }
+
+// TestConstantTimeComparison verifies that token validation uses constant-time
+// comparison to prevent timing attacks. While we can't directly test timing,
+// we verify the behavior matches crypto/subtle.ConstantTimeCompare semantics.
+func TestConstantTimeComparison(t *testing.T) {
+	// These tests verify the function behaves like constant-time comparison
+	// (returns same result regardless of where mismatch occurs)
+	tests := []struct {
+		name     string
+		provided string
+		expected string
+		want     bool
+	}{
+		// Mismatch at different positions should all return false
+		{"mismatch at start", "Xecret-token", "secret-token", false},
+		{"mismatch at middle", "secXet-token", "secret-token", false},
+		{"mismatch at end", "secret-tokeX", "secret-token", false},
+
+		// Length differences
+		{"shorter by 1", "secret-toke", "secret-token", false},
+		{"longer by 1", "secret-token!", "secret-token", false},
+		{"much shorter", "sec", "secret-token", false},
+		{"much longer", "secret-token-extra-stuff", "secret-token", false},
+
+		// Edge cases
+		{"null byte in provided", "secret\x00token", "secret-token", false},
+		{"null byte in expected", "secret-token", "secret\x00token", false},
+
+		// Exact match
+		{"exact match", "secret-token", "secret-token", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ValidateToken(tt.provided, tt.expected)
+			if got != tt.want {
+				t.Errorf("ValidateToken() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
