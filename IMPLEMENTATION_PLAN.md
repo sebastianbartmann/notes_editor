@@ -238,13 +238,13 @@
 - [ ] Test CORS headers
 - [ ] Test request validation
 
-### 4.6 React Web Client Tests
-- [ ] Test NoteView line parsing (H1-H6, tasks, text, empty)
-- [ ] Test task toggle state management
-- [ ] Test streaming text incremental display
-- [ ] Test theme switching (dark/light)
-- [ ] Test person context switching
-- [ ] Test localStorage persistence (token, person, theme)
+### 4.6 React Web Client Tests - COMPLETE
+- [x] Test NoteView line parsing (H1-H6, tasks, text, empty)
+- [x] Test task toggle state management
+- [ ] Test streaming text incremental display (requires mocking fetch/ReadableStream)
+- [x] Test theme switching (dark/light)
+- [x] Test person context switching
+- [x] Test localStorage persistence (token, person, theme)
 
 ### 4.7 Android App Tests (existing gap)
 - [ ] Unit tests for ApiClient failover logic
@@ -304,6 +304,23 @@
 ---
 
 ## Completed
+
+### React Web Client Testing - 2026-01-27
+- [x] Set up Vitest testing framework with jsdom and testing-library
+- [x] Added test scripts to package.json (`npm test`, `npm run test:watch`)
+- [x] Configured vite.config.ts with test configuration
+- [x] Created test setup file with localStorage mock
+- [x] **NoteView Tests** (42 tests):
+  - Line parsing: H1-H6 headings, tasks (unchecked/checked), empty lines, plain text
+  - Pinned marker detection on H3 only
+  - HTML escaping for XSS protection
+  - Task toggle callback with line numbers
+  - Unpin button rendering and callback
+- [x] **AuthContext Tests** (5 tests): localStorage persistence, login/logout
+- [x] **ThemeContext Tests** (7 tests): localStorage persistence, body class switching, toggle
+- [x] **PersonContext Tests** (7 tests): localStorage persistence, person switching
+- [x] **Bug Fix**: NoteView now only strips `<pinned>` marker from H3 headings (was incorrectly stripping from all headings)
+- Total: 61 tests passing
 
 ### API Alignment Fix - 2026-01-27
 - [x] Fixed `/api/todos/add` endpoint per spec 01:

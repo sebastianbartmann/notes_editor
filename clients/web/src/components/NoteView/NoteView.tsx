@@ -7,9 +7,9 @@ interface NoteViewProps {
   onUnpin?: (line: number) => void
 }
 
-type LineType = 'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'TASK' | 'TEXT' | 'EMPTY'
+export type LineType = 'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'TASK' | 'TEXT' | 'EMPTY'
 
-interface ParsedLine {
+export interface ParsedLine {
   type: LineType
   content: string
   checked?: boolean
@@ -21,7 +21,7 @@ const TASK_REGEX = /^\s*-\s*\[([ xX])\]\s*(.*)$/
 const HEADING_REGEX = /^(#{1,6})\s+(.*)$/
 const PINNED_REGEX = /<pinned>/i
 
-function parseLine(line: string, lineNumber: number): ParsedLine {
+export function parseLine(line: string, lineNumber: number): ParsedLine {
   // Check for task
   const taskMatch = line.match(TASK_REGEX)
   if (taskMatch) {
@@ -40,9 +40,11 @@ function parseLine(line: string, lineNumber: number): ParsedLine {
     const headingType = `H${level}` as LineType
     const content = headingMatch[2]
     const isPinned = level === 3 && PINNED_REGEX.test(content)
+    // Only strip <pinned> marker from H3 headings (where pinned is valid)
+    const displayContent = isPinned ? content.replace(PINNED_REGEX, '').trim() : content
     return {
       type: headingType,
-      content: content.replace(PINNED_REGEX, '').trim(),
+      content: displayContent,
       isPinned,
       lineNumber,
     }
@@ -65,7 +67,7 @@ function parseLine(line: string, lineNumber: number): ParsedLine {
   }
 }
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
