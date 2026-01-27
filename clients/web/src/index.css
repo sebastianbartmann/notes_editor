@@ -1,0 +1,233 @@
+/* CSS Variables - Dark Theme (Default) */
+:root {
+  --bg: #0f1012;
+  --panel: #15171a;
+  --panel-border: #2a2d33;
+  --text: #e6e6e6;
+  --muted: #9aa0a6;
+  --accent: #d9832b;
+  --accent-dim: #7a4a1d;
+  --danger: #d66b6b;
+  --input: #0f1114;
+  --note: #101317;
+  --button: #1e2227;
+  --shadow: rgba(0, 0, 0, 0.35);
+
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 18px;
+  --radius: 6px;
+
+  --font: "IBM Plex Mono", "Menlo", "Consolas", "Liberation Mono", monospace;
+}
+
+/* Light Theme */
+body.theme-light {
+  --bg: #e9f7f7;
+  --panel: #f6fbff;
+  --panel-border: #c7e3e6;
+  --text: #1a2a2f;
+  --muted: #4f6f78;
+  --accent: #3aa7a3;
+  --accent-dim: #c9f1ef;
+  --danger: #d66b6b;
+  --input: #f2fafb;
+  --note: #f9fdff;
+  --button: #e0eff0;
+  --shadow: rgba(18, 33, 45, 0.08);
+}
+
+/* Reset and Base Styles */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+body {
+  font-family: var(--font);
+  background: radial-gradient(circle at 20% 20%, #1a1c20 0%, #0f1012 55%);
+  background-color: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+body.theme-light {
+  background: radial-gradient(circle at 15% 15%, #f7fcff 0%, #def3f5 60%);
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+h1 {
+  font-size: 16px;
+}
+
+h2 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+h3 {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+h4 {
+  font-size: 12px;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Form Elements */
+input,
+textarea,
+select {
+  font-family: var(--font);
+  font-size: 13px;
+  background: var(--input);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: var(--space-2);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+/* Buttons */
+button {
+  font-family: var(--font);
+  font-size: 12px;
+  background: var(--button);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--muted);
+}
+
+button.ghost:hover {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+
+button.danger {
+  border-color: #3a2323;
+  color: var(--danger);
+}
+
+button.danger:hover {
+  color: #f2a3a3;
+  border-color: var(--danger);
+}
+
+button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Layout Utilities */
+.container {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: var(--space-3);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  box-shadow: 0 12px 28px var(--shadow);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--panel-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .container {
+    padding: var(--space-2);
+  }
+
+  .panel {
+    padding: var(--space-2);
+  }
+}

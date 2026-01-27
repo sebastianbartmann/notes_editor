@@ -1,0 +1,63 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.date {
+  font-size: 14px;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.message {
+  color: var(--muted);
+  text-align: center;
+  padding: var(--space-4);
+}
+
+.error {
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.appendForm {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+}
+
+.appendInput {
+  width: 100%;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.appendActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+}
+
+.pinnedLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}

@@ -1,6 +1,6 @@
 # Notes Editor Overview
 
-Notes Editor is a personal/family "second brain" app with a Go backend REST API, React web client (planned), and native Android client. Data lives in a local vault with per-person subfolders (e.g., `sebastian/`, `petra/`), and each client selects its person root and theme locally while the server remains user-agnostic.
+Notes Editor is a personal/family "second brain" app with a Go backend REST API, React web client, and native Android client. Data lives in a local vault with per-person subfolders (e.g., `sebastian/`, `petra/`), and each client selects its person root and theme locally while the server remains user-agnostic.
 
 Key features: daily notes with tasks and pinned entries, a file tree editor scoped to the selected person, and shared tools such as sleep tracking, noise playback, and a Claude tool. The Android app mirrors the web layout and adds native conveniences (media-style noise controls, persistent settings).
 
@@ -17,6 +17,12 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
   - `internal/auth/` - token validation and person context
   - `internal/config/` - environment configuration
 - `server/web_app/` holds the legacy Python FastAPI app (deprecated, will be archived)
+- `clients/web/` contains the React web client:
+  - `src/api/` - API client modules with TypeScript types
+  - `src/components/` - Reusable UI components (NoteView, Editor, FileTree, Layout)
+  - `src/context/` - React context providers (Auth, Person, Theme)
+  - `src/hooks/` - Custom hooks (useAuth, usePerson, useTheme)
+  - `src/pages/` - Page components (Daily, Files, Sleep, Claude, Noise, Settings)
 - `app/android/` contains the Android client; build tooling lives in `app/gradle-8.7/` and `app/android_sdk/`
 - Root files like `Makefile`, `notes-editor.service`, and `pyproject.toml` define local workflows and service configuration
 
@@ -29,6 +35,13 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 - `cd server && make test-coverage` generates coverage report
 - `cd server && make run` starts the server on port 8080
 - Requires Go 1.22+
+
+### React Web Client (clients/web/)
+- `cd clients/web && npm install` installs dependencies
+- `cd clients/web && npm run dev` starts Vite dev server with API proxy to localhost:8080
+- `cd clients/web && npm run build` creates production build in `dist/`
+- `cd clients/web && npm run preview` previews production build
+- TypeScript strict mode enabled
 
 ### Legacy Python Backend (deprecated)
 - `uv sync` installs Python dependencies (recommended over pip)
@@ -45,6 +58,7 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 - Go: standard `gofmt`, exported functions `PascalCase`, internal `camelCase`, packages lowercase
 - Python: 4-space indentation, `snake_case` for functions/vars, `PascalCase` for classes
 - Kotlin/Android: follow standard Android conventions; keep resource names lowercase with underscores (e.g., `noise_player.xml`)
+- TypeScript/React: strict mode, functional components, CSS modules for styling, PascalCase for components
 - Keep modules small and prefer explicit imports over wildcard imports
 
 ## Testing Guidelines

@@ -1,0 +1,110 @@
+.noteView {
+  background: var(--note);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.line {
+  min-height: 1.6em;
+}
+
+/* Headings */
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.h1 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: var(--space-2);
+}
+
+.h2 {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-top: var(--space-2);
+}
+
+.h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: var(--space-1);
+}
+
+.h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.h5 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.h6 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Pinned headings */
+.pinned {
+  background: #151a1f;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 2px -4px;
+}
+
+:global(body.theme-light) .pinned {
+  background: #e6f4f4;
+}
+
+.unpinBtn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border-color: var(--accent-dim);
+  color: var(--accent);
+  background: transparent;
+}
+
+.unpinBtn:hover {
+  background: var(--accent-dim);
+}
+
+/* Tasks */
+.task {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.task:hover {
+  color: var(--accent);
+}
+
+.taskDone {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.checkbox {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}

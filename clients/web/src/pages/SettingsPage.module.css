@@ -1,0 +1,35 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.section {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.section h3 {
+  margin-bottom: var(--space-2);
+}
+
+.options {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.hint {
+  margin-top: var(--space-2);
+  font-size: 12px;
+  color: var(--muted);
+}

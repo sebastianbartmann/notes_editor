@@ -1,0 +1,71 @@
+.tree {
+  font-size: 12px;
+}
+
+.item {
+  user-select: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: background 0.1s, color 0.1s;
+}
+
+.row:hover {
+  background: #1c2026;
+  color: var(--text);
+}
+
+:global(body.theme-light) .row:hover {
+  background: #e0eff0;
+}
+
+.selected {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.selected:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.toggle {
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  color: var(--muted);
+}
+
+.folder {
+  font-weight: 500;
+}
+
+.file {
+  font-weight: 400;
+}
+
+.children {
+  border-left: 1px dashed #24282e;
+  margin-left: 10px;
+  padding-left: var(--space-1);
+}
+
+:global(body.theme-light) .children {
+  border-left-color: #c7e3e6;
+}
+
+.loading {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 4px 6px;
+}
