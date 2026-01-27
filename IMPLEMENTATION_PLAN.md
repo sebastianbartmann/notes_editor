@@ -209,10 +209,11 @@
 - [ ] Test constant-time token comparison
 - [ ] Test authentication middleware rejects invalid tokens
 
-### 4.2 Go Backend Fixes - API Alignment
-- [ ] Fix `/api/todos/add`: rename `task` field to `text` per spec 01
-- [ ] Fix `/api/todos/add`: make `text` field optional (empty creates blank task)
-- [ ] Fix `/api/todos/add`: auto-determine today's daily note path (remove required `path` field)
+### 4.2 Go Backend Fixes - API Alignment - COMPLETE
+- [x] Fix `/api/todos/add`: rename `task` field to `text` per spec 01
+- [x] Fix `/api/todos/add`: make `text` field optional (empty creates blank task)
+- [x] Fix `/api/todos/add`: auto-determine today's daily note path (remove required `path` field)
+- [x] Add form-encoded request support for Android compatibility (todos endpoints)
 
 ### 4.3 Go Backend Tests - Core Logic
 - [ ] Test daily note creation with inherited todos
@@ -287,9 +288,31 @@
 - [ ] Test keyboard visibility behavior (bottom nav hides, accessory shows)
 - [ ] Test with person=null (only settings accessible)
 
+### 6.4 Android API Compatibility
+> **Issue Found:** Android client uses form-encoded POST requests, but Go handlers only parse JSON.
+> The todos endpoints were fixed in 4.2. These handlers still need form support:
+
+- [ ] Add form support to `handleSaveDaily` (/api/save)
+- [ ] Add form support to `handleAppendDaily` (/api/append)
+- [ ] Add form support to `handleClearPinned` (/api/clear-pinned)
+- [ ] Add form support to `handleAppendSleepTime` (/api/sleep-times/append)
+- [ ] Add form support to `handleDeleteSleepTime` (/api/sleep-times/delete)
+- [ ] Add form support to `handleCreateFile` (/api/files/create)
+- [ ] Add form support to `handleSaveFile` (/api/files/save)
+- [ ] Add form support to `handleDeleteFile` (/api/files/delete)
+
 ---
 
 ## Completed
+
+### API Alignment Fix - 2026-01-27
+- [x] Fixed `/api/todos/add` endpoint per spec 01:
+  - Changed request field from `task` to `text`
+  - Made `text` optional (empty creates `- [ ]` blank task)
+  - Removed required `path` field - auto-determines today's daily note path
+  - Added form-encoded request support for Android compatibility
+- [x] Added form-encoded support to `/api/todos/toggle` for Android compatibility
+- [x] Discovered and documented: 8 other handlers need form support for Android (Phase 6.4)
 
 ### Spec Updates - 2026-01-27
 - [x] Updated spec 10 (Authentication) to reference Go backend with actual code examples
