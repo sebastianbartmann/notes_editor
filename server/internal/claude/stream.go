@@ -1,0 +1,302 @@
+package claude
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// StreamEvent represents an event in the NDJSON stream.
+type StreamEvent struct {
+	Type      string `json:"type"`
+	Delta     string `json:"delta,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Input     any    `json:"input,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
+// ChatStream performs a streaming chat request.
+// Returns a channel that receives stream events.
+func (s *Service) ChatStream(person string, req ChatRequest) (<-chan StreamEvent, error) {
+	if s.apiKey == "" {
+		return nil, fmt.Errorf("Claude API key not configured")
+	}
+
+	session := s.sessions.GetOrCreate(req.SessionID, person)
+	session.AddMessage("user", req.Message)
+
+	// Build the message history
+	messages := buildAnthropicMessages(session.GetMessages())
+
+	// Create tool executor
+	toolExec := NewToolExecutor(s.store, s.linkedin, person)
+
+	events := make(chan StreamEvent, 100)
+
+	go func() {
+		defer close(events)
+		s.streamWithToolLoop(messages, toolExec, session, events)
+	}()
+
+	return events, nil
+}
+
+// streamWithToolLoop handles streaming with tool use in a loop.
+func (s *Service) streamWithToolLoop(messages []anthropicMsg, toolExec *ToolExecutor, session *Session, events chan<- StreamEvent) {
+	// Set up ping timer
+	pingTicker := time.NewTicker(5 * time.Second)
+	defer pingTicker.Stop()
+
+	// Create ping channel
+	pingDone := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-pingTicker.C:
+				select {
+				case events <- StreamEvent{Type: "ping"}:
+				default:
+				}
+			case <-pingDone:
+				return
+			}
+		}
+	}()
+	defer close(pingDone)
+
+	var fullResponse strings.Builder
+
+	for {
+		resp, textDelta, err := s.streamAPI(messages, events)
+		if err != nil {
+			events <- StreamEvent{Type: "error", Message: err.Error()}
+			return
+		}
+
+		fullResponse.WriteString(textDelta)
+
+		// Check if we need to handle tool use
+		if resp.StopReason == "tool_use" {
+			// Find tool use blocks and execute them
+			var toolResults []any
+			for _, block := range resp.Content {
+				if block.Type == "tool_use" {
+					// Send tool_use event
+					events <- StreamEvent{
+						Type:  "tool_use",
+						Name:  block.Name,
+						Input: block.Input,
+					}
+
+					input, ok := block.Input.(map[string]any)
+					if !ok {
+						input = make(map[string]any)
+					}
+
+					result, err := toolExec.ExecuteTool(block.Name, input)
+					if err != nil {
+						result = fmt.Sprintf("Error: %s", err.Error())
+					}
+
+					// Send status event
+					events <- StreamEvent{
+						Type:    "status",
+						Message: fmt.Sprintf("Tool %s executed", block.Name),
+					}
+
+					toolResults = append(toolResults, map[string]any{
+						"type":        "tool_result",
+						"tool_use_id": block.ID,
+						"content":     result,
+					})
+				}
+			}
+
+			// Add assistant response and tool results to messages
+			messages = append(messages, anthropicMsg{
+				Role:    "assistant",
+				Content: resp.Content,
+			})
+			messages = append(messages, anthropicMsg{
+				Role:    "user",
+				Content: toolResults,
+			})
+			continue
+		}
+
+		// Done - save response and send done event
+		session.AddMessage("assistant", fullResponse.String())
+		events <- StreamEvent{
+			Type:      "done",
+			SessionID: session.ID,
+		}
+		return
+	}
+}
+
+// streamAPI makes a streaming call to the Anthropic API.
+func (s *Service) streamAPI(messages []anthropicMsg, events chan<- StreamEvent) (*anthropicResponse, string, error) {
+	reqBody := struct {
+		Model     string           `json:"model"`
+		MaxTokens int              `json:"max_tokens"`
+		System    string           `json:"system"`
+		Messages  []anthropicMsg   `json:"messages"`
+		Tools     []map[string]any `json:"tools,omitempty"`
+		Stream    bool             `json:"stream"`
+	}{
+		Model:     defaultModel,
+		MaxTokens: maxTokens,
+		System:    SystemPrompt,
+		Messages:  messages,
+		Tools:     ToolDefinitions,
+		Stream:    true,
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", anthropicAPIURL, bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", s.apiKey)
+	req.Header.Set("anthropic-version", anthropicAPIVersion)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	return s.processStream(resp.Body, events)
+}
+
+// processStream processes the SSE stream from the Anthropic API.
+func (s *Service) processStream(body io.Reader, events chan<- StreamEvent) (*anthropicResponse, string, error) {
+	scanner := bufio.NewScanner(body)
+	var textBuilder strings.Builder
+	var finalResponse anthropicResponse
+
+	// Track content blocks for tool use
+	var contentBlocks []contentBlock
+	var currentToolInput strings.Builder
+	var currentToolID string
+	var currentToolName string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, ":") {
+			continue
+		}
+
+		// Parse SSE event
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			break
+		}
+
+		var event map[string]any
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
+			continue
+		}
+
+		eventType, _ := event["type"].(string)
+
+		switch eventType {
+		case "content_block_start":
+			block, ok := event["content_block"].(map[string]any)
+			if !ok {
+				continue
+			}
+			blockType, _ := block["type"].(string)
+			if blockType == "tool_use" {
+				currentToolID, _ = block["id"].(string)
+				currentToolName, _ = block["name"].(string)
+				currentToolInput.Reset()
+			}
+
+		case "content_block_delta":
+			delta, ok := event["delta"].(map[string]any)
+			if !ok {
+				continue
+			}
+			deltaType, _ := delta["type"].(string)
+
+			switch deltaType {
+			case "text_delta":
+				text, _ := delta["text"].(string)
+				textBuilder.WriteString(text)
+				events <- StreamEvent{Type: "text", Delta: text}
+
+			case "input_json_delta":
+				partial, _ := delta["partial_json"].(string)
+				currentToolInput.WriteString(partial)
+			}
+
+		case "content_block_stop":
+			// If we were building a tool use block, save it
+			if currentToolID != "" {
+				var input any
+				if currentToolInput.Len() > 0 {
+					_ = json.Unmarshal([]byte(currentToolInput.String()), &input)
+				}
+				contentBlocks = append(contentBlocks, contentBlock{
+					Type:  "tool_use",
+					ID:    currentToolID,
+					Name:  currentToolName,
+					Input: input,
+				})
+				currentToolID = ""
+				currentToolName = ""
+			}
+
+		case "message_delta":
+			delta, ok := event["delta"].(map[string]any)
+			if ok {
+				if stopReason, ok := delta["stop_reason"].(string); ok {
+					finalResponse.StopReason = stopReason
+				}
+			}
+
+		case "message_stop":
+			// Message complete
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, "", fmt.Errorf("stream read error: %w", err)
+	}
+
+	// Add text content if any
+	if textBuilder.Len() > 0 {
+		contentBlocks = append([]contentBlock{{
+			Type: "text",
+			Text: textBuilder.String(),
+		}}, contentBlocks...)
+	}
+
+	finalResponse.Content = contentBlocks
+	return &finalResponse, textBuilder.String(), nil
+}

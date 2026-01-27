@@ -1,6 +1,6 @@
 # Notes Editor Overview
 
-Notes Editor is a personal/family “second brain” app with a FastAPI + HTMX web UI and a native Android client. Data lives in a local vault with per-person subfolders (e.g., `sebastian/`, `petra/`), and each client selects its person root and theme locally while the server remains user-agnostic.
+Notes Editor is a personal/family "second brain" app with a Go backend REST API, React web client (planned), and native Android client. Data lives in a local vault with per-person subfolders (e.g., `sebastian/`, `petra/`), and each client selects its person root and theme locally while the server remains user-agnostic.
 
 Key features: daily notes with tasks and pinned entries, a file tree editor scoped to the selected person, and shared tools such as sleep tracking, noise playback, and a Claude tool. The Android app mirrors the web layout and adds native conveniences (media-style noise controls, persistent settings).
 
@@ -8,29 +8,57 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 
 ## Project Structure & Module Organization
 
-- `server/web_app/` holds the FastAPI app (`main.py`), Jinja templates in `templates/`, static assets in `static/`, and supporting code in `renderers/` and `services/`.
-- `app/android/` contains the Android client; build tooling lives in `app/gradle-8.7/` and `app/android_sdk/`.
-- Root files like `Makefile`, `notes-editor.service`, and `pyproject.toml` define local workflows and service configuration.
+- `server/` contains the Go backend:
+  - `cmd/server/main.go` - entry point
+  - `internal/api/` - HTTP handlers and middleware
+  - `internal/vault/` - file operations and git sync
+  - `internal/claude/` - Claude AI service with streaming
+  - `internal/linkedin/` - LinkedIn OAuth and API
+  - `internal/auth/` - token validation and person context
+  - `internal/config/` - environment configuration
+- `server/web_app/` holds the legacy Python FastAPI app (deprecated, will be archived)
+- `app/android/` contains the Android client; build tooling lives in `app/gradle-8.7/` and `app/android_sdk/`
+- Root files like `Makefile`, `notes-editor.service`, and `pyproject.toml` define local workflows and service configuration
 
 ## Build, Test, and Development Commands
 
-- `uv sync` installs Python dependencies (recommended over pip).
-- `make run` starts the dev server with auto-reload at `0.0.0.0:8000`.
-- `make install` installs/refreshes the systemd unit and restarts the service.
-- `make status` checks the systemd service status.
-- `make build-android` builds the Android debug APK.
-- `make deploy-android` builds and installs the debug APK via adb.
+### Go Backend (server/)
+- `cd server && go mod tidy` downloads dependencies
+- `cd server && make build` compiles to `bin/server`
+- `cd server && make test` runs all tests
+- `cd server && make test-coverage` generates coverage report
+- `cd server && make run` starts the server on port 8080
+- Requires Go 1.22+
+
+### Legacy Python Backend (deprecated)
+- `uv sync` installs Python dependencies (recommended over pip)
+- `make run` starts the dev server with auto-reload at `0.0.0.0:8000`
+- `make install` installs/refreshes the systemd unit and restarts the service
+- `make status` checks the systemd service status
+
+### Android
+- `make build-android` builds the Android debug APK
+- `make deploy-android` builds and installs the debug APK via adb
 
 ## Coding Style & Naming Conventions
 
-- Python: 4-space indentation, `snake_case` for functions/vars, `PascalCase` for classes.
-- Kotlin/Android: follow standard Android conventions; keep resource names lowercase with underscores (e.g., `noise_player.xml`).
-- Keep modules small and prefer explicit imports over wildcard imports.
+- Go: standard `gofmt`, exported functions `PascalCase`, internal `camelCase`, packages lowercase
+- Python: 4-space indentation, `snake_case` for functions/vars, `PascalCase` for classes
+- Kotlin/Android: follow standard Android conventions; keep resource names lowercase with underscores (e.g., `noise_player.xml`)
+- Keep modules small and prefer explicit imports over wildcard imports
 
 ## Testing Guidelines
 
-- There is no automated test suite yet. When adding tests, use `pytest`, place them under a new `tests/` directory, and name files `test_*.py`.
-- For manual verification, run `make run` and validate the web UI plus Android flows you touched.
+### Go Backend
+- Tests are in `*_test.go` files alongside source code
+- Run `cd server && make test` for all tests
+- Key test files: `auth/auth_test.go`, `vault/paths_test.go`, `vault/store_test.go`, `vault/daily_test.go`, `claude/session_test.go`
+
+### Legacy Python Backend
+- No automated test suite; when adding tests, use `pytest`, place under `tests/`, name files `test_*.py`
+
+### Manual Verification
+- Run the server and validate the web UI plus Android flows you touched
 
 ## Commit & Pull Request Guidelines
 
