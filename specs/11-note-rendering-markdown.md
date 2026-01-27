@@ -136,12 +136,15 @@ private fun parseNoteLines(content: String): List<NoteLine> {
 }
 ```
 
-### Web Parsing Patterns
+### React Web Parsing
 
-```python
-PINNED_HEADING = re.compile(r"^(###\s+.*<pinned>.*)$", re.IGNORECASE)
-HEADING_LINE = re.compile(r"^(#{1,6})\s+(.*)$")
-TASK_LINE = re.compile(r"^\s*-\s*\[([ xX])\]\s*(.*)$")
+The React NoteView component uses equivalent patterns in TypeScript:
+
+```typescript
+// clients/web/src/components/NoteView/NoteView.tsx
+const TASK_REGEX = /^\s*-\s*\[([ xX])\]\s*(.*)$/
+const HEADING_REGEX = /^(#{1,6})\s+(.*)$/
+const PINNED_REGEX = /<pinned>/i
 ```
 
 ---
@@ -183,17 +186,32 @@ Clicking anywhere on the row triggers `onToggleTask(lineNo)`.
 
 ## Web Rendering
 
-### Render Function
+### React NoteView Component
 
-```python
-def render_with_pinned_buttons(content: str, file_path: str) -> str
+```typescript
+// clients/web/src/components/NoteView/NoteView.tsx
+interface NoteViewProps {
+  content: string
+  path: string
+  onTaskToggle?: (line: number) => void
+  onUnpin?: (line: number) => void
+}
+
+export default function NoteView({
+  content,
+  path,
+  onTaskToggle,
+  onUnpin,
+}: NoteViewProps)
 ```
 
-**Parameters:**
+**Props:**
 - `content`: Raw markdown content
-- `file_path`: Relative file path (used in forms for API calls)
+- `path`: Relative file path (for API calls)
+- `onTaskToggle`: Callback when task checkbox is toggled (receives 1-indexed line number)
+- `onUnpin`: Callback when unpin button is clicked (receives 1-indexed line number)
 
-**Returns:** HTML string with rendered note lines
+**Returns:** JSX element with rendered note lines
 
 ### HTML Output Structure
 
@@ -243,20 +261,26 @@ Each line becomes a `<div class="note-line">` with additional classes based on t
 - Parent screen (DailyScreen/FilesScreen) handles API call
 - API endpoint: `POST /api/todos/toggle`
 
-**Web:**
-- Checkbox triggers HTMX POST on change
-- Endpoint: `POST /api/todos/toggle`
-- Form includes hidden `line` and `path` fields
+**React Web:**
+- Checkbox `onChange` event calls `onTaskToggle` callback with line number
+- Parent component (DailyPage/FilesPage) handles API call
+- API endpoint: `POST /api/todos/toggle`
 
-### HTMX Attributes (Web)
+### React Task Toggle
 
-```html
-<input type="checkbox"
-  hx-post="/api/todos/toggle"
-  hx-trigger="change"
-  hx-target="#message"
-  hx-swap="innerHTML"
-  hx-include="closest form">
+```typescript
+// In NoteView.tsx
+<input
+  type="checkbox"
+  checked={line.checked}
+  onChange={() => onTaskToggle?.(line.lineNumber)}
+/>
+
+// In DailyPage.tsx
+const handleTaskToggle = async (line: number) => {
+  await toggleTodo({ path, line })
+  await loadDaily()
+}
 ```
 
 ---
@@ -267,25 +291,26 @@ The `<pinned>` marker is a web-specific feature for carrying forward important n
 
 ### Detection Pattern
 
-```python
-PINNED_HEADING = re.compile(r"^(###\s+.*<pinned>.*)$", re.IGNORECASE)
+```typescript
+const PINNED_REGEX = /<pinned>/i
+
+// In parseLine function:
+const isPinned = level === 3 && PINNED_REGEX.test(content)
 ```
 
 Matches H3 headings containing `<pinned>` anywhere in the line (case-insensitive).
 
-### Pinned Heading HTML
+### React Pinned Heading
 
-```html
-<div class="note-line note-heading pinned heading h3">
-  <span class="line-text heading-text">{escaped_line}</span>
-  <form class="pin-form"
-    hx-post="/api/files/unpin"
-    hx-target="#message"
-    hx-swap="innerHTML">
-    <input type="hidden" name="path" value="{file_path}">
-    <input type="hidden" name="line" value="{line_number}">
-    <button class="pin-action" type="submit">Unpin</button>
-  </form>
+```tsx
+// In NoteView.tsx
+<div className={`${styles.heading} ${styles.h3} ${styles.pinned}`}>
+  <span>{escapeHtml(line.content)}</span>
+  {line.isPinned && onUnpin && (
+    <button onClick={() => onUnpin(line.lineNumber)} className={styles.unpinBtn}>
+      Unpin
+    </button>
+  )}
 </div>
 ```
 
@@ -388,17 +413,24 @@ NoteView(
 - Task toggle is disabled (empty callback)
 - Read-only preview before editing
 
-### Web Templates
+### React Page Usage
 
-The web uses `render_with_pinned_buttons()` in templates:
+The React pages use NoteView for displaying content:
 
-```python
-# In route handler
-rendered_content = render_with_pinned_buttons(content, file_path)
-return templates.TemplateResponse("daily.html", {
-    "rendered_content": rendered_content,
-    ...
-})
+```typescript
+// In DailyPage.tsx
+<NoteView
+  content={content}
+  path={path}
+  onTaskToggle={handleTaskToggle}
+  onUnpin={handleUnpin}
+/>
+
+// In FilesPage.tsx (read-only mode)
+<NoteView
+  content={content}
+  path={filePath}
+/>
 ```
 
 ---

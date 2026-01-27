@@ -1,16 +1,18 @@
 # Authentication and Context Management Specification
 
-> Status: Draft
-> Version: 2.0
+> Status: Active
+> Version: 3.0
 > Last Updated: 2026-01-27
 
 ## Overview
 
-This document defines the authentication, authorization, and context management systems for the Notes Editor application. It covers bearer token authentication, cookie-based session management, person context resolution, theme preferences, path utilities for multi-user file access, and environment configuration management.
+This document defines the authentication, authorization, and context management systems for the Notes Editor application. It covers bearer token authentication, person context resolution, theme preferences, and path utilities for multi-user file access.
 
 The authentication and context systems serve as foundational dependencies for all other application specifications.
 
-**Implementation:** Go backend (`server/internal/auth/`), React context providers (`clients/web/src/context/`)
+**Implementation:**
+- Go backend: `server/internal/auth/`, `server/internal/api/middleware.go`
+- React web client: `clients/web/src/context/`
 
 ---
 
@@ -25,424 +27,383 @@ The authentication and context systems serve as foundational dependencies for al
 ### Constants
 
 ```go
-var (
-    Persons = map[string]bool{"sebastian": true, "petra": true}
-    Themes  = map[string]bool{"dark": true, "light": true}
-)
+// server/internal/auth/person.go
+var ValidPersons = []string{"sebastian", "petra"}
 ```
 
-### Cookies
+```typescript
+// clients/web/src/context/PersonContext.tsx
+type Person = 'sebastian' | 'petra' | null
 
-| Cookie Name | Purpose | Max Age | Attributes |
-|-------------|---------|---------|------------|
-| `notes_token` | Session authentication | Session | `httponly=True`, `samesite=lax` |
-| `notes_person` | Person context persistence | 1 year | `samesite=lax` |
-| `notes_theme` | Theme preference persistence | 1 year | `samesite=lax` |
+// clients/web/src/context/ThemeContext.tsx
+type Theme = 'dark' | 'light'
+```
 
 ### Request Headers
 
 | Header | Purpose | Required |
 |--------|---------|----------|
-| `Authorization` | Bearer token authentication | No (if cookie present) |
-| `X-Notes-Person` | Person context override | No (falls back to cookie) |
+| `Authorization` | Bearer token authentication | Yes (all API requests) |
+| `X-Notes-Person` | Person context for scoped file access | Yes (most API requests) |
+
+### Client Storage (React Web)
+
+| Key | Purpose | Default |
+|-----|---------|---------|
+| `notes_token` | Authentication token persistence | `null` |
+| `notes_person` | Person context persistence | `null` |
+| `notes_theme` | Theme preference persistence | `"dark"` |
 
 ---
 
-## Authentication
+## Go Backend Authentication
 
-The application uses a global FastAPI dependency to enforce authentication on all routes except explicitly exempted paths.
+### Package Structure
 
-### Security Configuration
-
-```python
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-security = HTTPBearer(auto_error=False)
+```
+server/internal/auth/
+├── auth.go      # Token validation, context helpers
+├── person.go    # Valid persons list
+└── auth_test.go # Unit tests
 ```
 
-**Behavior**: `auto_error=False` allows the middleware to handle missing credentials gracefully rather than raising automatic 401 errors.
+### Token Validation
 
-### Authentication Middleware
+```go
+// server/internal/auth/auth.go
+package auth
 
-#### `require_auth`
+import (
+    "crypto/subtle"
+)
 
-**Signature**:
-```python
-def require_auth(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> None
+// ValidateToken performs constant-time comparison to prevent timing attacks.
+func ValidateToken(provided, expected string) bool {
+    return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+}
 ```
 
-**Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `request` | `Request` | FastAPI request object |
-| `credentials` | `HTTPAuthorizationCredentials` | Extracted bearer token (optional) |
+**Security Feature**: Uses `crypto/subtle.ConstantTimeCompare` to prevent timing attacks that could leak token information.
 
-**Returns**: `None` on success
+### Auth Middleware
 
-**Raises**: `HTTPException(status_code=401, detail="Unauthorized")` on failure
+```go
+// server/internal/api/middleware.go
+func AuthMiddleware(token string) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            // Skip auth for OAuth callback
+            if strings.HasPrefix(r.URL.Path, "/api/linkedin/oauth/callback") {
+                next.ServeHTTP(w, r)
+                return
+            }
+
+            authHeader := r.Header.Get("Authorization")
+            if authHeader == "" {
+                writeUnauthorized(w)
+                return
+            }
+
+            // Extract Bearer token
+            parts := strings.SplitN(authHeader, " ", 2)
+            if len(parts) != 2 || parts[0] != "Bearer" {
+                writeUnauthorized(w)
+                return
+            }
+
+            if !auth.ValidateToken(parts[1], token) {
+                writeUnauthorized(w)
+                return
+            }
+
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
+
+**Exempted Paths**: `/api/linkedin/oauth/callback` (OAuth flow)
 
 **Authentication Flow**:
-
-1. **Path Exemption Check**: If request path starts with `/login` or `/api/linkedin/oauth/callback`, authentication is bypassed.
-
-2. **Bearer Token Validation**: If `Authorization: Bearer <token>` header is present:
-   - Verify scheme is `bearer` (case-insensitive)
-   - Compare token against `NOTES_TOKEN` using `secrets.compare_digest()` (constant-time comparison)
-   - Return on match
-
-3. **Cookie Token Validation**: Check `notes_token` cookie:
-   - Compare cookie value against `NOTES_TOKEN` using `secrets.compare_digest()`
-   - Return on match
-
-4. **Rejection**: If no valid authentication method succeeds, raise HTTP 401.
-
-**Security Features**:
-- Constant-time string comparison prevents timing attacks
-- Supports both header-based (API clients) and cookie-based (web browser) authentication
-- Exempted paths are checked first to avoid unnecessary processing
-
-### Global Application Dependency
-
-```python
-app = FastAPI(dependencies=[Depends(require_auth)])
-```
-
-All routes inherit this authentication requirement unless explicitly exempted by path matching in the middleware.
-
----
-
-## Login Route
-
-### `POST /login`
-
-**Purpose**: Authenticate user and establish cookie-based session.
-
-**Authentication**: Not required (exempted path)
-
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `token` | string | Yes | Authentication token to validate |
-
-**Response (302)**: Redirect to `/` with session cookie set.
-
-**Response (401)**:
-```
-Invalid token
-```
-
-**Behavior**:
-1. Validate token against `NOTES_TOKEN` using `secrets.compare_digest()`
-2. If invalid, return HTML response with "Invalid token" and status 401
-3. If valid:
-   - Create `RedirectResponse` to `/` with status 302
-   - Set `notes_token` cookie with validated token
-   - Cookie attributes: `httponly=True`, `samesite=lax`
-
-**Cookie Security**:
-- `httponly=True`: Prevents JavaScript access (XSS mitigation)
-- `samesite=lax`: CSRF protection while allowing normal navigation
+1. Check if path is exempted
+2. Extract `Authorization` header
+3. Validate `Bearer <token>` format
+4. Verify token using constant-time comparison
+5. Reject with 401 if any step fails
 
 ---
 
 ## Person Context Management
 
-Person context determines which user's data is accessed. It scopes all file operations to a specific person's directory within the vault.
+### Go Backend
 
-### `get_person`
+Person context is stored in the request context and extracted from the `X-Notes-Person` header.
 
-**Signature**:
-```python
-def get_person(request: Request) -> str | None
+```go
+// server/internal/auth/auth.go
+type contextKey string
+
+const personContextKey contextKey = "person"
+
+// PersonFromContext retrieves the person value from the context.
+func PersonFromContext(ctx context.Context) string {
+    person, ok := ctx.Value(personContextKey).(string)
+    if !ok {
+        return ""
+    }
+    return person
+}
+
+// WithPerson returns a new context with the person value set.
+func WithPerson(ctx context.Context, person string) context.Context {
+    return context.WithValue(ctx, personContextKey, person)
+}
 ```
 
-**Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `request` | `Request` | FastAPI request object |
+```go
+// server/internal/auth/person.go
+var ValidPersons = []string{"sebastian", "petra"}
 
-**Returns**: Lowercase person identifier (`"sebastian"` or `"petra"`) or `None` if not set/invalid.
+func IsValidPerson(person string) bool {
+    for _, p := range ValidPersons {
+        if p == person {
+            return true
+        }
+    }
+    return false
+}
+```
 
-**Resolution Priority**:
-1. `X-Notes-Person` header
-2. `notes_person` cookie
-3. `None` (no valid person found)
+### Person Middleware
 
-**Behavior**:
-- Extract candidate from header or cookie
-- Strip whitespace and convert to lowercase
-- Validate against `PERSONS` set
-- Return validated person or `None`
+```go
+// server/internal/api/middleware.go
+func PersonMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        person := r.Header.Get("X-Notes-Person")
+        if person != "" {
+            if !auth.IsValidPerson(person) {
+                writeBadRequest(w, "Invalid person")
+                return
+            }
+            r = r.WithContext(auth.WithPerson(r.Context(), person))
+        }
+        next.ServeHTTP(w, r)
+    })
+}
+```
+
+### Handler Helper
+
+```go
+// server/internal/api/middleware.go
+func requirePerson(w http.ResponseWriter, r *http.Request) (string, bool) {
+    person := auth.PersonFromContext(r.Context())
+    if person == "" {
+        writeBadRequest(w, "Person not selected")
+        return "", false
+    }
+    return person, true
+}
+```
+
+**Usage in handlers**:
+```go
+func (s *Server) handleGetDaily(w http.ResponseWriter, r *http.Request) {
+    person, ok := requirePerson(w, r)
+    if !ok {
+        return
+    }
+    // person is now available for scoped file operations
+}
+```
 
 ---
 
-### `ensure_person_or_redirect`
+## React Web Client Context Providers
 
-**Signature**:
-```python
-def ensure_person_or_redirect(request: Request) -> str | RedirectResponse
+### AuthContext
+
+```typescript
+// clients/web/src/context/AuthContext.tsx
+interface AuthState {
+  token: string | null
+  isAuthenticated: boolean
+}
+
+interface AuthContextType extends AuthState {
+  login: (token: string) => void
+  logout: () => void
+}
+
+const STORAGE_KEY = 'notes_token'
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [token, setToken] = useState<string | null>(() => {
+    return localStorage.getItem(STORAGE_KEY)
+  })
+
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem(STORAGE_KEY, token)
+    } else {
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  }, [token])
+
+  // ... login/logout functions
+}
 ```
 
-**Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `request` | `Request` | FastAPI request object |
+**Features**:
+- Persists token to localStorage
+- Provides `isAuthenticated` computed state
+- `login(token)` saves token and authenticates
+- `logout()` clears token
 
-**Returns**: Person identifier string or `RedirectResponse` to `/settings`.
+### PersonContext
 
-**Behavior**:
-- Call `get_person(request)` to resolve person context
-- If person is valid, return the person identifier
-- If person is `None` or invalid, return `RedirectResponse("/settings")`
+```typescript
+// clients/web/src/context/PersonContext.tsx
+type Person = 'sebastian' | 'petra' | null
 
-**Use Case**: Web routes that need graceful handling of missing person context by redirecting to settings page.
+interface PersonContextType {
+  person: Person
+  setPerson: (person: Person) => void
+}
+
+const STORAGE_KEY = 'notes_person'
+
+export function PersonProvider({ children }: { children: ReactNode }) {
+  const [person, setPersonState] = useState<Person>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored === 'sebastian' || stored === 'petra') {
+      return stored
+    }
+    return null
+  })
+
+  useEffect(() => {
+    if (person) {
+      localStorage.setItem(STORAGE_KEY, person)
+    } else {
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  }, [person])
+
+  // ... setPerson function
+}
+```
+
+**Features**:
+- Validates stored value against valid persons
+- Persists to localStorage
+- Returns `null` if no valid person selected
+
+### ThemeContext
+
+```typescript
+// clients/web/src/context/ThemeContext.tsx
+type Theme = 'dark' | 'light'
+
+interface ThemeContextType {
+  theme: Theme
+  setTheme: (theme: Theme) => void
+  toggleTheme: () => void
+}
+
+const STORAGE_KEY = 'notes_theme'
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setThemeState] = useState<Theme>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored === 'dark' || stored === 'light') {
+      return stored
+    }
+    return 'dark'  // Default theme
+  })
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, theme)
+    if (theme === 'light') {
+      document.body.classList.add('theme-light')
+    } else {
+      document.body.classList.remove('theme-light')
+    }
+  }, [theme])
+
+  // ... setTheme, toggleTheme functions
+}
+```
+
+**Features**:
+- Default theme is `"dark"`
+- Persists to localStorage
+- Applies CSS class to `<body>` element
+- Provides `toggleTheme()` convenience method
+
+### Provider Hierarchy
+
+```tsx
+// clients/web/src/App.tsx
+<AuthProvider>
+  <PersonProvider>
+    <ThemeProvider>
+      <RouterProvider router={router} />
+    </ThemeProvider>
+  </PersonProvider>
+</AuthProvider>
+```
 
 ---
 
-### `ensure_person`
+## API Client Integration
 
-**Signature**:
-```python
-def ensure_person(request: Request) -> str
+### HTTP Headers
+
+The React API client includes authentication and person context headers on all requests:
+
+```typescript
+// clients/web/src/api/client.ts
+export function createHeaders(): HeadersInit {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  }
+
+  const token = localStorage.getItem('notes_token')
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const person = localStorage.getItem('notes_person')
+  if (person) {
+    headers['X-Notes-Person'] = person
+  }
+
+  return headers
+}
 ```
-
-**Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `request` | `Request` | FastAPI request object |
-
-**Returns**: Person identifier string.
-
-**Raises**: `HTTPException(status_code=400, detail="Person not selected")` if no valid person.
-
-**Behavior**:
-- Call `get_person(request)` to resolve person context
-- If person is valid, return the person identifier
-- If person is `None`, raise HTTP 400 error
-
-**Use Case**: API routes where person context is mandatory and missing context should result in an error response.
 
 ---
 
-## Theme Management
+## Directory Structure
 
-### `get_theme`
-
-**Signature**:
-```python
-def get_theme(request: Request) -> str
-```
-
-**Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `request` | `Request` | FastAPI request object |
-
-**Returns**: Theme identifier (`"dark"` or `"light"`).
-
-**Behavior**:
-- Read `notes_theme` cookie value
-- Strip whitespace and convert to lowercase
-- If value is in `THEMES` set, return it
-- Default to `"dark"` if cookie is missing or invalid
-
-**Default**: `"dark"`
-
----
-
-## Settings Routes
-
-### `POST /settings`
-
-**Purpose**: Update person and/or theme preferences.
-
-**Authentication**: Required
-
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `person` | string | No | Person identifier to set |
-| `theme` | string | No | Theme preference to set |
-
-**Response (302)**: Redirect to `/settings` with updated cookies.
-
-**Response (400)**:
-```
-Invalid person
-```
-or
-```
-Invalid theme
-```
-
-**Behavior**:
-1. Create `RedirectResponse` to `/settings` with status 302
-2. If `person` is provided:
-   - Normalize: strip whitespace, convert to lowercase
-   - Validate against `PERSONS` set
-   - If invalid, return HTML response with "Invalid person" and status 400
-   - Set `notes_person` cookie with `max_age=31536000` (1 year), `samesite=lax`
-3. If `theme` is provided:
-   - Normalize: strip whitespace, convert to lowercase
-   - Validate against `THEMES` set
-   - If invalid, return HTML response with "Invalid theme" and status 400
-   - Set `notes_theme` cookie with `max_age=31536000` (1 year), `samesite=lax`
-4. Return redirect response
-
----
-
-## Path Utilities
-
-These utilities manage path translation between person-relative paths and the filesystem structure.
-
-### Directory Structure
+Person context scopes all file operations to a person's subdirectory within the vault.
 
 ```
 VAULT_ROOT/
   sebastian/
     daily/
     notes/
+    linkedin/
     ...
   petra/
     daily/
     notes/
+    linkedin/
     ...
+  sleep_times.md  (shared)
 ```
-
-### `person_root_path`
-
-**Signature**:
-```python
-def person_root_path(person: str) -> Path
-```
-
-**Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `person` | `str` | Person identifier |
-
-**Returns**: `Path` object pointing to person's root directory.
-
-**Behavior**: Returns `VAULT_ROOT / person`.
-
-**Example**:
-```python
-person_root_path("sebastian")  # -> Path("/vault/sebastian")
-```
-
----
-
-### `person_relative_path`
-
-**Signature**:
-```python
-def person_relative_path(person: str, relative_path: str) -> str
-```
-
-**Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `person` | `str` | Person identifier |
-| `relative_path` | `str` | Path relative to person root (or absolute from vault) |
-
-**Returns**: Normalized path including person prefix.
-
-**Behavior**:
-1. Strip whitespace and leading slashes from `relative_path`
-2. If normalized path is empty or `"."`, return person identifier only
-3. If path already starts with `{person}/` or equals `person`, return as-is
-4. Otherwise, prepend `{person}/` to the path
-
-**Examples**:
-```python
-person_relative_path("sebastian", "")           # -> "sebastian"
-person_relative_path("sebastian", ".")          # -> "sebastian"
-person_relative_path("sebastian", "daily")      # -> "sebastian/daily"
-person_relative_path("sebastian", "/daily")     # -> "sebastian/daily"
-person_relative_path("sebastian", "sebastian/daily")  # -> "sebastian/daily"
-```
-
----
-
-### `strip_person_path`
-
-**Signature**:
-```python
-def strip_person_path(person: str, relative_path: str) -> str
-```
-
-**Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `person` | `str` | Person identifier |
-| `relative_path` | `str` | Path that may include person prefix |
-
-**Returns**: Path with person prefix removed.
-
-**Behavior**:
-1. If `relative_path` equals `person`, return `"."`
-2. If `relative_path` starts with `{person}/`, strip that prefix
-3. Otherwise, return path unchanged
-
-**Examples**:
-```python
-strip_person_path("sebastian", "sebastian")       # -> "."
-strip_person_path("sebastian", "sebastian/daily") # -> "daily"
-strip_person_path("sebastian", "other/path")      # -> "other/path"
-```
-
----
-
-## Environment Configuration
-
-### File Location
-
-The `.env` file is located at `BASE_DIR / ".env"` where `BASE_DIR` is the application base directory.
-
-### `read_env_content`
-
-**Signature**:
-```python
-def read_env_content() -> str
-```
-
-**Returns**: Contents of `.env` file as string, or empty string if file doesn't exist.
-
-**Behavior**:
-- Check if `.env` file exists at `BASE_DIR / ".env"`
-- If exists, read and return contents
-- If not exists, return empty string
-
----
-
-### `write_env_content`
-
-**Signature**:
-```python
-def write_env_content(env_content: str) -> None
-```
-
-**Parameters**:
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `env_content` | `str` | New environment file content |
-
-**Returns**: `None`
-
-**Behavior**:
-1. **Normalize line endings**: Convert `\r\n` (Windows) to `\n` (Unix)
-2. **Ensure trailing newline**: If content is non-empty and doesn't end with `\n`, append one
-3. **Create parent directories**: Ensure `BASE_DIR` exists
-4. **Write file**: Write normalized content to `BASE_DIR / ".env"`
-5. **Reload environment**: Call `load_dotenv(env_path, override=True)` to apply changes immediately
-
-**Side Effects**:
-- Creates parent directories if needed
-- Modifies filesystem
-- Updates process environment variables via `load_dotenv`
 
 ---
 
@@ -450,33 +411,47 @@ def write_env_content(env_content: str) -> None
 
 ### Token Security
 
-1. **Constant-Time Comparison**: All token comparisons use `secrets.compare_digest()` to prevent timing attacks that could leak token information.
+1. **Constant-Time Comparison**: All token comparisons use `crypto/subtle.ConstantTimeCompare` to prevent timing attacks.
 
-2. **Default Token Warning**: The default `NOTES_TOKEN` value should be overridden in production. Applications should log a warning if the default token is in use.
+2. **Default Token Warning**: The default `NOTES_TOKEN` value should be overridden in production.
 
-3. **Token Storage**: Tokens should be stored securely and not committed to version control.
-
-### Cookie Security
-
-1. **HttpOnly Flag**: The `notes_token` cookie uses `httponly=True` to prevent JavaScript access, mitigating XSS attacks.
-
-2. **SameSite Attribute**: All cookies use `samesite=lax` to provide CSRF protection while allowing normal navigation.
-
-3. **No Secure Flag**: Currently cookies don't use the `secure` flag, meaning they're transmitted over HTTP. For production over HTTPS, consider adding `secure=True`.
+3. **Token Storage**:
+   - Backend: Environment variable only, never logged
+   - Client: localStorage (acceptable for family app, not for sensitive data)
 
 ### Path Traversal Prevention
 
-1. **Person Scoping**: All file operations are scoped to a person's directory, preventing access to other users' data.
+1. **Person Scoping**: All file operations are scoped to a person's directory via the vault package.
 
-2. **Path Normalization**: Leading slashes are stripped to prevent absolute path injection.
+2. **Path Validation**: The vault package validates paths and rejects:
+   - Empty paths
+   - Absolute paths
+   - Paths containing `..` traversal
 
-3. **No `..` Handling**: The current implementation doesn't explicitly block `..` path traversal. This should be handled at the file operation level.
+3. **Person Isolation**: Users cannot access other users' files through the API.
 
-### Environment File Security
+### Client-Side Security
 
-1. **Sensitive Data**: The `.env` file may contain API keys and secrets. Access to environment configuration endpoints should be restricted.
+1. **No Cookie-Based Auth**: The React SPA uses header-based auth only, avoiding CSRF concerns.
 
-2. **Hot Reload**: `load_dotenv(override=True)` immediately applies changes to the running process, which could affect security if malicious values are written.
+2. **localStorage Persistence**: Token persists across sessions. Users must explicitly logout.
+
+---
+
+## Error Responses
+
+### Authentication Errors
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| 401 | `"Unauthorized"` | Missing or invalid `Authorization` header |
+
+### Person Context Errors
+
+| Status | Detail | Cause |
+|--------|--------|-------|
+| 400 | `"Person not selected"` | Missing `X-Notes-Person` header on required endpoint |
+| 400 | `"Invalid person"` | Person value not in `ValidPersons` list |
 
 ---
 
@@ -488,70 +463,47 @@ This specification provides foundational services used by other specifications:
 
 | Specification | Dependencies |
 |---------------|--------------|
-| **01-rest-api-contract.md** | `require_auth`, `ensure_person`, bearer token validation |
-| **02-daily-notes.md** | `person_root_path`, `person_relative_path`, person context |
-| **03-file-management.md** | Path utilities, person context for scoped file access |
-| **04-claude-chat.md** | Authentication middleware, person context |
-| **05-linkedin-service.md** | OAuth callback path exemption, environment config |
-| **06-sleep-times.md** | `person_root_path`, person context |
-| **07-todos.md** | Person context, path utilities |
+| **01-rest-api-contract.md** | Bearer token validation, person context headers |
+| **02-vault-storage-git-sync.md** | Person-scoped file paths |
+| **04-claude-service.md** | Authentication middleware, person context |
+| **05-linkedin-service.md** | OAuth callback path exemption |
+| **06-daily-note-format.md** | Person context for daily note paths |
+| **09-sleep-tracking.md** | Shared file access (sleep_times.md) |
 
 ### Common Patterns
 
-**API Route with Person Context**:
-```python
-@app.get("/api/example")
-async def example_endpoint(
-    request: Request,
-    person: str = Depends(ensure_person),
-):
-    root = person_root_path(person)
-    # ... scoped file operations
+**Go Handler with Person Context**:
+```go
+func (s *Server) handleExample(w http.ResponseWriter, r *http.Request) {
+    person, ok := requirePerson(w, r)
+    if !ok {
+        return
+    }
+    // Use s.vault.ReadFile(person, "path/to/file.md")
+}
 ```
 
-**Web Route with Redirect on Missing Person**:
-```python
-@app.get("/example")
-async def example_page(request: Request):
-    result = ensure_person_or_redirect(request)
-    if isinstance(result, RedirectResponse):
-        return result
-    person = result
-    # ... render page
+**React Component with Auth Check**:
+```tsx
+function ProtectedPage() {
+  const { isAuthenticated } = useAuth()
+  const { person } = usePerson()
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />
+  }
+
+  if (!person) {
+    return <Navigate to="/settings" />
+  }
+
+  return <Content />
+}
 ```
 
-**Theme-Aware Template Rendering**:
-```python
-@app.get("/page")
-async def page(request: Request):
-    theme = get_theme(request)
-    return templates.TemplateResponse(
-        "page.html",
-        {"request": request, "theme": theme}
-    )
+**API Call with Headers**:
+```typescript
+const response = await fetch('/api/daily', {
+  headers: createHeaders(),
+})
 ```
-
----
-
-## Error Responses
-
-### Authentication Errors
-
-| Status | Detail | Cause |
-|--------|--------|-------|
-| 401 | `"Unauthorized"` | Missing or invalid authentication |
-| 401 | `"Invalid token"` | Wrong token at login |
-
-### Person Context Errors
-
-| Status | Detail | Cause |
-|--------|--------|-------|
-| 400 | `"Person not selected"` | Missing or invalid person context on required endpoint |
-| 400 | `"Invalid person"` | Invalid person value in settings form |
-
-### Settings Errors
-
-| Status | Detail | Cause |
-|--------|--------|-------|
-| 400 | `"Invalid person"` | Person value not in `PERSONS` set |
-| 400 | `"Invalid theme"` | Theme value not in `THEMES` set |

@@ -57,19 +57,36 @@ Replace the current "add empty task then edit" workflow with an inline input flo
 }
 ```
 
-### Server Implementation
+### Server Implementation (Go)
 
-```python
-@app.post("/api/todos/add")
-async def add_todo(
-    category: str = Form(...),
-    text: str = Form("")  # Optional, defaults to empty
-):
-    if category not in ("work", "priv"):
-        raise HTTPException(400, "Invalid category")
+```go
+// server/internal/api/todos.go
+type AddTodoRequest struct {
+    Category string `json:"category"` // "work" or "priv"
+    Text     string `json:"text"`     // Optional task text
+}
 
-    task_line = f"- [ ] {text}" if text.strip() else "- [ ]"
-    # ... insert task_line under appropriate category section
+func (s *Server) handleAddTodo(w http.ResponseWriter, r *http.Request) {
+    person, ok := requirePerson(w, r)
+    if !ok {
+        return
+    }
+
+    var req AddTodoRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        writeBadRequest(w, "Invalid request body")
+        return
+    }
+
+    // Generate task line: "- [ ] {text}" or "- [ ]" if text is empty
+    taskLine := "- [ ]"
+    if text := strings.TrimSpace(req.Text); text != "" {
+        taskLine = "- [ ] " + text
+    }
+
+    // Add to today's daily note under the specified category
+    // ...
+}
 ```
 
 ---
@@ -316,15 +333,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
 ---
 
+## Implementation Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Go Server | Partial | API accepts `text` field but currently requires `path` and `task` fields |
+| Android Client | Implemented | Full inline input flow in DailyScreen.kt |
+| React Web Client | Not implemented | DailyPage has append form but no inline task buttons |
+
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `server/routes/api.py` | Add optional `text` param to `/api/todos/add` |
+| `server/internal/api/todos.go` | Update to use `text` field (optional), auto-determine path for today's note |
 | `app/android/.../DailyScreen.kt` | Add input mode state, TaskInputRow composable |
 | `app/android/.../ApiClient.kt` | Add `text` param to `addTodo()` |
-| `server/web_app/templates/editor.html` | Replace HTMX forms with JS-driven input flow |
-| `server/web_app/static/css/style.css` | Add `.task-input-row` and `.task-input` styles |
+| `clients/web/src/pages/DailyPage.tsx` | Add inline task input UI (Work/Priv buttons) |
+| `clients/web/src/api/todos.ts` | API client already supports `text` field |
 
 ---
 
@@ -344,6 +369,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 ## Related Specifications
 
-- [01-rest-api-contract.md](./01-rest-api-contract.md) - API contract (update needed)
+- [01-rest-api-contract.md](./01-rest-api-contract.md) - API contract
 - [03-android-app-architecture.md](./03-android-app-architecture.md) - Android architecture
-- [07-web-interface.md](./07-web-interface.md) - Web interface patterns
+- [20-react-web-client.md](./20-react-web-client.md) - React web client

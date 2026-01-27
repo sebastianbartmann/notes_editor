@@ -187,10 +187,17 @@
 - [x] Update deployment scripts for Go backend
 - [x] Update CI/CD pipelines (N/A - no pipelines exist)
 
-### 3.2 Update Specs
-- [ ] Mark spec 07 (web-interface) as fully deprecated
-- [ ] Update spec 10 to reference Go auth implementation
-- [ ] Verify all specs match Go+React implementation
+### 3.2 Update Specs - COMPLETE
+- [x] Mark spec 07 (web-interface) as fully deprecated (already marked SUPERSEDED)
+- [x] Update spec 10 to reference Go auth implementation
+- [x] Update spec 11 to reference React NoteView instead of Python
+- [x] Update spec 17 to reference Go server instead of Python
+- [x] Verify all specs match Go+React implementation
+
+**Issues Found During Verification:**
+- Go `/api/todos/add` uses `task` field but spec 01 and React client use `text` - needs alignment
+- Go `/api/todos/add` requires `path` but spec says it should auto-determine today's note path
+- React web client missing inline task input feature (spec 17) - only has append form
 
 ---
 
@@ -202,7 +209,12 @@
 - [ ] Test constant-time token comparison
 - [ ] Test authentication middleware rejects invalid tokens
 
-### 4.2 Go Backend Tests - Core Logic
+### 4.2 Go Backend Fixes - API Alignment
+- [ ] Fix `/api/todos/add`: rename `task` field to `text` per spec 01
+- [ ] Fix `/api/todos/add`: make `text` field optional (empty creates blank task)
+- [ ] Fix `/api/todos/add`: auto-determine today's daily note path (remove required `path` field)
+
+### 4.3 Go Backend Tests - Core Logic
 - [ ] Test daily note creation with inherited todos
 - [ ] Test daily note creation with inherited pinned notes
 - [ ] Test todo toggle (checked/unchecked)
@@ -211,7 +223,7 @@
 - [ ] Test git pull with conflict resolution
 - [ ] Test git commit and push with retry
 
-### 4.3 Go Backend Tests - Services
+### 4.4 Go Backend Tests - Services
 - [ ] Test Claude session management (concurrent access)
 - [ ] Test Claude tool execution
 - [ ] Test NDJSON streaming format
@@ -219,13 +231,13 @@
 - [ ] Test LinkedIn OAuth token exchange
 - [ ] Test LinkedIn CSV activity logging
 
-### 4.4 Go Backend Tests - API
+### 4.5 Go Backend Tests - API
 - [ ] Integration tests for all endpoints
 - [ ] Test error response formats (400, 401, 404)
 - [ ] Test CORS headers
 - [ ] Test request validation
 
-### 4.5 React Web Client Tests
+### 4.6 React Web Client Tests
 - [ ] Test NoteView line parsing (H1-H6, tasks, text, empty)
 - [ ] Test task toggle state management
 - [ ] Test streaming text incremental display
@@ -233,7 +245,7 @@
 - [ ] Test person context switching
 - [ ] Test localStorage persistence (token, person, theme)
 
-### 4.6 Android App Tests (existing gap)
+### 4.7 Android App Tests (existing gap)
 - [ ] Unit tests for ApiClient failover logic
 - [ ] Unit tests for NoteView markdown parsing
 - [ ] UI tests for daily screen task toggle
@@ -278,6 +290,13 @@
 ---
 
 ## Completed
+
+### Spec Updates - 2026-01-27
+- [x] Updated spec 10 (Authentication) to reference Go backend with actual code examples
+- [x] Updated spec 11 (Note Rendering) to reference React NoteView instead of Python renderer
+- [x] Updated spec 17 (Add Task Inline Input) to reference Go server instead of Python
+- [x] Verified spec 07 (Web Interface) is already marked SUPERSEDED
+- [x] Documented API inconsistencies for future fix (Go uses `task`/`path`, spec says `text` optional)
 
 ### Python Backend Deprecation - 2026-01-27
 - [x] Archived Python backend to `_archive/python-backend/`
