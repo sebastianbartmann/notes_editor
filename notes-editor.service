@@ -1,16 +1,15 @@
 [Unit]
-Description=Daily Notes Editor
+Description=Daily Notes Editor (Go Server)
 After=network.target
 
 [Service]
 Type=simple
 User=dev
-WorkingDirectory=/home/dev/notes_editor
-Environment="PATH=/home/dev/.local/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONUNBUFFERED=1"
+WorkingDirectory=/home/dev/notes_editor/server
+Environment="PATH=/usr/local/go/bin:/home/dev/.local/bin:/usr/local/bin:/usr/bin:/bin"
 StandardOutput=journal
 StandardError=journal
-ExecStart=/home/dev/notes_editor/.venv/bin/uvicorn server.web_app.main:app --host 0.0.0.0 --port 8000
+ExecStart=/home/dev/notes_editor/server/bin/server
 Restart=always
 RestartSec=3
 

@@ -181,11 +181,11 @@
 
 ## Phase 3: Migration and Cleanup
 
-### 3.1 Deprecate Python Backend
-- [ ] Document migration path for any custom integrations
-- [ ] Archive Python code to `_archive/python-backend/`
-- [ ] Update deployment scripts for Go backend
-- [ ] Update CI/CD pipelines
+### 3.1 Deprecate Python Backend - COMPLETE
+- [x] Document migration path for any custom integrations
+- [x] Archive Python code to `_archive/python-backend/`
+- [x] Update deployment scripts for Go backend
+- [x] Update CI/CD pipelines (N/A - no pipelines exist)
 
 ### 3.2 Update Specs
 - [ ] Mark spec 07 (web-interface) as fully deprecated
@@ -278,6 +278,13 @@
 ---
 
 ## Completed
+
+### Python Backend Deprecation - 2026-01-27
+- [x] Archived Python backend to `_archive/python-backend/`
+- [x] Updated root Makefile for Go server (run, build, test)
+- [x] Updated notes-editor.service for Go binary
+- [x] Created migration documentation in `_archive/python-backend/README.md`
+- [x] Updated AGENTS.md with new commands
 
 ### React Web Client Implementation - 2026-01-27
 - [x] Complete React web client implementation (Phase 2.1-2.15)

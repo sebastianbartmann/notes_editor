@@ -16,7 +16,7 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
   - `internal/linkedin/` - LinkedIn OAuth and API
   - `internal/auth/` - token validation and person context
   - `internal/config/` - environment configuration
-- `server/web_app/` holds the legacy Python FastAPI app (deprecated, will be archived)
+- `_archive/python-backend/` contains the archived Python FastAPI backend (superseded by Go)
 - `clients/web/` contains the React web client:
   - `src/api/` - API client modules with TypeScript types
   - `src/components/` - Reusable UI components (NoteView, Editor, FileTree, Layout)
@@ -24,7 +24,7 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
   - `src/hooks/` - Custom hooks (useAuth, usePerson, useTheme)
   - `src/pages/` - Page components (Daily, Files, Sleep, Claude, Noise, Settings)
 - `app/android/` contains the Android client; build tooling lives in `app/gradle-8.7/` and `app/android_sdk/`
-- Root files like `Makefile`, `notes-editor.service`, and `pyproject.toml` define local workflows and service configuration
+- Root `Makefile` and `notes-editor.service` define local workflows and systemd deployment for the Go server
 
 ## Build, Test, and Development Commands
 
@@ -43,11 +43,12 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 - `cd clients/web && npm run preview` previews production build
 - TypeScript strict mode enabled
 
-### Legacy Python Backend (deprecated)
-- `uv sync` installs Python dependencies (recommended over pip)
-- `make run` starts the dev server with auto-reload at `0.0.0.0:8000`
-- `make install` installs/refreshes the systemd unit and restarts the service
-- `make status` checks the systemd service status
+### Root Makefile Commands
+- `make run` starts the Go dev server on port 8080
+- `make build` builds the Go binary to `server/bin/server`
+- `make test` runs Go backend tests
+- `make install-systemd` installs/refreshes the systemd unit
+- `make status-systemd` checks the systemd service status
 
 ### Android
 - `make build-android` builds the Android debug APK
@@ -56,7 +57,6 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 ## Coding Style & Naming Conventions
 
 - Go: standard `gofmt`, exported functions `PascalCase`, internal `camelCase`, packages lowercase
-- Python: 4-space indentation, `snake_case` for functions/vars, `PascalCase` for classes
 - Kotlin/Android: follow standard Android conventions; keep resource names lowercase with underscores (e.g., `noise_player.xml`)
 - TypeScript/React: strict mode, functional components, CSS modules for styling, PascalCase for components
 - Keep modules small and prefer explicit imports over wildcard imports
@@ -67,9 +67,6 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 - Tests are in `*_test.go` files alongside source code
 - Run `cd server && make test` for all tests
 - Key test files: `auth/auth_test.go`, `vault/paths_test.go`, `vault/store_test.go`, `vault/daily_test.go`, `claude/session_test.go`
-
-### Legacy Python Backend
-- No automated test suite; when adding tests, use `pytest`, place under `tests/`, name files `test_*.py`
 
 ### Manual Verification
 - Run the server and validate the web UI plus Android flows you touched
