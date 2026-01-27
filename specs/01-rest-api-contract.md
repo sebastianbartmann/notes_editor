@@ -1,27 +1,27 @@
 # REST API Contract Specification
 
 > Status: Draft
-> Version: 1.0
-> Last Updated: 2026-01-18
+> Version: 2.0
+> Last Updated: 2026-01-27
 
 ## Overview
 
-This document defines the REST API contract between the Android mobile application and the FastAPI server for the Notes Editor application. The API provides endpoints for managing daily notes, todos, sleep time tracking, file management, Claude AI chat, and application settings.
+This document defines the REST API contract between clients (Android app, React web app) and the Go backend server for the Notes Editor application. The API provides endpoints for managing daily notes, todos, sleep time tracking, file management, Claude AI chat, and application settings.
 
 ## Authentication
 
 ### Bearer Token Authentication
-All API endpoints (except `/login` and `/api/linkedin/oauth/callback`) require authentication via Bearer token.
+All API endpoints (except `/api/linkedin/oauth/callback`) require authentication via Bearer token.
 
 **Header Format:**
 ```
 Authorization: Bearer <NOTES_TOKEN>
 ```
 
-The token is validated using constant-time comparison (`secrets.compare_digest`).
+The token is validated using constant-time comparison.
 
 ### Person Context Header
-Most endpoints require a person context to scope data access. This is provided via:
+Most endpoints require a person context to scope data access:
 
 **Header:**
 ```
@@ -30,13 +30,14 @@ X-Notes-Person: <person_name>
 
 Valid values: `sebastian`, `petra`
 
-If the person header is missing or invalid, the API returns HTTP 400 with `"Person not selected"`.
+If the person header is missing or invalid, the API returns HTTP 400 with `{"detail": "Person not selected"}`.
 
 ### Common Request Headers
 
 | Header | Required | Description |
 |--------|----------|-------------|
 | `Authorization` | Yes | `Bearer <token>` |
+| `Content-Type` | For POST | `application/json` |
 | `Accept` | Yes | `application/json` or `application/x-ndjson` for streams |
 | `X-Notes-Person` | Yes* | User context (required for most endpoints) |
 
@@ -76,10 +77,12 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `content` | string | Yes | Full markdown content |
+**Request Body** (JSON):
+```json
+{
+  "content": "# daily 2026-01-18\n\n## todos\n..."
+}
+```
 
 **Response (200)**:
 ```json
@@ -107,11 +110,18 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
+**Request Body** (JSON):
+```json
+{
+  "content": "Note content here",
+  "pinned": true
+}
+```
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `content` | string | Yes | Note content to append |
-| `pinned` | string | No | `"on"` to mark entry as pinned |
+| `pinned` | boolean | No | Mark entry as pinned (default: false) |
 
 **Response (200)**:
 ```json
@@ -141,7 +151,7 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body**: Empty
+**Request Body**: Empty JSON object `{}`
 
 **Response (200)**:
 ```json
@@ -161,7 +171,14 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
+**Request Body** (JSON):
+```json
+{
+  "category": "work",
+  "text": "Complete the report"
+}
+```
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `category` | string | Yes | `"work"` or `"priv"` |
@@ -196,7 +213,14 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
+**Request Body** (JSON):
+```json
+{
+  "path": "daily/2026-01-18.md",
+  "line": 15
+}
+```
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `path` | string | Yes | Relative file path |
@@ -267,13 +291,22 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
+**Request Body** (JSON):
+```json
+{
+  "child": "Thomas",
+  "entry": "19:30",
+  "asleep": true,
+  "woke": false
+}
+```
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `child` | string | Yes | Child's name |
 | `entry` | string | Yes | Time entry (e.g., "19:30") |
-| `asleep` | string | No | `"on"` to mark as fell asleep |
-| `woke` | string | No | `"on"` to mark as woke up |
+| `asleep` | boolean | No | Mark as fell asleep |
+| `woke` | boolean | No | Mark as woke up |
 
 **Response (200)**:
 ```json
@@ -302,10 +335,12 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `line` | integer | Yes | 1-indexed line number |
+**Request Body** (JSON):
+```json
+{
+  "line": 15
+}
+```
 
 **Response (200)**:
 ```json
@@ -319,12 +354,6 @@ If the person header is missing or invalid, the API returns HTTP 400 with `"Pers
 ```json
 {
   "detail": "Invalid line number"
-}
-```
-or
-```json
-{
-  "detail": "Line out of range"
 }
 ```
 
@@ -404,10 +433,12 @@ or
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `path` | string | Yes | Relative file path |
+**Request Body** (JSON):
+```json
+{
+  "path": "notes/new-note.md"
+}
+```
 
 **Response (200)**:
 ```json
@@ -434,17 +465,19 @@ If file already exists:
 
 ---
 
-#### `POST /api/files/save-json`
-**Purpose**: Save content to a file (JSON response).
+#### `POST /api/files/save`
+**Purpose**: Save content to a file.
 
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `path` | string | Yes | Relative file path |
-| `content` | string | Yes | File content |
+**Request Body** (JSON):
+```json
+{
+  "path": "daily/2026-01-18.md",
+  "content": "# Updated content\n..."
+}
+```
 
 **Response (200)**:
 ```json
@@ -456,16 +489,18 @@ If file already exists:
 
 ---
 
-#### `POST /api/files/delete-json`
-**Purpose**: Delete a file (JSON response).
+#### `POST /api/files/delete`
+**Purpose**: Delete a file.
 
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `path` | string | Yes | Relative file path |
+**Request Body** (JSON):
+```json
+{
+  "path": "notes/old-note.md"
+}
+```
 
 **Response (200)**:
 ```json
@@ -485,100 +520,19 @@ If file already exists:
 
 ---
 
-#### `GET /api/files/tree`
-**Purpose**: Get HTML-rendered tree view of directory contents for HTMX integration.
-
-**Authentication**: Required
-**Person Header**: Required
-
-**Query Parameters**:
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `path` | string | No | Relative path (default: `.`) |
-
-**Response (200)**: HTML fragment containing nested directory tree with HTMX attributes.
-
-**Notes**: Used by web interface for lazy-loading directory contents. Returns HTML, not JSON.
-
----
-
-#### `GET /api/files/open`
-**Purpose**: Open a file in the web editor (returns full HTML page).
-
-**Authentication**: Required
-**Person Header**: Required
-
-**Query Parameters**:
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `path` | string | Yes | Relative file path |
-
-**Response (200)**: HTML page (`file_editor.html` template) with file content and rendered note view.
-
-**Error (400)**:
-```json
-{
-  "detail": "Path is a directory"
-}
-```
-
-**Error (404)**:
-```json
-{
-  "detail": "File not found"
-}
-```
-
----
-
-#### `POST /api/files/save`
-**Purpose**: Save file content (HTML response for HTMX).
-
-**Authentication**: Required
-**Person Header**: Required
-
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `path` | string | Yes | Relative file path |
-| `content` | string | Yes | File content |
-
-**Response (200)**: HTML page (`file_editor.html` template) with updated content and status message.
-
-**Notes**: Use `/api/files/save-json` for JSON response. This endpoint is for web HTMX forms.
-
----
-
-#### `POST /api/files/delete`
-**Purpose**: Delete a file (HTML response for HTMX).
-
-**Authentication**: Required
-**Person Header**: Required
-
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `path` | string | Yes | Relative file path |
-
-**Response (200)**: HTML page with deletion confirmation. Sets `HX-Trigger: fileDeleted` header.
-
-**Error** (directory): Returns HTML with error message "Cannot delete a directory".
-
-**Notes**: Use `/api/files/delete-json` for JSON response. This endpoint is for web HTMX forms.
-
----
-
 #### `POST /api/files/unpin`
 **Purpose**: Remove the `<pinned>` marker from a specific line.
 
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `path` | string | Yes | Relative file path |
-| `line` | integer | Yes | 1-indexed line number |
+**Request Body** (JSON):
+```json
+{
+  "path": "daily/2026-01-18.md",
+  "line": 25
+}
+```
 
 **Response (200)**:
 ```json
@@ -606,7 +560,14 @@ If line is not pinned:
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
+**Request Body** (JSON):
+```json
+{
+  "message": "Hello, Claude!",
+  "session_id": "abc123"
+}
+```
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `message` | string | Yes | User message |
@@ -648,13 +609,15 @@ If line is not pinned:
 Accept: application/x-ndjson
 ```
 
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `message` | string | Yes | User message |
-| `session_id` | string | No | Existing session ID |
+**Request Body** (JSON):
+```json
+{
+  "message": "Tell me about Go",
+  "session_id": "abc123"
+}
+```
 
-**Response**: `StreamingResponse` with `application/x-ndjson` media type.
+**Response**: Streaming `application/x-ndjson` (newline-delimited JSON).
 
 **Stream Event Types** (one JSON object per line):
 
@@ -691,10 +654,12 @@ Error:
 **Authentication**: Required
 **Person Header**: Required
 
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `session_id` | string | Yes | Session ID to clear |
+**Request Body** (JSON):
+```json
+{
+  "session_id": "abc123"
+}
+```
 
 **Response (200)**:
 ```json
@@ -771,10 +736,12 @@ If session not found:
 **Authentication**: Required
 **Person Header**: Not required
 
-**Request Body** (form-encoded):
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `env_content` | string | Yes | New env file content |
+**Request Body** (JSON):
+```json
+{
+  "content": "KEY=new_value\nOTHER_KEY=other_value\n"
+}
+```
 
 **Response (200)**:
 ```json
@@ -827,103 +794,132 @@ If session not found:
 
 ## Data Models
 
-### ApiMessage
-Generic success/error response.
-```kotlin
-data class ApiMessage(
-    val success: Boolean = true,
-    val message: String = ""
-)
+### TypeScript Types (for clients)
+
+```typescript
+interface ApiMessage {
+  success: boolean;
+  message: string;
+}
+
+interface DailyNote {
+  date: string;      // "YYYY-MM-DD"
+  path: string;      // Relative path from person root
+  content: string;   // Full markdown content
+}
+
+interface SleepTimesResponse {
+  entries: SleepEntry[];
+}
+
+interface SleepEntry {
+  line_no: number;   // 1-indexed line number
+  text: string;      // Full line text
+}
+
+interface FilesResponse {
+  entries: FileEntry[];
+}
+
+interface FileEntry {
+  name: string;      // File/directory name
+  path: string;      // Relative path
+  is_dir: boolean;
+}
+
+interface FileReadResponse {
+  path: string;      // Relative path
+  content: string;   // File content
+}
+
+interface EnvResponse {
+  success: boolean;
+  content?: string;
+  message?: string;
+}
+
+interface ClaudeChatResponse {
+  success: boolean;
+  message?: string;
+  response: string;
+  session_id: string;
+  history: ChatMessage[];
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface ClaudeStreamEvent {
+  type: 'text' | 'tool_use' | 'session' | 'ping' | 'error';
+  delta?: string;       // Text content (for type="text")
+  name?: string;        // Tool name (for type="tool_use")
+  input?: object;       // Tool input (for type="tool_use")
+  session_id?: string;  // Session ID (for type="session")
+  message?: string;     // Error message (for type="error")
+}
 ```
 
-### DailyNote
-Today's daily note content.
-```kotlin
-data class DailyNote(
-    val date: String,      // "YYYY-MM-DD"
-    val path: String,      // Relative path from person root
-    val content: String    // Full markdown content
-)
-```
+### Go Types (for server)
 
-### SleepTimesResponse
-List of sleep entries.
-```kotlin
-data class SleepTimesResponse(
-    val entries: List<SleepEntry>
-)
+```go
+type ApiMessage struct {
+    Success bool   `json:"success"`
+    Message string `json:"message"`
+}
 
-data class SleepEntry(
-    @SerialName("line_no")
-    val lineNo: Int,       // 1-indexed line number
-    val text: String       // Full line text
-)
-```
+type DailyNote struct {
+    Date    string `json:"date"`
+    Path    string `json:"path"`
+    Content string `json:"content"`
+}
 
-### FilesResponse
-Directory listing.
-```kotlin
-data class FilesResponse(
-    val entries: List<FileEntry>
-)
+type SleepTimesResponse struct {
+    Entries []SleepEntry `json:"entries"`
+}
 
-data class FileEntry(
-    val name: String,      // File/directory name
-    val path: String,      // Relative path
-    @SerialName("is_dir")
-    val isDir: Boolean
-)
-```
+type SleepEntry struct {
+    LineNo int    `json:"line_no"`
+    Text   string `json:"text"`
+}
 
-### FileReadResponse
-File content.
-```kotlin
-data class FileReadResponse(
-    val path: String,      // Relative path
-    val content: String    // File content
-)
-```
+type FilesResponse struct {
+    Entries []FileEntry `json:"entries"`
+}
 
-### EnvResponse
-Environment settings.
-```kotlin
-data class EnvResponse(
-    val success: Boolean,
-    val content: String = "",
-    val message: String = ""
-)
-```
+type FileEntry struct {
+    Name  string `json:"name"`
+    Path  string `json:"path"`
+    IsDir bool   `json:"is_dir"`
+}
 
-### ClaudeChatResponse
-Non-streaming chat response.
-```kotlin
-data class ClaudeChatResponse(
-    val success: Boolean,
-    val message: String = "",
-    val response: String = "",
-    @SerialName("session_id")
-    val sessionId: String = "",
-    val history: List<ChatMessage> = emptyList()
-)
+type FileReadResponse struct {
+    Path    string `json:"path"`
+    Content string `json:"content"`
+}
 
-data class ChatMessage(
-    val role: String,      // "user" or "assistant"
-    val content: String
-)
-```
+type ClaudeChatResponse struct {
+    Success   bool           `json:"success"`
+    Message   string         `json:"message,omitempty"`
+    Response  string         `json:"response"`
+    SessionID string         `json:"session_id"`
+    History   []ChatMessage  `json:"history"`
+}
 
-### ClaudeStreamEvent
-Streaming chat event.
-```kotlin
-data class ClaudeStreamEvent(
-    val type: String,              // "text", "tool_use", "session", "ping", "error"
-    val delta: String? = null,     // Text content (for type="text")
-    val name: String? = null,      // Tool name (for type="tool_use")
-    val input: JsonElement? = null,// Tool input (for type="tool_use")
-    @SerialName("session_id")
-    val sessionId: String? = null, // Session ID (for type="session")
-    val message: String? = null    // Error message (for type="error")
-)
+type ChatMessage struct {
+    Role    string `json:"role"`
+    Content string `json:"content"`
+}
+
+type ClaudeStreamEvent struct {
+    Type      string      `json:"type"`
+    Delta     string      `json:"delta,omitempty"`
+    Name      string      `json:"name,omitempty"`
+    Input     interface{} `json:"input,omitempty"`
+    SessionID string      `json:"session_id,omitempty"`
+    Message   string      `json:"message,omitempty"`
+}
 ```
 
 ---
@@ -941,7 +937,7 @@ data class ClaudeStreamEvent(
 
 ### Error Response Formats
 
-**FastAPI HTTPException** (validation errors):
+**Validation errors**:
 ```json
 {
   "detail": "Error message"
@@ -969,7 +965,7 @@ data class ClaudeStreamEvent(
 ## Notes
 
 ### Content Type
-- All POST requests use `application/x-www-form-urlencoded` encoding
+- All POST requests use `application/json` encoding
 - All responses use `application/json` except for streaming endpoints
 
 ### Path Handling
@@ -984,11 +980,6 @@ data class ClaudeStreamEvent(
 
 ### Multi-Server Fallback
 The Android client supports multiple base URLs and will try them in order if one fails (for network resilience).
-
-### Boolean Form Fields
-Boolean flags in form data use the convention:
-- Present with value `"on"` = true
-- Absent or empty = false
 
 ### Streaming Timeout
 The streaming endpoint uses an infinite read timeout on the client side. The server sends `{"type": "ping"}` every 5 seconds to keep the connection alive.

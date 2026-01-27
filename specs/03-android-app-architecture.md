@@ -1,18 +1,20 @@
 # Android App Architecture Specification
 
 > Status: Draft
-> Version: 1.0
-> Last Updated: 2026-01-18
+> Version: 2.0
+> Last Updated: 2026-01-27
 
 ## Overview
 
 This document specifies the architecture of the Notes Editor Android application. The app is built with Jetpack Compose and provides a mobile interface for managing daily notes, file browsing, sleep tracking, and AI-powered chat.
 
+**Location:** `clients/android/`
+
 **Related Specifications:**
 - `01-rest-api-contract.md` - REST API endpoints consumed by this app
-- `02-vault-storage-git-sync.md` - Server-side storage layer
-- `15-android-arc-menu-navigation.md` - Arc menu navigation system
-- `16-android-bottom-info-bar.md` - Bottom info bar with screen titles
+- `02-vault-storage-git-sync.md` - Server-side storage layer (Go)
+- `18-android-bottom-navigation-bar.md` - Bottom navigation bar
+- `14-android-keyboard-accessory-bar.md` - Keyboard accessory bar
 
 ---
 
@@ -69,7 +71,7 @@ The application follows a simplified MVVM-like architecture with singleton objec
 
 The single activity that hosts the entire application.
 
-**File:** `MainActivity.kt`
+**File:** `clients/android/app/src/main/java/.../MainActivity.kt`
 
 **Responsibilities:**
 - Initialize UserSettings from SharedPreferences
@@ -131,7 +133,9 @@ sealed class Screen(val route: String, val label: String) {
 
 **Navigation Behavior:**
 - Start destination: `Settings` if no person selected, `Daily` otherwise
-- Arc menu navigation: collapsed FAB in bottom-right, expands to show all destinations (see specs 15 and 16)
+- Bottom navigation bar: 4 static buttons (Daily, Files, Sleep, Tools)
+- Tools screen provides hub navigation to secondary screens (Claude, Noise, etc.)
+- Per-screen top headers display titles and optional action buttons
 - Top-level navigation preserves back stack by popping to existing screens
 
 ---
@@ -488,7 +492,7 @@ Common UI components used across screens.
 | Component | Purpose |
 |-----------|---------|
 | `AppText` | Styled text with theme typography |
-| `ScreenTitle` | **Deprecated** - Screen titles now shown in BottomInfoBar |
+| `ScreenTitle` | Per-screen title header with optional action button |
 | `SectionTitle` | Section header within screens |
 | `ScreenLayout` | Standard screen container (optional scroll, no longer handles headers) |
 | `CompactDivider` | Thin horizontal divider |
@@ -642,24 +646,26 @@ Test notification functionality.
 └─────────────────┘       └─────────────────┘
                                   │
                           ┌───────┴───────┐
-                          │   Arc Menu    │
-                          │ (FAB bottom-R)│
+                          │  Bottom Nav   │
+                          │ [D][F][S][T]  │
                           └───────────────┘
                                   │
-                    ┌─────────────┼─────────────┐
-                    │ Level 1     │ Level 2     │
-                    ▼             ▼             ▼
-         ┌──────────────────────────────────────────────┐
-         │  All screens accessible directly:            │
-         │  Daily, Files, Sleep, Claude, Noise,         │
-         │  Notifications, Settings                     │
-         └──────────────────────────────────────────────┘
+              ┌─────────┬─────────┼─────────┐
+              │         │         │         │
+              ▼         ▼         ▼         ▼
+           Daily     Files     Sleep     Tools
+                                           │
+                              ┌────────────┼────────────┐
+                              │            │            │
+                              ▼            ▼            ▼
+                           Claude       Noise      Settings
+                           Notifications           Kiosk
 ```
 
 **Navigation Rules:**
-1. Arc Menu Level 1 items (Daily, Files, Sleep) are primary destinations
-2. Arc Menu Level 2 items (Claude, Noise, Notifications, Settings) are secondary destinations
-3. All screens are directly accessible from the Arc Menu without intermediate navigation
+1. Bottom nav bar items (Daily, Files, Sleep, Tools) are primary destinations
+2. Tools screen provides hub navigation to secondary screens
+3. Secondary screens: Claude, Noise, Notifications, Settings, Kiosk
 4. When person is null, only Settings screen is accessible
 
 ---

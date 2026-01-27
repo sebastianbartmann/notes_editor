@@ -1,12 +1,14 @@
 # Claude Chat Streaming Client Specification
 
 > Status: Draft
-> Version: 1.0
-> Last Updated: 2026-01-18
+> Version: 2.0
+> Last Updated: 2026-01-27
 
 ## Overview
 
-This document specifies the client-side implementations for consuming the Claude chat streaming API on Android and Web platforms. It complements [04-claude-service.md](./04-claude-service.md) which covers the server-side implementation.
+This document specifies the client-side implementations for consuming the Claude chat streaming API on Android and React Web platforms. It complements [04-claude-service.md](./04-claude-service.md) which covers the server-side Go implementation.
+
+**Implementation:** Android (`clients/android/`), React (`clients/web/src/hooks/useClaudeStream.ts`)
 
 The streaming client enables real-time display of Claude's responses as they are generated, providing visual feedback during tool execution and maintaining conversation context through session management.
 
@@ -123,9 +125,16 @@ Indicates an error during processing. The stream may continue or terminate after
 | `Authorization` | `Bearer <token>` | Yes |
 | `Accept` | `application/x-ndjson` | Yes |
 | `X-Notes-Person` | `sebastian` or `petra` | Yes |
-| `Content-Type` | `application/x-www-form-urlencoded` | Yes |
+| `Content-Type` | `application/json` | Yes |
 
-**Request Body (form-encoded):**
+**Request Body (JSON):**
+```json
+{
+  "message": "User's message",
+  "session_id": "existing-session-id-or-null"
+}
+```
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `message` | string | Yes | User's message |

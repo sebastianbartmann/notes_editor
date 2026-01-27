@@ -1,12 +1,14 @@
 # Theming and Styling System Specification
 
 > Status: Draft
-> Version: 1.0
-> Last Updated: 2026-01-18
+> Version: 2.0
+> Last Updated: 2026-01-27
 
 ## Overview
 
-This document specifies the theming and styling system for the Notes Editor application. The application maintains synchronized visual themes across Web and Android platforms, providing both dark and light mode support with consistent color palettes, spacing, and typography.
+This document specifies the theming and styling system for the Notes Editor application. The application maintains synchronized visual themes across React Web and Android platforms, providing both dark and light mode support with consistent color palettes, spacing, and typography.
+
+**Implementation:** React (`clients/web/src/index.css`), Android (`clients/android/app/src/main/java/.../Theme.kt`)
 
 **Key Principles:**
 - **Platform-native implementation**: CSS custom properties for Web, Compose theme system for Android
@@ -979,9 +981,9 @@ fun NotesEditorTheme(content: @Composable () -> Unit) {
 
 | Platform | File | Purpose |
 |----------|------|---------|
-| Web | `server/web_app/static/style.css` | All CSS styles and custom properties |
-| Android | `app/android/app/src/main/java/com/bartmann/noteseditor/Theme.kt` | Theme data classes and composables |
-| Android | `app/android/app/src/main/res/font/` | JetBrains Mono Nerd font files |
+| React Web | `clients/web/src/index.css` | All CSS styles and custom properties |
+| Android | `clients/android/app/src/main/java/com/bartmann/noteseditor/Theme.kt` | Theme data classes and composables |
+| Android | `clients/android/app/src/main/res/font/` | JetBrains Mono Nerd font files |
 
 ---
 

@@ -1,12 +1,21 @@
-# Web Interface Specification
+# Web Interface Specification (Legacy)
 
-> Status: Draft
+> Status: **SUPERSEDED**
+> Superseded By: [20-react-web-client.md](./20-react-web-client.md)
 > Version: 1.0
 > Last Updated: 2026-01-18
 
-## Overview
+## Deprecation Notice
 
-The Notes Editor web interface is a server-rendered HTML application that provides a browser-based UI for managing daily notes, files, sleep tracking, and Claude AI chat. The interface uses HTMX for dynamic interactions without full page reloads, Jinja2 templates for server-side rendering, and vanilla JavaScript for complex client-side behaviors.
+**This specification describes the legacy Python/HTMX web interface which has been replaced by a React/Vite single-page application.** See [20-react-web-client.md](./20-react-web-client.md) for the current web client specification.
+
+The legacy implementation is preserved here for historical reference only.
+
+---
+
+## Overview (Legacy)
+
+The Notes Editor web interface was a server-rendered HTML application that provided a browser-based UI for managing daily notes, files, sleep tracking, and Claude AI chat. The interface used HTMX for dynamic interactions without full page reloads, Jinja2 templates for server-side rendering, and vanilla JavaScript for complex client-side behaviors.
 
 ---
 

@@ -1,8 +1,8 @@
 # LinkedIn Service Specification
 
 > Status: Draft
-> Version: 1.0
-> Last Updated: 2026-01-18
+> Version: 2.0
+> Last Updated: 2026-01-27
 
 ## Overview
 
@@ -12,7 +12,24 @@ This document specifies the LinkedIn API integration for the Notes Editor applic
 2. **Content Operations**: Create posts, read comments, post comments and replies
 3. **Activity Logging**: CSV-based logging of all LinkedIn activity per person
 
-The LinkedIn service is used by Claude's MCP tools to enable AI-assisted LinkedIn posting and engagement.
+The LinkedIn service is used by Claude's tools to enable AI-assisted LinkedIn posting and engagement.
+
+---
+
+## Architecture
+
+### Package Structure
+
+```
+server/internal/linkedin/
+├── service.go         # Core LinkedIn service
+├── service_test.go
+├── oauth.go           # OAuth token exchange
+├── oauth_test.go
+├── client.go          # LinkedIn API client
+├── client_test.go
+└── logging.go         # Activity CSV logging
+```
 
 ---
 
@@ -27,18 +44,62 @@ The LinkedIn service is used by Claude's MCP tools to enable AI-assisted LinkedI
 | `LINKEDIN_REDIRECT_URI` | Yes | OAuth callback URL |
 | `LINKEDIN_ACCESS_TOKEN` | Yes* | Current access token (*set after OAuth flow) |
 
+### Config Type
+
+```go
+type Config struct {
+    ClientID     string
+    ClientSecret string
+    RedirectURI  string
+    AccessToken  string
+}
+
+func LoadConfig() (*Config, error) {
+    cfg := &Config{
+        ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
+        ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
+        RedirectURI:  os.Getenv("LINKEDIN_REDIRECT_URI"),
+        AccessToken:  os.Getenv("LINKEDIN_ACCESS_TOKEN"),
+    }
+    // Validate required fields
+    return cfg, nil
+}
+```
+
 ### File Locations
 
 | Path | Description |
 |------|-------------|
-| `server/web_app/.env` | Environment file storing credentials |
+| `.env` | Environment file storing credentials |
 | `{VAULT_ROOT}/{person}/linkedin/posts.csv` | Activity log per person |
 
 ### Constants
 
-```python
-LINKEDIN_API_BASE = "https://api.linkedin.com"
-LINKEDIN_VERSION = ""  # No version header (uses v2 endpoints)
+```go
+const (
+    linkedInAPIBase = "https://api.linkedin.com"
+    linkedInOAuthURL = "https://www.linkedin.com/oauth/v2/accessToken"
+)
+```
+
+---
+
+## Service Type
+
+```go
+type Service struct {
+    config    *Config
+    vaultRoot string
+    client    *http.Client
+}
+
+func NewService(config *Config, vaultRoot string) *Service {
+    return &Service{
+        config:    config,
+        vaultRoot: vaultRoot,
+        client:    &http.Client{Timeout: 30 * time.Second},
+    }
+}
 ```
 
 ---
@@ -50,69 +111,45 @@ LINKEDIN_VERSION = ""  # No version header (uses v2 endpoints)
 1. User initiates OAuth via LinkedIn authorization URL
 2. LinkedIn redirects to callback with authorization code
 3. Server exchanges code for access token
-4. Token is persisted to `.env` and runtime environment
+4. Token is persisted to `.env` and runtime config
 
 ### Token Exchange
 
+#### `ExchangeCodeForToken(authCode string) (*TokenResponse, error)`
+
 **Endpoint:** `POST https://www.linkedin.com/oauth/v2/accessToken`
 
-```python
-def exchange_code_for_token(auth_code: str) -> dict:
-    # POST with form data:
-    # - grant_type: "authorization_code"
-    # - code: auth_code
-    # - redirect_uri: LINKEDIN_REDIRECT_URI
-    # - client_id: LINKEDIN_CLIENT_ID
-    # - client_secret: LINKEDIN_CLIENT_SECRET
-    #
-    # Returns: {"access_token": "...", "expires_in": 3600, ...}
-```
+```go
+type TokenResponse struct {
+    AccessToken string `json:"access_token"`
+    ExpiresIn   int    `json:"expires_in"`
+    Scope       string `json:"scope"`
+}
 
-**Response:**
-```json
-{
-  "access_token": "AQV...",
-  "expires_in": 5184000,
-  "scope": "r_liteprofile w_member_social",
-  "token_type": "Bearer"
+func (s *Service) ExchangeCodeForToken(authCode string) (*TokenResponse, error) {
+    data := url.Values{
+        "grant_type":    {"authorization_code"},
+        "code":          {authCode},
+        "redirect_uri":  {s.config.RedirectURI},
+        "client_id":     {s.config.ClientID},
+        "client_secret": {s.config.ClientSecret},
+    }
+
+    resp, err := s.client.PostForm(linkedInOAuthURL, data)
+    // ... parse response
 }
 ```
 
 ### Token Persistence
 
-```python
-def persist_access_token(access_token: str) -> None:
-    # Updates LINKEDIN_ACCESS_TOKEN in .env file
-    # Sets os.environ["LINKEDIN_ACCESS_TOKEN"]
-```
-
-The `update_env_value` helper handles `.env` file modification, preserving comments and other variables.
-
-### REST API Callback
-
-**Endpoint:** `GET /api/linkedin/oauth/callback`
-
-**Query Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `code` | string | Yes | Authorization code from LinkedIn |
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "expires_in": 5184000
+```go
+func (s *Service) PersistAccessToken(token string) error {
+    // Updates LINKEDIN_ACCESS_TOKEN in .env file
+    // Updates s.config.AccessToken
 }
 ```
 
-**Error Response (400):**
-```json
-{
-  "detail": "LinkedIn token exchange failed: 400 ..."
-}
-```
-
-**Note:** This endpoint is exempt from bearer token authentication.
+The `updateEnvValue` helper handles `.env` file modification, preserving comments and other variables.
 
 ---
 
@@ -120,29 +157,14 @@ The `update_env_value` helper handles `.env` file modification, preserving comme
 
 ### Request Headers
 
-```python
-def get_headers(token: str) -> dict:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
+```go
+func (s *Service) headers() http.Header {
+    return http.Header{
+        "Authorization": []string{"Bearer " + s.config.AccessToken},
+        "Content-Type":  []string{"application/json"},
     }
+}
 ```
-
-No LinkedIn-Versioning header is used; the service relies on v2 endpoint defaults.
-
-### Generic Request Handler
-
-```python
-def _request(method: str, url: str, token: str, **kwargs) -> requests.Response:
-    # Sends HTTP request with:
-    # - Authorization and Content-Type headers
-    # - 30-second timeout
-    # - Error logging and RuntimeError on failure
-```
-
-**Error Handling:**
-- Non-2xx responses log to stdout and raise `RuntimeError`
-- Error message includes status code and response body
 
 ### Get Person URN
 
@@ -150,9 +172,10 @@ Retrieves the authenticated user's LinkedIn person URN.
 
 **Endpoint:** `GET /v2/userinfo`
 
-```python
-def get_person_urn(token: str) -> str:
-    # Returns: "urn:li:person:{sub}"
+```go
+func (s *Service) GetPersonURN() (string, error) {
+    // Returns: "urn:li:person:{sub}"
+}
 ```
 
 **Response:**
@@ -172,8 +195,8 @@ def get_person_urn(token: str) -> str:
 
 Creates a new LinkedIn post as the authenticated user.
 
-```python
-def create_post(text: str) -> dict
+```go
+func (s *Service) CreatePost(text string, person string) (*PostResponse, error)
 ```
 
 **Endpoint:** `POST /v2/ugcPosts`
@@ -194,9 +217,9 @@ def create_post(text: str) -> dict
 ```
 
 **Response:**
-```json
-{
-  "id": "urn:li:share:123456789"
+```go
+type PostResponse struct {
+    ID string `json:"id"` // "urn:li:share:123456789"
 }
 ```
 
@@ -204,8 +227,8 @@ def create_post(text: str) -> dict
 
 Retrieves comments for a LinkedIn post.
 
-```python
-def read_comments(post_urn: str) -> dict
+```go
+func (s *Service) ReadComments(postURN string) (*CommentsResponse, error)
 ```
 
 **Endpoint:** `GET /v2/socialActions/{encoded_urn}/comments`
@@ -213,17 +236,24 @@ def read_comments(post_urn: str) -> dict
 **Note:** The post URN is URL-encoded (e.g., `urn:li:share:123` becomes `urn%3Ali%3Ashare%3A123`).
 
 **Response:**
-```json
-{
-  "elements": [
-    {
-      "id": "urn:li:comment:456",
-      "actor": "urn:li:person:abc",
-      "message": {"text": "Great post!"},
-      "created": {"time": 1705580400000}
-    }
-  ],
-  "paging": {"count": 10, "start": 0}
+```go
+type CommentsResponse struct {
+    Elements []Comment `json:"elements"`
+}
+
+type Comment struct {
+    ID      string         `json:"id"`
+    Actor   string         `json:"actor"`
+    Message CommentMessage `json:"message"`
+    Created CommentTime    `json:"created"`
+}
+
+type CommentMessage struct {
+    Text string `json:"text"`
+}
+
+type CommentTime struct {
+    Time int64 `json:"time"` // Unix timestamp in milliseconds
 }
 ```
 
@@ -231,12 +261,8 @@ def read_comments(post_urn: str) -> dict
 
 Posts a comment on a LinkedIn post. Supports both top-level comments and replies.
 
-```python
-def create_comment(
-    post_urn: str,
-    text: str,
-    parent_comment_urn: str | None = None
-) -> dict
+```go
+func (s *Service) CreateComment(postURN, text string, parentCommentURN string, person string) (*CommentResponse, error)
 ```
 
 **Endpoint:** `POST /v2/socialActions/{encoded_urn}/comments`
@@ -259,9 +285,9 @@ def create_comment(
 ```
 
 **Response:**
-```json
-{
-  "id": "urn:li:comment:789"
+```go
+type CommentResponse struct {
+    ID string `json:"id"` // "urn:li:comment:789"
 }
 ```
 
@@ -290,85 +316,116 @@ timestamp,action,post_urn,comment_urn,text,response
 
 ### Logging Functions
 
-```python
-def log_post(person: str, text: str, response: dict) -> None:
-    # Logs action="post" with post_urn from response
+```go
+func (s *Service) LogPost(person, text string, response *PostResponse) error {
+    return s.logActivity(person, ActivityEntry{
+        Timestamp:  time.Now().Format("2006-01-02 15:04:05"),
+        Action:     "post",
+        PostURN:    response.ID,
+        Text:       text,
+        Response:   mustJSON(response),
+    })
+}
 
-def log_comment(
-    person: str,
-    text: str,
-    response: dict,
-    post_urn: str,
-    comment_urn: str | None = None,
-    action: str = "comment"
-) -> None:
-    # Logs action="comment" or "reply"
-    # comment_urn defaults to response["id"] if not provided
+func (s *Service) LogComment(person, text string, response *CommentResponse, postURN, parentURN string) error {
+    action := "comment"
+    if parentURN != "" {
+        action = "reply"
+    }
+    return s.logActivity(person, ActivityEntry{
+        Timestamp:   time.Now().Format("2006-01-02 15:04:05"),
+        Action:      action,
+        PostURN:     postURN,
+        CommentURN:  response.ID,
+        Text:        text,
+        Response:    mustJSON(response),
+    })
+}
 ```
 
 ### Log File Creation
 
-- Parent directories are created automatically
-- CSV header row is written only for new files
-- Logs are appended without locking (single-server deployment)
+```go
+func (s *Service) logActivity(person string, entry ActivityEntry) error {
+    logPath := filepath.Join(s.vaultRoot, person, "linkedin", "posts.csv")
 
----
+    // Create directory if needed
+    if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+        return err
+    }
 
-## Error Handling
+    // Check if file exists (for header)
+    writeHeader := false
+    if _, err := os.Stat(logPath); os.IsNotExist(err) {
+        writeHeader = true
+    }
 
-### Environment Errors
+    f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
 
-| Error | Cause | Handling |
-|-------|-------|----------|
-| `ValueError` | Missing required env variable | Raised by `_require_env()` |
-
-### OAuth Errors
-
-| Error | Cause | Handling |
-|-------|-------|----------|
-| `RuntimeError` | Token exchange failed | HTTP 400 response |
-| `RuntimeError` | Missing access_token in response | HTTP 400 response |
-
-### API Errors
-
-| Error | Cause | Handling |
-|-------|-------|----------|
-| `RuntimeError` | Non-2xx API response | Logged and raised |
-| `RuntimeError` | Missing 'sub' in userinfo | Raised |
-| `requests.Timeout` | Request exceeded 30s | Raised |
-
-### MCP Tool Error Responses
-
-LinkedIn MCP tools return structured errors rather than raising exceptions:
-
-```json
-{
-  "content": [{"type": "text", "text": "Error: text is required"}],
-  "is_error": true
+    w := csv.NewWriter(f)
+    if writeHeader {
+        w.Write([]string{"timestamp", "action", "post_urn", "comment_urn", "text", "response"})
+    }
+    w.Write(entry.ToSlice())
+    w.Flush()
+    return w.Error()
 }
 ```
 
 ---
 
+## Error Handling
+
+### Error Types
+
+```go
+var (
+    ErrMissingConfig    = errors.New("missing required configuration")
+    ErrTokenExchange    = errors.New("token exchange failed")
+    ErrAPIRequest       = errors.New("LinkedIn API request failed")
+    ErrMissingPersonURN = errors.New("missing person URN in response")
+)
+```
+
+### API Error Response
+
+```go
+type APIError struct {
+    StatusCode int
+    Body       string
+}
+
+func (e *APIError) Error() string {
+    return fmt.Sprintf("LinkedIn API error %d: %s", e.StatusCode, e.Body)
+}
+```
+
+### Error Scenarios
+
+| Error | Cause | Handling |
+|-------|-------|----------|
+| `ErrMissingConfig` | Missing required env variable | Return error on service creation |
+| `ErrTokenExchange` | OAuth token exchange failed | Return to caller (HTTP 400) |
+| `ErrAPIRequest` | Non-2xx API response | Return wrapped error |
+
+---
+
 ## Integration Notes
 
-### MCP Tools Integration
+### Claude Tools Integration
 
-The LinkedIn service is wrapped by MCP tools in `linkedin_tools.py`:
+The LinkedIn service is used by Claude tools in the claude package:
 
-| MCP Tool | Service Function |
-|----------|------------------|
-| `linkedin_post` | `create_post()` + `log_post()` |
-| `linkedin_read_comments` | `read_comments()` |
-| `linkedin_post_comment` | `create_comment()` + `log_comment()` |
-| `linkedin_reply_comment` | `create_comment(parent_comment_urn=...)` + `log_comment()` |
-
-### Person Context
-
-MCP tools manage person context via `contextvars`:
-- Context is set before Claude queries
-- All logging functions receive `person` parameter from context
-- Context is reset after query completes
+| Claude Tool | Service Function |
+|-------------|------------------|
+| `linkedin_post` | `CreatePost()` + `LogPost()` |
+| `linkedin_read_comments` | `ReadComments()` |
+| `linkedin_post_comment` | `CreateComment()` + `LogComment()` |
+| `linkedin_reply_comment` | `CreateComment(parentURN=...)` + `LogComment()` |
 
 ### Vault Integration
 
@@ -379,8 +436,88 @@ Activity logs are stored in the person's vault directory:
 
 This allows logs to be version-controlled with the user's other notes.
 
-### Related Specifications
+---
+
+## Testing
+
+### Unit Tests
+
+```go
+func TestService_CreatePost(t *testing.T) {
+    // Create mock HTTP server
+    server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path == "/v2/userinfo" {
+            json.NewEncoder(w).Encode(map[string]string{"sub": "test123"})
+            return
+        }
+        if r.URL.Path == "/v2/ugcPosts" {
+            json.NewEncoder(w).Encode(map[string]string{"id": "urn:li:share:999"})
+            return
+        }
+    }))
+    defer server.Close()
+
+    cfg := &Config{AccessToken: "test-token"}
+    svc := NewServiceWithBaseURL(cfg, t.TempDir(), server.URL)
+
+    resp, err := svc.CreatePost("Test post", "sebastian")
+    if err != nil {
+        t.Fatalf("unexpected error: %v", err)
+    }
+
+    if resp.ID != "urn:li:share:999" {
+        t.Errorf("got ID %q, want %q", resp.ID, "urn:li:share:999")
+    }
+}
+
+func TestService_LogPost(t *testing.T) {
+    root := t.TempDir()
+    svc := NewService(&Config{}, root)
+
+    err := svc.LogPost("sebastian", "Test post", &PostResponse{ID: "urn:li:share:123"})
+    if err != nil {
+        t.Fatalf("unexpected error: %v", err)
+    }
+
+    // Verify CSV was created
+    logPath := filepath.Join(root, "sebastian", "linkedin", "posts.csv")
+    content, err := os.ReadFile(logPath)
+    if err != nil {
+        t.Fatalf("failed to read log: %v", err)
+    }
+
+    if !strings.Contains(string(content), "post,urn:li:share:123") {
+        t.Error("log entry not found")
+    }
+}
+```
+
+### Integration Tests
+
+```go
+func TestOAuthCallback_Integration(t *testing.T) {
+    if os.Getenv("LINKEDIN_TEST_CODE") == "" {
+        t.Skip("LINKEDIN_TEST_CODE not set")
+    }
+
+    cfg, _ := LoadConfig()
+    svc := NewService(cfg, t.TempDir())
+
+    resp, err := svc.ExchangeCodeForToken(os.Getenv("LINKEDIN_TEST_CODE"))
+    if err != nil {
+        t.Fatalf("token exchange failed: %v", err)
+    }
+
+    if resp.AccessToken == "" {
+        t.Error("expected access token")
+    }
+}
+```
+
+---
+
+## Related Specifications
 
 - [01-rest-api-contract.md](./01-rest-api-contract.md) - OAuth callback endpoint
 - [02-vault-storage-git-sync.md](./02-vault-storage-git-sync.md) - VAULT_ROOT and storage paths
-- [04-claude-service.md](./04-claude-service.md) - MCP tools and Claude integration
+- [04-claude-service.md](./04-claude-service.md) - Claude tools integration

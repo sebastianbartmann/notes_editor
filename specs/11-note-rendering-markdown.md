@@ -1,12 +1,14 @@
 # Note Rendering and Markdown Parsing Specification
 
 > Status: Draft
-> Version: 1.0
-> Last Updated: 2026-01-18
+> Version: 2.0
+> Last Updated: 2026-01-27
 
 ## Overview
 
-This document specifies the parallel implementations for rendering markdown notes with interactive elements on both Android and Web platforms. Both platforms share the same line-by-line parsing logic to ensure consistent note display across the application.
+This document specifies the parallel implementations for rendering markdown notes with interactive elements on Android and React Web platforms. Both platforms share the same line-by-line parsing logic to ensure consistent note display across the application.
+
+**Implementation:** Android (`clients/android/`), React (`clients/web/src/components/NoteView/`)
 
 The rendering system parses markdown content into discrete line objects, classifies each line by type (heading, task, text, empty), and renders them with platform-appropriate styling and interactivity.
 
@@ -50,9 +52,22 @@ private data class NoteLine(
 )
 ```
 
-### Web/Python Implementation
+### React/TypeScript Implementation
 
-The web implementation uses implicit typing via regex matching. Line types are determined by match order in `render_with_pinned_buttons()`.
+The React implementation uses explicit line type classification similar to Android:
+
+```typescript
+enum LineType {
+  H1, H2, H3, H4, TASK, TEXT, EMPTY
+}
+
+interface NoteLine {
+  lineNo: number;    // 1-indexed line number
+  text: string;      // Display text (prefix stripped)
+  type: LineType;
+  done?: boolean;    // For TASK type only
+}
+```
 
 ---
 

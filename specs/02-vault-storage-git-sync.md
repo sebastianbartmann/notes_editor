@@ -1,15 +1,15 @@
 # Vault Storage and Git Sync Specification
 
 > Status: Draft
-> Version: 1.0
-> Last Updated: 2026-01-18
+> Version: 2.0
+> Last Updated: 2026-01-27
 
 ## Overview
 
 This document specifies the storage and synchronization layer for the Notes Editor application. The system provides:
 
-1. **Vault Storage** (`vault_store.py`): File operations within a sandboxed directory structure
-2. **Git Sync** (`git_sync.py`): Version control and remote synchronization
+1. **Vault Storage** (`internal/vault/store.go`): File operations within a sandboxed directory structure
+2. **Git Sync** (`internal/vault/git.go`): Version control and remote synchronization
 
 All notes are stored as plain markdown files on the filesystem, organized by person and managed through Git for cross-device synchronization.
 
@@ -21,16 +21,20 @@ All notes are stored as plain markdown files on the filesystem, organized by per
 
 The vault root directory is the base path for all file operations:
 
-```python
-VAULT_ROOT = Path.home() / "notes"  # e.g., /home/user/notes
+```go
+// From environment variable NOTES_ROOT
+vaultRoot := os.Getenv("NOTES_ROOT")  // e.g., /home/user/notes
+if vaultRoot == "" {
+    vaultRoot = filepath.Join(os.Getenv("HOME"), "notes")
+}
 ```
 
 ### Git Directory
 
 Git operations use the same directory as the vault:
 
-```python
-GIT_DIR = Path.home() / "notes"
+```go
+gitDir := vaultRoot  // /home/user/notes
 ```
 
 ### Multi-User Directory Structure
@@ -52,119 +56,126 @@ The vault supports multiple persons, each with their own subdirectory:
 
 ---
 
-## Vault Store Module
+## Vault Store Package
 
-The `vault_store` module provides sandboxed file operations. All paths are relative to `VAULT_ROOT` and validated to prevent directory traversal attacks.
+The `vault` package provides sandboxed file operations. All paths are relative to `vaultRoot` and validated to prevent directory traversal attacks.
+
+### Store Type
+
+```go
+type Store struct {
+    rootPath string
+}
+
+func NewStore(rootPath string) *Store {
+    return &Store{rootPath: rootPath}
+}
+```
 
 ### Path Resolution
 
-#### `resolve_path(relative_path: str) -> Path`
+#### `ResolvePath(relativePath string) (string, error)`
 
 Resolves a vault-relative path to an absolute filesystem path with security validation.
 
 **Parameters:**
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `relative_path` | `str` | Path relative to vault root (e.g., `"sebastian/daily/2026-01-18.md"`) |
+| `relativePath` | `string` | Path relative to vault root (e.g., `"sebastian/daily/2026-01-18.md"`) |
 
-**Returns:** `Path` - Absolute filesystem path
+**Returns:** `string` - Absolute filesystem path, `error` - validation error if any
 
-**Raises:**
-| Exception | Condition |
-|-----------|-----------|
-| `ValueError` | Path is empty |
-| `ValueError` | Path is absolute (starts with `/`) |
-| `ValueError` | Path escapes vault root via `..` traversal |
+**Errors:**
+| Error | Condition |
+|-------|-----------|
+| `ErrEmptyPath` | Path is empty |
+| `ErrAbsolutePath` | Path is absolute (starts with `/`) |
+| `ErrPathEscape` | Path escapes vault root via `..` traversal |
 
 **Behavior:**
 1. Rejects empty paths
 2. Rejects absolute paths
-3. Joins path with `VAULT_ROOT`
-4. Resolves to canonical absolute path (eliminates `..` and symlinks)
+3. Joins path with vault root
+4. Cleans path (eliminates `..` and redundant separators)
 5. Validates resolved path is within vault root
 
 **Example:**
-```python
-# Valid paths
-resolve_path("sebastian/daily/note.md")  # -> /home/user/notes/sebastian/daily/note.md
-resolve_path("petra/notes.md")           # -> /home/user/notes/petra/notes.md
+```go
+// Valid paths
+path, _ := store.ResolvePath("sebastian/daily/note.md")  // -> /home/user/notes/sebastian/daily/note.md
+path, _ := store.ResolvePath("petra/notes.md")           // -> /home/user/notes/petra/notes.md
 
-# Invalid paths (raises ValueError)
-resolve_path("")                         # Empty path
-resolve_path("/etc/passwd")              # Absolute path
-resolve_path("../../../etc/passwd")      # Escapes vault root
-resolve_path("sebastian/../../root")     # Escapes vault root
+// Invalid paths (returns error)
+_, err := store.ResolvePath("")                          // ErrEmptyPath
+_, err := store.ResolvePath("/etc/passwd")               // ErrAbsolutePath
+_, err := store.ResolvePath("../../../etc/passwd")       // ErrPathEscape
+_, err := store.ResolvePath("sebastian/../../root")      // ErrPathEscape
 ```
 
 ---
 
 ### File Operations
 
-#### `read_entry(relative_path: str) -> str`
+#### `ReadFile(person, relativePath string) (string, error)`
 
 Reads the content of a file.
 
 **Parameters:**
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `relative_path` | `str` | Vault-relative path to the file |
+| `person` | `string` | Person context (e.g., "sebastian") |
+| `relativePath` | `string` | Path relative to person's directory |
 
-**Returns:** `str` - File content as UTF-8 text
+**Returns:** `string` - File content as UTF-8 text, `error` - error if any
 
-**Raises:**
-| Exception | Condition |
-|-----------|-----------|
-| `ValueError` | Invalid path (see `resolve_path`) |
-| `FileNotFoundError` | File does not exist |
-| `IsADirectoryError` | Path is a directory |
-| `UnicodeDecodeError` | File is not valid UTF-8 |
+**Errors:**
+| Error | Condition |
+|-------|-----------|
+| `ErrInvalidPath` | Invalid path (see `ResolvePath`) |
+| `os.ErrNotExist` | File does not exist |
+| `ErrIsDirectory` | Path is a directory |
 
 ---
 
-#### `write_entry(relative_path: str, content: str) -> None`
+#### `WriteFile(person, relativePath string, content string) error`
 
 Writes content to a file, creating parent directories if needed.
 
 **Parameters:**
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `relative_path` | `str` | Vault-relative path to the file |
-| `content` | `str` | Content to write |
+| `person` | `string` | Person context |
+| `relativePath` | `string` | Path relative to person's directory |
+| `content` | `string` | Content to write |
 
-**Returns:** `None`
+**Returns:** `error` - error if any
 
-**Raises:**
-| Exception | Condition |
-|-----------|-----------|
-| `ValueError` | Invalid path (see `resolve_path`) |
-| `IsADirectoryError` | Path is an existing directory |
-| `PermissionError` | Insufficient filesystem permissions |
+**Errors:**
+| Error | Condition |
+|-------|-----------|
+| `ErrInvalidPath` | Invalid path (see `ResolvePath`) |
+| `ErrIsDirectory` | Path is an existing directory |
+| `os.ErrPermission` | Insufficient filesystem permissions |
 
 **Behavior:**
 1. Resolves and validates path
-2. Creates parent directories recursively (`mkdir -p` equivalent)
-3. Overwrites file with new content (atomic write via `Path.write_text`)
+2. Creates parent directories recursively (`os.MkdirAll`)
+3. Writes file atomically (`os.WriteFile`)
 
 ---
 
-#### `append_entry(relative_path: str, content: str) -> None`
+#### `AppendFile(person, relativePath string, content string) error`
 
 Appends content to a file, creating the file and parent directories if needed.
 
 **Parameters:**
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `relative_path` | `str` | Vault-relative path to the file |
-| `content` | `str` | Content to append |
+| `person` | `string` | Person context |
+| `relativePath` | `string` | Path relative to person's directory |
+| `content` | `string` | Content to append |
 
-**Returns:** `None`
-
-**Raises:**
-| Exception | Condition |
-|-----------|-----------|
-| `ValueError` | Invalid path (see `resolve_path`) |
-| `IsADirectoryError` | Path is an existing directory |
-| `PermissionError` | Insufficient filesystem permissions |
+**Returns:** `error` - error if any
 
 **Behavior:**
 1. Resolves and validates path
@@ -176,98 +187,98 @@ Appends content to a file, creating the file and parent directories if needed.
 
 ---
 
-#### `delete_entry(relative_path: str) -> None`
+#### `DeleteFile(person, relativePath string) error`
 
 Deletes a file.
 
 **Parameters:**
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `relative_path` | `str` | Vault-relative path to the file |
+| `person` | `string` | Person context |
+| `relativePath` | `string` | Path relative to person's directory |
 
-**Returns:** `None`
+**Returns:** `error` - error if any
 
-**Raises:**
-| Exception | Condition |
-|-----------|-----------|
-| `ValueError` | Invalid path (see `resolve_path`) |
-| `IsADirectoryError` | Path is a directory (directories cannot be deleted) |
+**Errors:**
+| Error | Condition |
+|-------|-----------|
+| `ErrInvalidPath` | Invalid path (see `ResolvePath`) |
+| `ErrIsDirectory` | Path is a directory (directories cannot be deleted) |
 
 **Behavior:**
 1. Resolves and validates path
-2. If file does not exist, returns silently (idempotent)
-3. If path is a directory, raises `IsADirectoryError`
+2. If file does not exist, returns nil (idempotent)
+3. If path is a directory, returns `ErrIsDirectory`
 4. Deletes the file
 
 ---
 
 ### Directory Operations
 
-#### `list_dir(relative_path: str) -> list[dict]`
+#### `ListDir(person, relativePath string) ([]FileEntry, error)`
 
 Lists contents of a directory.
 
 **Parameters:**
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `relative_path` | `str` | Vault-relative path to the directory |
+| `person` | `string` | Person context |
+| `relativePath` | `string` | Path relative to person's directory |
 
-**Returns:** `list[dict]` - List of entry dictionaries
+**Returns:** `[]FileEntry` - List of entries, `error` - error if any
 
-**Entry Dictionary:**
-```python
-{
-    "name": str,     # Entry name (e.g., "note.md")
-    "path": str,     # Vault-relative path (e.g., "sebastian/daily/note.md")
-    "is_dir": bool   # True if directory, False if file
+**FileEntry Type:**
+```go
+type FileEntry struct {
+    Name  string `json:"name"`    // Entry name (e.g., "note.md")
+    Path  string `json:"path"`    // Vault-relative path (e.g., "daily/note.md")
+    IsDir bool   `json:"is_dir"`  // True if directory, False if file
 }
 ```
 
-**Raises:**
-| Exception | Condition |
-|-----------|-----------|
-| `ValueError` | Invalid path (see `resolve_path`) |
-| `FileNotFoundError` | Directory does not exist |
-| `NotADirectoryError` | Path is a file, not a directory |
+**Errors:**
+| Error | Condition |
+|-------|-----------|
+| `ErrInvalidPath` | Invalid path (see `ResolvePath`) |
+| `os.ErrNotExist` | Directory does not exist |
+| `ErrNotDirectory` | Path is a file, not a directory |
 
 **Behavior:**
 1. Resolves and validates path
-2. Iterates directory contents
+2. Reads directory contents (`os.ReadDir`)
 3. Excludes hidden files (names starting with `.`)
 4. Sorts entries: files first, then directories, alphabetically (case-insensitive)
 
 **Example Response:**
-```python
-[
-    {"name": "notes.md", "path": "sebastian/notes.md", "is_dir": False},
-    {"name": "todo.md", "path": "sebastian/todo.md", "is_dir": False},
-    {"name": "daily", "path": "sebastian/daily", "is_dir": True},
-]
+```go
+[]FileEntry{
+    {Name: "notes.md", Path: "notes.md", IsDir: false},
+    {Name: "todo.md", Path: "todo.md", IsDir: false},
+    {Name: "daily", Path: "daily", IsDir: true},
+}
 ```
 
 ---
 
-## Git Sync Module
+## Git Sync Package
 
-The `git_sync` module provides Git operations for synchronizing the vault with a remote repository.
+The `git` functions in the `vault` package provide Git operations for synchronizing the vault with a remote repository.
 
 ### Pull Operation
 
-#### `git_pull() -> tuple[bool, str]`
+#### `GitPull() (bool, string)`
 
 Pulls latest changes from the remote repository.
 
 **Parameters:** None
 
-**Returns:** `tuple[bool, str]`
-- `bool`: Success status
-- `str`: Status message or error description
+**Returns:** `bool` - Success status, `string` - Status message or error description
 
 **Behavior:**
 
 1. **Repository Check:**
-   - Verifies `.git` directory exists in `GIT_DIR`
-   - Returns `(False, "Not a git repository")` if missing
+   - Verifies `.git` directory exists in vault root
+   - Returns `(false, "Not a git repository")` if missing
 
 2. **Abort Existing Operations:**
    - Aborts any in-progress rebase: `git rebase --abort`
@@ -290,34 +301,32 @@ Pulls latest changes from the remote repository.
 **Return Values:**
 | Condition | Return |
 |-----------|--------|
-| Success | `(True, "Pull successful")` |
-| No remote changes | `(True, "Already up to date")` |
-| Fallback succeeded | `(True, "Reset to remote successful")` |
-| Not a git repo | `(False, "Not a git repository")` |
-| Network error | `(False, "<error message>")` |
+| Success | `(true, "Pull successful")` |
+| No remote changes | `(true, "Already up to date")` |
+| Fallback succeeded | `(true, "Reset to remote successful")` |
+| Not a git repo | `(false, "Not a git repository")` |
+| Network error | `(false, "<error message>")` |
 
 ---
 
 ### Commit and Push Operation
 
-#### `git_commit_and_push(message: str = "Update notes") -> tuple[bool, str]`
+#### `GitCommitAndPush(message string) (bool, string)`
 
 Stages all changes, commits, and pushes to remote.
 
 **Parameters:**
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `message` | `str` | `"Update notes"` | Commit message |
+| `message` | `string` | - | Commit message (use "Update notes" as default) |
 
-**Returns:** `tuple[bool, str]`
-- `bool`: Success status
-- `str`: Status message or error description
+**Returns:** `bool` - Success status, `string` - Status message or error description
 
 **Behavior:**
 
 1. **Check for Changes:**
    - Executes: `git status --porcelain`
-   - Returns early if no changes: `(True, "No changes to commit")`
+   - Returns early if no changes: `(true, "No changes to commit")`
 
 2. **Stage Changes:**
    - Executes: `git add .`
@@ -325,7 +334,7 @@ Stages all changes, commits, and pushes to remote.
 
 3. **Commit:**
    - Executes: `git commit -m "<message>"`
-   - Uses provided or default message
+   - Uses provided message
 
 4. **Push:**
    - Executes: `git push`
@@ -333,15 +342,26 @@ Stages all changes, commits, and pushes to remote.
 
 5. **Graceful Degradation:**
    - If push ultimately fails, changes remain committed locally
-   - Returns `(False, "<error>")` but data is preserved
+   - Returns `(false, "<error>")` but data is preserved
 
 **Return Values:**
 | Condition | Return |
 |-----------|--------|
-| Success | `(True, "Changes pushed successfully")` |
-| No changes | `(True, "No changes to commit")` |
-| Commit succeeded, push failed | `(False, "Push failed: <error>")` |
-| Commit failed | `(False, "Commit failed: <error>")` |
+| Success | `(true, "Changes pushed successfully")` |
+| No changes | `(true, "No changes to commit")` |
+| Commit succeeded, push failed | `(false, "Push failed: <error>")` |
+| Commit failed | `(false, "Commit failed: <error>")` |
+
+### Git Command Execution
+
+```go
+func runGitCommand(args ...string) (string, error) {
+    cmd := exec.Command("git", args...)
+    cmd.Dir = vaultRoot
+    output, err := cmd.CombinedOutput()
+    return string(output), err
+}
+```
 
 ---
 
@@ -349,12 +369,12 @@ Stages all changes, commits, and pushes to remote.
 
 ### Path Traversal Prevention
 
-The `resolve_path` function implements multiple layers of protection:
+The `ResolvePath` function implements multiple layers of protection:
 
 1. **Empty Path Rejection:** Prevents operations on vault root itself
 2. **Absolute Path Rejection:** Blocks paths starting with `/`
-3. **Canonical Resolution:** Uses `Path.resolve()` to eliminate `..` sequences
-4. **Containment Validation:** Verifies resolved path is within vault root
+3. **Path Cleaning:** Uses `filepath.Clean()` to normalize paths
+4. **Containment Validation:** Verifies resolved path is within vault root using `strings.HasPrefix`
 
 **Attack Vectors Mitigated:**
 - `../../../etc/passwd` - Blocked by containment check
@@ -363,7 +383,7 @@ The `resolve_path` function implements multiple layers of protection:
 
 ### Hidden File Filtering
 
-The `list_dir` function excludes files starting with `.`:
+The `ListDir` function excludes files starting with `.`:
 - Protects `.git` directory from exposure
 - Hides system files (`.DS_Store`, etc.)
 - Prevents accidental exposure of `.env` or similar
@@ -381,56 +401,62 @@ The sync strategy prioritizes data preservation:
 
 ### API Layer Integration
 
-The REST API (`main.py`) uses these modules as follows:
+The REST API handlers use the vault package:
 
-```python
-# Path prefixing with person context
-def get_person_path(person: str, relative_path: str) -> str:
-    return f"{person}/{relative_path}"
+```go
+// Path prefixing with person context
+func (h *Handler) GetFileContent(w http.ResponseWriter, r *http.Request) {
+    person := auth.PersonFromContext(r.Context())
+    path := r.URL.Query().Get("path")
 
-# Reading a file
-@app.get("/api/files/read")
-async def read_file(path: str, person: str):
-    full_path = get_person_path(person, path)
-    content = vault_store.read_entry(full_path)
-    return {"path": path, "content": content}
+    content, err := h.store.ReadFile(person, path)
+    if err != nil {
+        if errors.Is(err, os.ErrNotExist) {
+            writeError(w, 404, "File not found")
+            return
+        }
+        writeError(w, 400, err.Error())
+        return
+    }
 
-# Writing with git sync
-@app.post("/api/save")
-async def save_note(content: str, person: str):
-    path = get_person_path(person, get_today_path())
-    vault_store.write_entry(path, content)
-    success, msg = git_sync.git_commit_and_push("Update daily note")
-    return {"success": success, "message": msg}
+    json.NewEncoder(w).Encode(FileReadResponse{
+        Path:    path,
+        Content: content,
+    })
+}
+
+// Writing with git sync
+func (h *Handler) SaveNote(w http.ResponseWriter, r *http.Request) {
+    person := auth.PersonFromContext(r.Context())
+    // ... parse request body ...
+
+    if err := h.store.WriteFile(person, path, content); err != nil {
+        writeError(w, 400, err.Error())
+        return
+    }
+
+    success, msg := h.store.GitCommitAndPush("Update daily note")
+    json.NewEncoder(w).Encode(ApiMessage{
+        Success: success,
+        Message: msg,
+    })
+}
 ```
 
 ### Typical Operation Sequence
 
 **Reading data:**
 ```
-1. git_pull()           # Sync from remote
-2. read_entry(path)     # Read file content
-3. Return to client
+1. GitPull()              // Sync from remote
+2. ReadFile(person, path) // Read file content
+3. Return JSON to client
 ```
 
 **Writing data:**
 ```
-1. write_entry(path, content)       # Write to filesystem
-2. git_commit_and_push(message)     # Sync to remote
+1. WriteFile(person, path, content)  // Write to filesystem
+2. GitCommitAndPush(message)         // Sync to remote
 3. Return success/failure to client
-```
-
-### Error Handling Pattern
-
-```python
-try:
-    content = vault_store.read_entry(path)
-except FileNotFoundError:
-    raise HTTPException(404, "File not found")
-except IsADirectoryError:
-    raise HTTPException(400, "Path is a directory")
-except ValueError as e:
-    raise HTTPException(400, str(e))
 ```
 
 ### Concurrent Access
@@ -442,9 +468,73 @@ The current implementation does not handle concurrent access:
 
 ---
 
+## Testing
+
+### Unit Tests
+
+```go
+func TestStore_ReadFile(t *testing.T) {
+    tests := []struct {
+        name    string
+        person  string
+        path    string
+        setup   func(root string)
+        want    string
+        wantErr error
+    }{
+        {
+            name:   "reads existing file",
+            person: "sebastian",
+            path:   "daily/2026-01-27.md",
+            setup: func(root string) {
+                os.MkdirAll(filepath.Join(root, "sebastian", "daily"), 0755)
+                os.WriteFile(
+                    filepath.Join(root, "sebastian", "daily", "2026-01-27.md"),
+                    []byte("# daily 2026-01-27\n"),
+                    0644,
+                )
+            },
+            want: "# daily 2026-01-27\n",
+        },
+        {
+            name:    "rejects path traversal",
+            person:  "sebastian",
+            path:    "../../../etc/passwd",
+            wantErr: ErrPathEscape,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            root := t.TempDir()
+            if tt.setup != nil {
+                tt.setup(root)
+            }
+            store := NewStore(root)
+
+            got, err := store.ReadFile(tt.person, tt.path)
+            if tt.wantErr != nil {
+                if !errors.Is(err, tt.wantErr) {
+                    t.Errorf("got error %v, want %v", err, tt.wantErr)
+                }
+                return
+            }
+            if err != nil {
+                t.Fatalf("unexpected error: %v", err)
+            }
+            if got != tt.want {
+                t.Errorf("got %q, want %q", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+---
+
 ## Limitations
 
-1. **No Directory Deletion:** `delete_entry` only handles files
+1. **No Directory Deletion:** `DeleteFile` only handles files
 2. **No File Renaming:** Must delete and recreate
 3. **UTF-8 Only:** Binary files not supported
 4. **No Locking:** Concurrent access may cause issues

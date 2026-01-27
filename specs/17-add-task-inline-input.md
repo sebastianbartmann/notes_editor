@@ -1,12 +1,14 @@
 # Add Task Inline Input
 
 > Status: Implemented
-> Version: 1.0
-> Last Updated: 2026-01-19
+> Version: 1.1
+> Last Updated: 2026-01-27
 
 ## Overview
 
 Replace the current "add empty task then edit" workflow with an inline input flow where users type task text directly before adding. When clicking "Work task" or "Priv task", an input field appears allowing the user to type their task, then save or cancel.
+
+**Implementation:** Android (`clients/android/`), React Web (`clients/web/`), Go Server (`server/`)
 
 ## Current Behavior
 

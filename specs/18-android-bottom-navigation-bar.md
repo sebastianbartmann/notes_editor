@@ -1,12 +1,14 @@
 # Android Bottom Navigation Bar Specification
 
 > Status: Implemented
-> Version: 1.0
-> Last Updated: 2026-01-26
+> Version: 1.1
+> Last Updated: 2026-01-27
 
 ## Overview
 
 This document specifies the bottom navigation bar for the Notes Editor Android app. This replaces the previous Arc Menu navigation (spec 15) with a simpler, always-visible bottom bar.
+
+**Location:** `clients/android/`
 
 **Related Specifications:**
 - `03-android-app-architecture.md` - Overall app architecture

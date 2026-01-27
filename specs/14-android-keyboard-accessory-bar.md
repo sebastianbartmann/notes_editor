@@ -1,12 +1,14 @@
 # Android Keyboard Accessory Bar Specification
 
 > Status: Implemented
-> Version: 1.1
-> Last Updated: 2026-01-19
+> Version: 1.2
+> Last Updated: 2026-01-27
 
 ## Overview
 
 This document specifies the implementation of a keyboard accessory bar for the Notes Editor Android application. The primary goal is to fix keyboard overlap issues where the soft keyboard covers input fields, making text invisible while typing. Additionally, a toolbar with special keys is added above the keyboard for improved text input efficiency.
+
+**Location:** `clients/android/`
 
 ## Problem Statement
 

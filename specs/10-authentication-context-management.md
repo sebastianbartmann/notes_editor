@@ -1,14 +1,16 @@
 # Authentication and Context Management Specification
 
 > Status: Draft
-> Version: 1.0
-> Last Updated: 2026-01-18
+> Version: 2.0
+> Last Updated: 2026-01-27
 
 ## Overview
 
 This document defines the authentication, authorization, and context management systems for the Notes Editor application. It covers bearer token authentication, cookie-based session management, person context resolution, theme preferences, path utilities for multi-user file access, and environment configuration management.
 
 The authentication and context systems serve as foundational dependencies for all other application specifications.
+
+**Implementation:** Go backend (`server/internal/auth/`), React context providers (`clients/web/src/context/`)
 
 ---
 
@@ -22,9 +24,11 @@ The authentication and context systems serve as foundational dependencies for al
 
 ### Constants
 
-```python
-PERSONS = {"sebastian", "petra"}  # Valid person identifiers
-THEMES = {"dark", "light"}        # Valid theme values
+```go
+var (
+    Persons = map[string]bool{"sebastian": true, "petra": true}
+    Themes  = map[string]bool{"dark": true, "light": true}
+)
 ```
 
 ### Cookies
