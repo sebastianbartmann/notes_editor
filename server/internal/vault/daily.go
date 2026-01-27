@@ -315,7 +315,8 @@ func (d *Daily) ClearAllPinned(person, path string) error {
 	}
 
 	// Remove <pinned> markers from ### HH:MM <pinned> lines
-	pattern := regexp.MustCompile(`(^###\s+\d{2}:\d{2})\s*<pinned>`)
+	// Use (?m) multiline flag so ^ matches start of each line
+	pattern := regexp.MustCompile(`(?m)(^###\s+\d{2}:\d{2})\s*<pinned>`)
 	newContent := pattern.ReplaceAllString(content, "$1")
 
 	return d.store.WriteFile(person, path, newContent)

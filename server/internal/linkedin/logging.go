@@ -1,6 +1,7 @@
 package linkedin
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"os"
@@ -75,7 +76,7 @@ func (s *Service) logActivity(person, action, postURN, commentURN, text, respons
 
 // compactJSON compacts a JSON string by removing unnecessary whitespace.
 func compactJSON(s string) string {
-	var buf strings.Builder
+	var buf bytes.Buffer
 	if err := json.Compact(&buf, []byte(s)); err != nil {
 		return s // Return original if compaction fails
 	}
