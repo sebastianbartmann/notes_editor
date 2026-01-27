@@ -241,7 +241,7 @@
 ### 4.6 React Web Client Tests - COMPLETE
 - [x] Test NoteView line parsing (H1-H6, tasks, text, empty)
 - [x] Test task toggle state management
-- [ ] Test streaming text incremental display (requires mocking fetch/ReadableStream)
+- [x] Test streaming text incremental display (mocking fetch/ReadableStream)
 - [x] Test theme switching (dark/light)
 - [x] Test person context switching
 - [x] Test localStorage persistence (token, person, theme)
@@ -319,8 +319,26 @@
 - [x] **AuthContext Tests** (5 tests): localStorage persistence, login/logout
 - [x] **ThemeContext Tests** (7 tests): localStorage persistence, body class switching, toggle
 - [x] **PersonContext Tests** (7 tests): localStorage persistence, person switching
+- [x] **Claude Streaming Tests** (19 tests):
+  - NDJSON parsing: text, tool_use, session, ping, error, done events
+  - Chunked data handling (partial lines across reads)
+  - Final buffer parsing (no trailing newline)
+  - Empty line skipping
+  - JSON parse error recovery
+  - Multiple events per chunk
+  - Correct headers (Accept: application/x-ndjson, auth, person)
+  - Session ID forwarding
+  - Error handling (401, null body)
+  - Text delta accumulation for UI display
+- [x] **API Client Tests** (16 tests):
+  - Auth header injection from localStorage
+  - Person header injection from localStorage
+  - Content-Type for POST with body
+  - ApiError with status and detail
+  - Stream request NDJSON Accept header
+  - Stream request returns ReadableStreamDefaultReader
 - [x] **Bug Fix**: NoteView now only strips `<pinned>` marker from H3 headings (was incorrectly stripping from all headings)
-- Total: 61 tests passing
+- Total: 96 tests passing
 
 ### API Alignment Fix - 2026-01-27
 - [x] Fixed `/api/todos/add` endpoint per spec 01:

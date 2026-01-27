@@ -71,9 +71,13 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 - Key test files: `auth/auth_test.go`, `vault/paths_test.go`, `vault/store_test.go`, `vault/daily_test.go`, `claude/session_test.go`
 
 ### React Web Client
-- Tests are in `*.test.tsx` files alongside source code
-- Run `cd clients/web && npm test` for all tests
-- Key test files: `NoteView.test.tsx` (line parsing, task toggle), `AuthContext.test.tsx`, `ThemeContext.test.tsx`, `PersonContext.test.tsx`
+- Tests are in `*.test.ts(x)` files alongside source code
+- Run `cd clients/web && npm test` for all tests (96 tests)
+- Key test files:
+  - `NoteView.test.tsx` (line parsing, task toggle)
+  - `AuthContext.test.tsx`, `ThemeContext.test.tsx`, `PersonContext.test.tsx`
+  - `claude.test.ts` (NDJSON streaming, event parsing, chunked data)
+  - `client.test.ts` (API client, auth headers, ApiError)
 - Uses Vitest with jsdom and @testing-library/react
 
 ### Manual Verification
