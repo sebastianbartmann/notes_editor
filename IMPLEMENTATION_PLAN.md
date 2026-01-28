@@ -1,7 +1,7 @@
 # Implementation Plan
 
 > Last updated: 2026-01-28
-> Status: Active - Phase 7 complete; Phase 4-6 have remaining items
+> Status: Active - Phase 8 (Android Automated Testing) is next priority
 
 ## Instructions
 - Tasks marked `- [ ]` are incomplete
@@ -284,6 +284,8 @@
   - [ ] `button: #1E2227` (currently #353942)
 
 ### 6.3 Manual Testing
+> **Note:** Will be replaced by automated Maestro tests in Phase 8 (spec 21)
+
 - [ ] Test navigation on all screens
 - [ ] Test keyboard visibility behavior (bottom nav hides, accessory shows)
 - [ ] Test with person=null (only settings accessible)
@@ -350,13 +352,52 @@ All request data classes created in `Models.kt`:
 
 - [x] Go server tests pass (all packages)
 - [x] React web client tests pass (96 tests)
-- [ ] Manual Android testing pending (requires device/emulator)
+- [ ] Android testing pending (see Phase 8 for automated setup)
 
 ### 7.7 Cleanup - COMPLETE
 
 - [x] No `-json` suffix endpoints in Go server (never existed there)
 - [x] AGENTS.md does not mention form-encoded requests
 - [x] Only Android and React clients exist; both now use JSON
+
+---
+
+## Phase 8: Android Automated Testing (spec 21)
+
+> **Goal:** Enable agents to run Android UI tests with visual screenshot feedback.
+> Uses Maestro for UI testing with headless emulator.
+
+### 8.1 Setup Infrastructure
+
+- [ ] Create `scripts/install-android-sdk.sh` script per spec 21
+- [ ] Add Makefile targets:
+  - [ ] `android-test-setup` - One-time setup for new machines
+  - [ ] `android-emulator-start` - Start headless emulator
+  - [ ] `android-emulator-stop` - Stop emulator
+  - [ ] `android-test` - Run all Maestro tests
+  - [ ] `android-test-report` - Run tests and show summary
+
+### 8.2 Maestro Test Flows
+
+- [ ] Create `app/android/maestro/` directory structure
+- [ ] Create `flows/daily-screen.yaml` - Test daily note interactions
+- [ ] Create `flows/files-screen.yaml` - Test file browser
+- [ ] Create `flows/sleep-screen.yaml` - Test sleep tracking form
+- [ ] Create `flows/claude-screen.yaml` - Test Claude chat
+- [ ] Create `flows/settings-screen.yaml` - Test settings/theme
+- [ ] Create `flows/full-navigation.yaml` - Test bottom nav and screen transitions
+- [ ] Create `maestro/README.md` - Document test flows
+
+### 8.3 Environment Configuration
+
+- [ ] Document required environment variables in `.env.example`
+- [ ] Add `app/android/maestro/screenshots/` to `.gitignore`
+- [ ] Test setup script on clean machine
+
+### 8.4 CI Integration (Optional)
+
+- [ ] Create `.github/workflows/android-test.yml` for GitHub Actions
+- [ ] Configure artifact upload for screenshots
 
 ---
 
