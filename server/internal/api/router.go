@@ -2,6 +2,9 @@ package api
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -52,7 +55,7 @@ func NewServer(cfg *config.Config) *Server {
 func NewRouter(srv *Server) http.Handler {
 	r := chi.NewRouter()
 
-	// Middleware stack
+	// Global middleware (no auth)
 	r.Use(RecovererMiddleware)
 	r.Use(LoggingMiddleware)
 	r.Use(cors.Handler(cors.Options{
@@ -62,44 +65,77 @@ func NewRouter(srv *Server) http.Handler {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-	r.Use(AuthMiddleware(srv.config.NotesToken))
-	r.Use(PersonMiddleware)
 
-	// Daily note routes
-	r.Get("/api/daily", srv.handleGetDaily)
-	r.Post("/api/save", srv.handleSaveDaily)
-	r.Post("/api/append", srv.handleAppendDaily)
-	r.Post("/api/clear-pinned", srv.handleClearPinned)
+	// API routes with auth
+	r.Route("/api", func(r chi.Router) {
+		r.Use(AuthMiddleware(srv.config.NotesToken))
+		r.Use(PersonMiddleware)
 
-	// Todo routes
-	r.Post("/api/todos/add", srv.handleAddTodo)
-	r.Post("/api/todos/toggle", srv.handleToggleTodo)
+		// Daily note routes
+		r.Get("/daily", srv.handleGetDaily)
+		r.Post("/save", srv.handleSaveDaily)
+		r.Post("/append", srv.handleAppendDaily)
+		r.Post("/clear-pinned", srv.handleClearPinned)
 
-	// Sleep times routes
-	r.Get("/api/sleep-times", srv.handleGetSleepTimes)
-	r.Post("/api/sleep-times/append", srv.handleAppendSleepTime)
-	r.Post("/api/sleep-times/delete", srv.handleDeleteSleepTime)
+		// Todo routes
+		r.Post("/todos/add", srv.handleAddTodo)
+		r.Post("/todos/toggle", srv.handleToggleTodo)
 
-	// File routes
-	r.Get("/api/files/list", srv.handleListFiles)
-	r.Get("/api/files/read", srv.handleReadFile)
-	r.Post("/api/files/create", srv.handleCreateFile)
-	r.Post("/api/files/save", srv.handleSaveFile)
-	r.Post("/api/files/delete", srv.handleDeleteFile)
-	r.Post("/api/files/unpin", srv.handleUnpinEntry)
+		// Sleep times routes
+		r.Get("/sleep-times", srv.handleGetSleepTimes)
+		r.Post("/sleep-times/append", srv.handleAppendSleepTime)
+		r.Post("/sleep-times/delete", srv.handleDeleteSleepTime)
 
-	// Claude routes
-	r.Post("/api/claude/chat", srv.handleClaudeChat)
-	r.Post("/api/claude/chat-stream", srv.handleClaudeChatStream)
-	r.Post("/api/claude/clear", srv.handleClaudeClear)
-	r.Get("/api/claude/history", srv.handleClaudeHistory)
+		// File routes
+		r.Get("/files/list", srv.handleListFiles)
+		r.Get("/files/read", srv.handleReadFile)
+		r.Post("/files/create", srv.handleCreateFile)
+		r.Post("/files/save", srv.handleSaveFile)
+		r.Post("/files/delete", srv.handleDeleteFile)
+		r.Post("/files/unpin", srv.handleUnpinEntry)
 
-	// Settings routes
-	r.Get("/api/settings/env", srv.handleGetEnv)
-	r.Post("/api/settings/env", srv.handleSetEnv)
+		// Claude routes
+		r.Post("/claude/chat", srv.handleClaudeChat)
+		r.Post("/claude/chat-stream", srv.handleClaudeChatStream)
+		r.Post("/claude/clear", srv.handleClaudeClear)
+		r.Get("/claude/history", srv.handleClaudeHistory)
 
-	// LinkedIn OAuth
-	r.Get("/api/linkedin/oauth/callback", srv.handleLinkedInCallback)
+		// Settings routes
+		r.Get("/settings/env", srv.handleGetEnv)
+		r.Post("/settings/env", srv.handleSetEnv)
+
+		// LinkedIn OAuth
+		r.Get("/linkedin/oauth/callback", srv.handleLinkedInCallback)
+	})
+
+	// Static file serving for web UI (no auth)
+	staticDir := srv.config.StaticDir
+	if staticDir == "" {
+		staticDir = "./static"
+	}
+	r.Get("/*", staticFileHandler(staticDir))
 
 	return r
+}
+
+// staticFileHandler serves static files and falls back to index.html for SPA routing.
+func staticFileHandler(staticDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+
+		fullPath := filepath.Join(staticDir, path)
+
+		// Check if file exists
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			// SPA fallback: serve index.html for non-existent paths
+			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+			return
+		}
+
+		// Serve the actual file
+		http.ServeFile(w, r, fullPath)
+	}
 }

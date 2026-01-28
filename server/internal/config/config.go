@@ -16,6 +16,8 @@ type Config struct {
 	NotesRoot string
 	// AnthropicKey is the API key for Claude AI service.
 	AnthropicKey string
+	// StaticDir is the directory for serving static web UI files.
+	StaticDir string
 	// LinkedIn configuration for OAuth and API access.
 	LinkedIn LinkedInConfig
 }
@@ -38,6 +40,7 @@ func Load() (*Config, error) {
 		NotesToken:   os.Getenv("NOTES_TOKEN"),
 		NotesRoot:    os.Getenv("NOTES_ROOT"),
 		AnthropicKey: os.Getenv("ANTHROPIC_API_KEY"),
+		StaticDir:    os.Getenv("STATIC_DIR"),
 		LinkedIn: LinkedInConfig{
 			ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
 			ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
