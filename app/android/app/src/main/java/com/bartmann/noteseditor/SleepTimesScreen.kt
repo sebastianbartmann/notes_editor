@@ -214,9 +214,17 @@ fun SleepTimesScreen(modifier: Modifier, onReload: () -> Unit) {
                 CompactButton(
                     text = "Append",
                     onClick = {
+                        val status = when {
+                            asleep -> "eingeschlafen"
+                            woke -> "aufgewacht"
+                            else -> {
+                                message = "Please select eingeschlafen or aufgewacht"
+                                return@CompactButton
+                            }
+                        }
                         scope.launch {
                             try {
-                                val response = ApiClient.appendSleepTimes(child, entryText, asleep, woke)
+                                val response = ApiClient.appendSleepTimes(child, entryText, status)
                                 message = response.message
                                 entryText = ""
                                 asleep = false

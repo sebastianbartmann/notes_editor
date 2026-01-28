@@ -84,3 +84,87 @@ data class ClaudeStreamEvent(
     val sessionId: String? = null,
     val message: String? = null
 )
+
+// Request models for JSON serialization
+
+@Serializable
+data class SaveDailyRequest(
+    val path: String,
+    val content: String
+)
+
+@Serializable
+data class AppendDailyRequest(
+    val path: String,
+    val text: String,
+    val pinned: Boolean = false
+)
+
+@Serializable
+data class ClearPinnedRequest(
+    val path: String
+)
+
+@Serializable
+data class AddTodoRequest(
+    val category: String,
+    val text: String = ""
+)
+
+@Serializable
+data class ToggleTodoRequest(
+    val path: String,
+    val line: Int
+)
+
+@Serializable
+data class AppendSleepRequest(
+    val child: String,
+    val time: String,
+    val status: String
+)
+
+@Serializable
+data class DeleteSleepRequest(
+    val line: Int
+)
+
+@Serializable
+data class CreateFileRequest(
+    val path: String
+)
+
+@Serializable
+data class SaveFileRequest(
+    val path: String,
+    val content: String
+)
+
+@Serializable
+data class DeleteFileRequest(
+    val path: String
+)
+
+@Serializable
+data class UnpinEntryRequest(
+    val path: String,
+    val line: Int
+)
+
+@Serializable
+data class ClaudeChatRequest(
+    val message: String,
+    @SerialName("session_id")
+    val sessionId: String? = null
+)
+
+@Serializable
+data class ClaudeClearRequest(
+    @SerialName("session_id")
+    val sessionId: String
+)
+
+@Serializable
+data class SaveEnvRequest(
+    val content: String
+)

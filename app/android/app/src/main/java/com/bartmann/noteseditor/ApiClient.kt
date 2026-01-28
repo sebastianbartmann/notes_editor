@@ -9,10 +9,12 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import okhttp3.FormBody
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSource
 
 object ApiClient {
@@ -123,18 +125,18 @@ object ApiClient {
             parse = { body -> decode(body) }
         )
 
-    private suspend inline fun <reified T> postForm(path: String, params: Map<String, String>): T =
+    private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+
+    private suspend inline fun <reified T, reified R> postJson(path: String, body: R): T =
         executeRequest(
             buildRequest = { baseUrl ->
-                val formBuilder = FormBody.Builder()
-                for ((key, value) in params) {
-                    formBuilder.add(key, value)
-                }
+                val jsonBody = json.encodeToString(body).toRequestBody(JSON_MEDIA_TYPE)
                 val builder = Request.Builder()
                     .url("$baseUrl$path")
                     .header("Authorization", authHeader)
                     .header("Accept", "application/json")
-                    .post(formBuilder.build())
+                    .header("Content-Type", "application/json")
+                    .post(jsonBody)
                 val person = UserSettings.person
                 if (person != null) {
                     builder.header(PERSON_HEADER, person)
@@ -145,44 +147,34 @@ object ApiClient {
         )
 
     suspend fun fetchDaily(): DailyNote = getJson("/api/daily")
-    suspend fun saveDaily(content: String): ApiMessage =
-        postForm("/api/save", mapOf("content" to content))
 
-    suspend fun appendDaily(content: String, pinned: Boolean): ApiMessage =
-        postForm(
-            "/api/append",
-            mapOf("content" to content, "pinned" to if (pinned) "on" else "")
-        )
+    suspend fun saveDaily(path: String, content: String): ApiMessage =
+        postJson("/api/save", SaveDailyRequest(path = path, content = content))
+
+    suspend fun appendDaily(path: String, text: String, pinned: Boolean): ApiMessage =
+        postJson("/api/append", AppendDailyRequest(path = path, text = text, pinned = pinned))
 
     suspend fun addTodo(category: String, text: String = ""): ApiMessage =
-        postForm("/api/todos/add", mapOf("category" to category, "text" to text))
+        postJson("/api/todos/add", AddTodoRequest(category = category, text = text))
 
     suspend fun toggleTodo(path: String, line: Int): ApiMessage =
-        postForm("/api/todos/toggle", mapOf("path" to path, "line" to line.toString()))
+        postJson("/api/todos/toggle", ToggleTodoRequest(path = path, line = line))
 
-    suspend fun clearPinned(): ApiMessage =
-        postForm("/api/clear-pinned", emptyMap())
+    suspend fun clearPinned(path: String): ApiMessage =
+        postJson("/api/clear-pinned", ClearPinnedRequest(path = path))
 
 
     suspend fun fetchSleepTimes(): SleepTimesResponse = getJson("/api/sleep-times")
 
     suspend fun appendSleepTimes(
         child: String,
-        entry: String,
-        asleep: Boolean,
-        woke: Boolean
-    ): ApiMessage {
-        val params = mutableMapOf(
-            "child" to child,
-            "entry" to entry
-        )
-        if (asleep) params["asleep"] = "on"
-        if (woke) params["woke"] = "on"
-        return postForm("/api/sleep-times/append", params)
-    }
+        time: String,
+        status: String
+    ): ApiMessage =
+        postJson("/api/sleep-times/append", AppendSleepRequest(child = child, time = time, status = status))
 
     suspend fun deleteSleepEntry(line: Int): ApiMessage =
-        postForm("/api/sleep-times/delete", mapOf("line" to line.toString()))
+        postJson("/api/sleep-times/delete", DeleteSleepRequest(line = line))
 
     suspend fun listFiles(path: String): FilesResponse =
         getJson("/api/files/list?path=${URLEncoder.encode(path, "UTF-8")}")
@@ -191,36 +183,30 @@ object ApiClient {
         getJson("/api/files/read?path=${URLEncoder.encode(path, "UTF-8")}")
 
     suspend fun createFile(path: String): ApiMessage =
-        postForm("/api/files/create", mapOf("path" to path))
+        postJson("/api/files/create", CreateFileRequest(path = path))
 
     suspend fun saveFile(path: String, content: String): ApiMessage =
-        postForm("/api/files/save-json", mapOf("path" to path, "content" to content))
+        postJson("/api/files/save", SaveFileRequest(path = path, content = content))
 
     suspend fun deleteFile(path: String): ApiMessage =
-        postForm("/api/files/delete-json", mapOf("path" to path))
+        postJson("/api/files/delete", DeleteFileRequest(path = path))
 
     suspend fun unpinEntry(path: String, line: Int): ApiMessage =
-        postForm("/api/files/unpin", mapOf("path" to path, "line" to line.toString()))
+        postJson("/api/files/unpin", UnpinEntryRequest(path = path, line = line))
 
-    suspend fun claudeChat(message: String, sessionId: String?): ClaudeChatResponse {
-        val params = mutableMapOf("message" to message)
-        if (sessionId != null) params["session_id"] = sessionId
-        return postForm("/api/claude/chat", params)
-    }
+    suspend fun claudeChat(message: String, sessionId: String?): ClaudeChatResponse =
+        postJson("/api/claude/chat", ClaudeChatRequest(message = message, sessionId = sessionId))
 
     fun claudeChatStream(message: String, sessionId: String?): Flow<ClaudeStreamEvent> {
-        val params = mutableMapOf("message" to message)
-        if (sessionId != null) params["session_id"] = sessionId
+        val request = ClaudeChatRequest(message = message, sessionId = sessionId)
         return executeStream { baseUrl ->
-            val formBuilder = FormBody.Builder()
-            for ((key, value) in params) {
-                formBuilder.add(key, value)
-            }
+            val jsonBody = json.encodeToString(request).toRequestBody(JSON_MEDIA_TYPE)
             val builder = Request.Builder()
                 .url("$baseUrl/api/claude/chat-stream")
                 .header("Authorization", authHeader)
                 .header("Accept", "application/x-ndjson")
-                .post(formBuilder.build())
+                .header("Content-Type", "application/json")
+                .post(jsonBody)
             val person = UserSettings.person
             if (person != null) {
                 builder.header(PERSON_HEADER, person)
@@ -230,10 +216,10 @@ object ApiClient {
     }
 
     suspend fun claudeClear(sessionId: String): ApiMessage =
-        postForm("/api/claude/clear", mapOf("session_id" to sessionId))
+        postJson("/api/claude/clear", ClaudeClearRequest(sessionId = sessionId))
 
     suspend fun fetchEnv(): EnvResponse = getJson("/api/settings/env")
 
     suspend fun saveEnv(content: String): ApiMessage =
-        postForm("/api/settings/env", mapOf("env_content" to content))
+        postJson("/api/settings/env", SaveEnvRequest(content = content))
 }

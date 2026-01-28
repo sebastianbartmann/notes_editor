@@ -166,7 +166,7 @@ fun DailyScreen(
                             CompactButton(text = "Save") {
                                 scope.launch {
                                     try {
-                                        val response = ApiClient.saveDaily(content)
+                                        val response = ApiClient.saveDaily(path, content)
                                         message = response.message
                                         refresh()
                                     } catch (exc: Exception) {
@@ -274,7 +274,7 @@ fun DailyScreen(
                             onClick = {
                                 scope.launch {
                                     try {
-                                        val response = ApiClient.clearPinned()
+                                        val response = ApiClient.clearPinned(path)
                                         message = response.message
                                         refresh()
                                     } catch (exc: Exception) {
@@ -300,7 +300,7 @@ fun DailyScreen(
                             CompactButton(text = "Add") {
                                 scope.launch {
                                     try {
-                                        val response = ApiClient.appendDaily(appendText, pinned)
+                                        val response = ApiClient.appendDaily(path, appendText, pinned)
                                         message = response.message
                                         appendText = ""
                                         pinned = false

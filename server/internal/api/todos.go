@@ -3,8 +3,6 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -15,39 +13,23 @@ type AddTodoRequest struct {
 }
 
 // handleAddTodo adds a task to a category in today's daily note.
-// Accepts both JSON and form-encoded requests for Android/React compatibility.
 func (s *Server) handleAddTodo(w http.ResponseWriter, r *http.Request) {
 	person, ok := requirePerson(w, r)
 	if !ok {
 		return
 	}
 
-	var category, text string
-
-	contentType := r.Header.Get("Content-Type")
-	if strings.HasPrefix(contentType, "application/json") {
-		var req AddTodoRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeBadRequest(w, "Invalid request body")
-			return
-		}
-		category = req.Category
-		text = req.Text
-	} else {
-		// Parse form data (application/x-www-form-urlencoded)
-		if err := r.ParseForm(); err != nil {
-			writeBadRequest(w, "Invalid form data")
-			return
-		}
-		category = r.FormValue("category")
-		text = r.FormValue("text")
+	var req AddTodoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "Invalid request body")
+		return
 	}
 
-	if category == "" {
+	if req.Category == "" {
 		writeBadRequest(w, "Category is required")
 		return
 	}
-	if category != "work" && category != "priv" {
+	if req.Category != "work" && req.Category != "priv" {
 		writeBadRequest(w, "Invalid category")
 		return
 	}
@@ -59,7 +41,7 @@ func (s *Server) handleAddTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.daily.AddTask(person, path, category, text); err != nil {
+	if err := s.daily.AddTask(person, path, req.Category, req.Text); err != nil {
 		writeBadRequest(w, err.Error())
 		return
 	}
@@ -77,51 +59,28 @@ type ToggleTodoRequest struct {
 }
 
 // handleToggleTodo toggles a task's completion status.
-// Accepts both JSON and form-encoded requests for Android/React compatibility.
 func (s *Server) handleToggleTodo(w http.ResponseWriter, r *http.Request) {
 	person, ok := requirePerson(w, r)
 	if !ok {
 		return
 	}
 
-	var path string
-	var line int
-
-	contentType := r.Header.Get("Content-Type")
-	if strings.HasPrefix(contentType, "application/json") {
-		var req ToggleTodoRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeBadRequest(w, "Invalid request body")
-			return
-		}
-		path = req.Path
-		line = req.Line
-	} else {
-		// Parse form data (application/x-www-form-urlencoded)
-		if err := r.ParseForm(); err != nil {
-			writeBadRequest(w, "Invalid form data")
-			return
-		}
-		path = r.FormValue("path")
-		lineStr := r.FormValue("line")
-		var err error
-		line, err = strconv.Atoi(lineStr)
-		if err != nil {
-			writeBadRequest(w, "Invalid line number")
-			return
-		}
+	var req ToggleTodoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "Invalid request body")
+		return
 	}
 
-	if path == "" {
+	if req.Path == "" {
 		writeBadRequest(w, "Path is required")
 		return
 	}
-	if line < 1 {
+	if req.Line < 1 {
 		writeBadRequest(w, "Line must be positive")
 		return
 	}
 
-	if err := s.daily.ToggleTask(person, path, line); err != nil {
+	if err := s.daily.ToggleTask(person, req.Path, req.Line); err != nil {
 		writeBadRequest(w, err.Error())
 		return
 	}
