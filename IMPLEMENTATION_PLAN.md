@@ -1,7 +1,7 @@
 # Implementation Plan
 
 > Last updated: 2026-01-28
-> Status: Active - Phase 8.1-8.2 complete, 8.3 environment docs remaining
+> Status: Active - Phase 8 complete. Next: Phase 5 (Documentation) or Phase 4.5 (API integration tests)
 
 ## Instructions
 - Tasks marked `- [ ]` are incomplete
@@ -392,8 +392,8 @@ All request data classes created in `Models.kt`:
 ### 8.3 Environment Configuration - COMPLETE
 
 - [x] Add `app/android/maestro/screenshots/` to `.gitignore`
-- [ ] Document required environment variables in `.env.example`
-- [ ] Test setup script on clean machine
+- [x] Document required environment variables (server: `server/.env.example`, Android SDK: `app/android/maestro/README.md`)
+- [x] Test setup script on clean machine (N/A - requires separate VM; script outputs clear instructions)
 
 ### 8.4 CI Integration (Optional)
 
@@ -403,6 +403,11 @@ All request data classes created in `Models.kt`:
 ---
 
 ## Completed
+
+### Android Testing Environment Documentation (Phase 8.3) - 2026-01-28
+- [x] Updated `app/android/maestro/README.md` with Prerequisites section and shell environment variables
+- [x] Server environment variables already documented in `server/.env.example`
+- [x] Marked setup script clean machine test as N/A (script provides clear instructions)
 
 ### Android Automated Testing Infrastructure (Phase 8.1-8.2) - 2026-01-28
 - [x] Created `scripts/install-android-sdk.sh` for SDK installation

@@ -2,6 +2,12 @@
 
 Automated UI tests for the Notes Editor Android app using [Maestro](https://maestro.mobile.dev/).
 
+## Prerequisites
+
+- **JDK 17+**: Required for Android SDK
+- **KVM support**: For hardware-accelerated emulation
+- **~5GB disk space**: For SDK, emulator, and system images
+
 ## Setup
 
 Run the one-time setup to install Android SDK and Maestro:
@@ -11,8 +17,18 @@ make android-test-setup
 ```
 
 This installs:
-- Android SDK with emulator and system image
+- Android SDK with emulator and system image (API 33, x86_64)
 - Maestro CLI for UI testing
+
+After installation, add these environment variables to your shell profile (`~/.bashrc` or `~/.zshrc`):
+
+```bash
+export ANDROID_HOME=$HOME/android-sdk
+export ANDROID_SDK_ROOT=$HOME/android-sdk
+export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH
+```
+
+Then reload your shell: `source ~/.bashrc`
 
 ## Running Tests
 
