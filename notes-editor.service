@@ -6,6 +6,7 @@ After=network.target
 Type=simple
 User=dev
 WorkingDirectory=/home/dev/notes_editor/server
+EnvironmentFile=/home/dev/notes_editor/server/.env
 Environment="PATH=/usr/local/go/bin:/home/dev/.local/bin:/usr/local/bin:/usr/bin:/bin"
 StandardOutput=journal
 StandardError=journal
