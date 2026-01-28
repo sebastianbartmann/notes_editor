@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 )
@@ -13,11 +12,8 @@ const sleepTimesFile = "sleep_times.md"
 
 // SleepEntry represents a sleep time entry.
 type SleepEntry struct {
-	Line   int    `json:"line"`
-	Date   string `json:"date"`
-	Child  string `json:"child"`
-	Time   string `json:"time"`
-	Status string `json:"status"`
+	LineNo int    `json:"line_no"`
+	Text   string `json:"text"`
 }
 
 // handleGetSleepTimes returns recent sleep time entries.
@@ -33,10 +29,11 @@ func (s *Server) handleGetSleepTimes(w http.ResponseWriter, r *http.Request) {
 
 	entries := parseSleepEntries(content)
 
-	// Sort by date descending (most recent first)
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Date > entries[j].Date
-	})
+	// Already in reverse order from parsing (most recent at end of file)
+	// Reverse to get most recent first
+	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
+		entries[i], entries[j] = entries[j], entries[i]
+	}
 
 	// Limit to 20 entries
 	if len(entries) > 20 {
@@ -59,18 +56,9 @@ func parseSleepEntries(content string) []SleepEntry {
 			continue
 		}
 
-		// Parse format: YYYY-MM-DD | ChildName | TimeEntry | Status
-		parts := strings.Split(line, " | ")
-		if len(parts) != 4 {
-			continue
-		}
-
 		entries = append(entries, SleepEntry{
-			Line:   i + 1, // 1-indexed
-			Date:   strings.TrimSpace(parts[0]),
-			Child:  strings.TrimSpace(parts[1]),
-			Time:   strings.TrimSpace(parts[2]),
-			Status: strings.TrimSpace(parts[3]),
+			LineNo: i + 1, // 1-indexed
+			Text:   line,
 		})
 	}
 

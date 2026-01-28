@@ -28,6 +28,7 @@ func (s *Server) handleGetDaily(w http.ResponseWriter, r *http.Request) {
 	_ = s.git.CommitAndPush("Daily note created")
 
 	writeJSON(w, http.StatusOK, map[string]string{
+		"date":    time.Now().Format("2006-01-02"),
 		"content": content,
 		"path":    path,
 	})
