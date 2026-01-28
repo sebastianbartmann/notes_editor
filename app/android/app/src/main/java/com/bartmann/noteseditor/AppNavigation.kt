@@ -156,13 +156,13 @@ fun NotesEditorApp() {
                     SettingsScreen(Modifier)
                 }
                 composable(Screen.Daily.route) {
-                    DailyScreen(Modifier, onReload = {})
+                    DailyScreen(Modifier)
                 }
                 composable(Screen.Files.route) {
-                    FilesScreen(Modifier, onReload = {})
+                    FilesScreen(Modifier)
                 }
                 composable(Screen.Sleep.route) {
-                    SleepTimesScreen(Modifier, onReload = {})
+                    SleepTimesScreen(Modifier)
                 }
                 composable(Screen.Tools.route) {
                     ToolsScreen(
@@ -171,7 +171,7 @@ fun NotesEditorApp() {
                     )
                 }
                 composable(Screen.ToolClaude.route) {
-                    ToolClaudeScreen(Modifier, onClear = {})
+                    ToolClaudeScreen(Modifier)
                 }
                 composable(Screen.ToolNoise.route) {
                     ToolNoiseScreen(Modifier)

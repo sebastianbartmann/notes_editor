@@ -37,7 +37,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 @Composable
-fun ToolClaudeScreen(modifier: Modifier, onClear: () -> Unit) {
+fun ToolClaudeScreen(modifier: Modifier) {
     var inputText by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("") }

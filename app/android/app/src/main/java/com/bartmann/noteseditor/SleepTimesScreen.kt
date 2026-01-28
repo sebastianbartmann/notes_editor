@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SleepTimesScreen(modifier: Modifier, onReload: () -> Unit) {
+fun SleepTimesScreen(modifier: Modifier) {
     var entries by remember { mutableStateOf(listOf<SleepEntry>()) }
     var child by remember { mutableStateOf("Fabian") }
     var entryText by remember { mutableStateOf("") }

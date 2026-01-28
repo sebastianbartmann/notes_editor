@@ -35,8 +35,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DailyScreen(
-    modifier: Modifier,
-    onReload: () -> Unit
+    modifier: Modifier
 ) {
     var content by remember { mutableStateOf("") }
     var appendText by remember { mutableStateOf("") }
@@ -148,6 +147,19 @@ fun DailyScreen(
                                         refresh()
                                     } catch (exc: Exception) {
                                         message = "Toggle failed: ${exc.message}"
+                                    }
+                                }
+                            }
+                        },
+                        onUnpin = { lineNo ->
+                            if (path.isNotBlank()) {
+                                scope.launch {
+                                    try {
+                                        val response = ApiClient.unpinEntry(path, lineNo)
+                                        message = response.message
+                                        refresh()
+                                    } catch (exc: Exception) {
+                                        message = "Unpin failed: ${exc.message}"
                                     }
                                 }
                             }

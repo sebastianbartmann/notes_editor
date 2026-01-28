@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilesScreen(modifier: Modifier, onReload: () -> Unit) {
+fun FilesScreen(modifier: Modifier) {
     var rootPath by remember { mutableStateOf(".") }
     var entriesByPath by remember { mutableStateOf(mapOf<String, List<FileEntry>>()) }
     var expandedDirs by remember { mutableStateOf(setOf<String>()) }

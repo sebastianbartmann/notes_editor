@@ -1,7 +1,7 @@
 # Implementation Plan
 
 > Last updated: 2026-01-28
-> Status: Active - Phase 6.2 complete. Next: Phase 6.1 (Android UI gaps)
+> Status: Active - Phase 6.1 complete. Next: Phase 6.3 (Manual Testing)
 
 ## Instructions
 - Tasks marked `- [ ]` are incomplete
@@ -270,9 +270,9 @@
 
 ## Phase 6: Android Alignment (existing gaps)
 
-### 6.1 UI Gaps
-- [ ] Implement per-entry unpin UI (API exists: `ApiClient.unpinEntry`)
-- [ ] Remove unused callback parameters in `AppNavigation.kt`
+### 6.1 UI Gaps - COMPLETE
+- [x] Implement per-entry unpin UI (API exists: `ApiClient.unpinEntry`)
+- [x] Remove unused callback parameters in `AppNavigation.kt`
 
 ### 6.2 Theme Alignment (spec 12) - COMPLETE
 - [x] Update dark theme colors to match spec:
@@ -403,6 +403,21 @@ All request data classes created in `Models.kt`:
 ---
 
 ## Completed
+
+### Android UI Gaps (Phase 6.1) - 2026-01-28
+- [x] **Per-entry unpin UI implemented** in `NoteView.kt`:
+  - Added `isPinned` property to `NoteLine` data class
+  - Added optional `onUnpin: ((Int) -> Unit)?` callback parameter
+  - H3 headings with `<pinned>` marker now display "Unpin" button
+  - `<pinned>` marker is stripped from display text (case-insensitive)
+- [x] **DailyScreen.kt** wired up `onUnpin` callback to call `ApiClient.unpinEntry(path, lineNo)`
+- [x] **Removed unused callback parameters**:
+  - `DailyScreen`: removed `onReload: () -> Unit`
+  - `FilesScreen`: removed `onReload: () -> Unit`
+  - `SleepTimesScreen`: removed `onReload: () -> Unit`
+  - `ToolClaudeScreen`: removed `onClear: () -> Unit`
+  - `AppNavigation.kt`: removed empty lambda arguments from composable calls
+- [x] Go tests pass, React tests pass (96 tests)
 
 ### Android Dark Theme Alignment (Phase 6.2) - 2026-01-28
 - [x] Updated `Theme.kt` dark theme colors to match spec 12:

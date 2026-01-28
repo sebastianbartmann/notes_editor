@@ -18,7 +18,8 @@ private data class NoteLine(
     val lineNo: Int,
     val text: String,
     val type: LineType,
-    val done: Boolean = false
+    val done: Boolean = false,
+    val isPinned: Boolean = false
 )
 
 private enum class LineType {
@@ -29,6 +30,7 @@ private enum class LineType {
 fun NoteView(
     content: String,
     onToggleTask: (Int) -> Unit,
+    onUnpin: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val lines = parseNoteLines(content)
@@ -56,11 +58,32 @@ fun NoteView(
                         style = AppTheme.typography.section.copy(fontWeight = FontWeight.SemiBold),
                         color = AppTheme.colors.muted
                     )
-                    LineType.H3 -> AppText(
-                        text = line.text,
-                        style = AppTheme.typography.section.copy(fontWeight = FontWeight.SemiBold),
-                        color = AppTheme.colors.accent
-                    )
+                    LineType.H3 -> {
+                        if (line.isPinned && onUnpin != null) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AppText(
+                                    text = line.text,
+                                    style = AppTheme.typography.section.copy(fontWeight = FontWeight.SemiBold),
+                                    color = AppTheme.colors.accent,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                CompactTextButton(
+                                    text = "Unpin",
+                                    onClick = { onUnpin(line.lineNo) }
+                                )
+                            }
+                        } else {
+                            AppText(
+                                text = line.text,
+                                style = AppTheme.typography.section.copy(fontWeight = FontWeight.SemiBold),
+                                color = AppTheme.colors.accent
+                            )
+                        }
+                    }
                     LineType.H4 -> AppText(
                         text = line.text,
                         style = AppTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
@@ -96,6 +119,8 @@ fun NoteView(
     }
 }
 
+private val PINNED_REGEX = Regex("<pinned>", RegexOption.IGNORE_CASE)
+
 private fun parseNoteLines(content: String): List<NoteLine> {
     val lines = content.lines()
     val items = mutableListOf<NoteLine>()
@@ -123,7 +148,12 @@ private fun parseNoteLines(content: String): List<NoteLine> {
         }
         when {
             trimmed.startsWith("#### ") -> items.add(NoteLine(lineNo, trimmed.removePrefix("#### ").trim(), LineType.H4))
-            trimmed.startsWith("### ") -> items.add(NoteLine(lineNo, trimmed.removePrefix("### ").trim(), LineType.H3))
+            trimmed.startsWith("### ") -> {
+                val headingText = trimmed.removePrefix("### ").trim()
+                val isPinned = PINNED_REGEX.containsMatchIn(headingText)
+                val displayText = if (isPinned) headingText.replace(PINNED_REGEX, "").trim() else headingText
+                items.add(NoteLine(lineNo, displayText, LineType.H3, isPinned = isPinned))
+            }
             trimmed.startsWith("## ") -> items.add(NoteLine(lineNo, trimmed.removePrefix("## ").trim(), LineType.H2))
             trimmed.startsWith("# ") -> items.add(NoteLine(lineNo, trimmed.removePrefix("# ").trim(), LineType.H1))
             else -> items.add(NoteLine(lineNo, trimmed, LineType.TEXT))
