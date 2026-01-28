@@ -189,7 +189,8 @@ fun NotesEditorApp() {
         if (person != null && !isKeyboardVisible) {
             BottomNavBar(
                 currentRoute = currentRoute,
-                onNavigate = { route -> navigateByRoute(route) }
+                onNavigate = { route -> navigateByRoute(route) },
+                modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
             )
         }
     }

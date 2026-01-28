@@ -57,3 +57,4 @@ Thumbs.db
 
 # Android build outputs
 app/android/app/build/
+server/.env

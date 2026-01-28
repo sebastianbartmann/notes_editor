@@ -40,7 +40,7 @@ export default function DailyPage() {
 
   const handleSave = async (newContent: string) => {
     try {
-      await saveDaily(newContent)
+      await saveDaily({ path, content: newContent })
       setContent(newContent)
       setIsEditing(false)
     } catch (err) {
@@ -51,7 +51,7 @@ export default function DailyPage() {
   const handleAppend = async () => {
     if (!appendText.trim()) return
     try {
-      await appendDaily({ content: appendText, pinned: isPinned })
+      await appendDaily({ path, text: appendText, pinned: isPinned })
       setAppendText('')
       setIsPinned(false)
       await loadDaily()

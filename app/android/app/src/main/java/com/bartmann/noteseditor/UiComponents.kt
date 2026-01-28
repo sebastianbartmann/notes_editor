@@ -54,7 +54,7 @@ fun ScreenHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(32.dp)
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

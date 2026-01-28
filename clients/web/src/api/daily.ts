@@ -1,14 +1,14 @@
 import { apiRequest } from './client'
-import type { DailyResponse, SaveResponse, AppendRequest } from './types'
+import type { DailyResponse, SaveResponse, SaveDailyRequest, AppendRequest } from './types'
 
 export async function fetchDaily(): Promise<DailyResponse> {
   return apiRequest<DailyResponse>('/api/daily')
 }
 
-export async function saveDaily(content: string): Promise<SaveResponse> {
+export async function saveDaily(data: SaveDailyRequest): Promise<SaveResponse> {
   return apiRequest<SaveResponse>('/api/save', {
     method: 'POST',
-    body: { content },
+    body: data,
   })
 }
 

@@ -72,7 +72,7 @@ If the person header is missing or invalid, the API returns HTTP 400 with `{"det
 ---
 
 #### `POST /api/save`
-**Purpose**: Overwrite the entire content of today's daily note.
+**Purpose**: Overwrite the entire content of a daily note.
 
 **Authentication**: Required
 **Person Header**: Required
@@ -80,9 +80,15 @@ If the person header is missing or invalid, the API returns HTTP 400 with `{"det
 **Request Body** (JSON):
 ```json
 {
+  "path": "daily/2026-01-18.md",
   "content": "# daily 2026-01-18\n\n## todos\n..."
 }
 ```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | string | Yes | Relative file path |
+| `content` | string | Yes | Full note content |
 
 **Response (200)**:
 ```json
@@ -113,14 +119,16 @@ If the person header is missing or invalid, the API returns HTTP 400 with `{"det
 **Request Body** (JSON):
 ```json
 {
-  "content": "Note content here",
+  "path": "daily/2026-01-18.md",
+  "text": "Note content here",
   "pinned": true
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `content` | string | Yes | Note content to append |
+| `path` | string | Yes | Relative file path |
+| `text` | string | Yes | Note content to append |
 | `pinned` | boolean | No | Mark entry as pinned (default: false) |
 
 **Response (200)**:
@@ -267,21 +275,35 @@ If the person header is missing or invalid, the API returns HTTP 400 with `{"det
 {
   "entries": [
     {
-      "line_no": 15,
-      "text": "2026-01-18 | Max | 19:30 | eingeschlafen"
+      "line": 15,
+      "date": "2026-01-18",
+      "child": "Thomas",
+      "time": "19:30",
+      "status": "eingeschlafen"
     },
     {
-      "line_no": 14,
-      "text": "2026-01-17 | Max | 06:15 | aufgewacht"
+      "line": 14,
+      "date": "2026-01-17",
+      "child": "Fabian",
+      "time": "06:15",
+      "status": "aufgewacht"
     }
   ]
 }
 ```
 
+| Field | Type | Description |
+|-------|------|-------------|
+| `line` | integer | 1-indexed line number |
+| `date` | string | ISO date (YYYY-MM-DD) |
+| `child` | string | Child name |
+| `time` | string | Time entry |
+| `status` | string | `eingeschlafen` or `aufgewacht` |
+
 **Behavior**:
 - Returns up to 20 most recent entries
 - Entries are returned in reverse chronological order
-- Creates sleep_times.md if it doesn't exist
+- Returns empty list if file doesn't exist
 
 ---
 
@@ -295,18 +317,16 @@ If the person header is missing or invalid, the API returns HTTP 400 with `{"det
 ```json
 {
   "child": "Thomas",
-  "entry": "19:30",
-  "asleep": true,
-  "woke": false
+  "time": "19:30",
+  "status": "eingeschlafen"
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `child` | string | Yes | Child's name |
-| `entry` | string | Yes | Time entry (e.g., "19:30") |
-| `asleep` | boolean | No | Mark as fell asleep |
-| `woke` | boolean | No | Mark as woke up |
+| `child` | string | Yes | Child's name (`Thomas` or `Fabian`) |
+| `time` | string | Yes | Time entry (e.g., "19:30") |
+| `status` | string | Yes | `eingeschlafen` or `aufgewacht` |
 
 **Response (200)**:
 ```json
@@ -813,8 +833,11 @@ interface SleepTimesResponse {
 }
 
 interface SleepEntry {
-  line_no: number;   // 1-indexed line number
-  text: string;      // Full line text
+  line: number;      // 1-indexed line number
+  date: string;      // ISO date (YYYY-MM-DD)
+  child: string;     // Child name
+  time: string;      // Time entry
+  status: string;    // eingeschlafen or aufgewacht
 }
 
 interface FilesResponse {
@@ -880,8 +903,11 @@ type SleepTimesResponse struct {
 }
 
 type SleepEntry struct {
-    LineNo int    `json:"line_no"`
-    Text   string `json:"text"`
+    Line   int    `json:"line"`
+    Date   string `json:"date"`
+    Child  string `json:"child"`
+    Time   string `json:"time"`
+    Status string `json:"status"`
 }
 
 type FilesResponse struct {

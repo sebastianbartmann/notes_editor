@@ -34,9 +34,10 @@ export default function SleepPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!entry.trim()) return
+    if (!entry.trim() || (!asleep && !woke)) return
     try {
-      await appendSleepTime({ child, entry, asleep, woke })
+      const status = asleep ? 'eingeschlafen' : 'aufgewacht'
+      await appendSleepTime({ child, time: entry, status })
       setEntry('')
       setAsleep(false)
       setWoke(false)
@@ -128,7 +129,7 @@ export default function SleepPage() {
             placeholder="19:30"
             className={styles.timeInput}
           />
-          <button type="submit" disabled={!entry.trim()}>
+          <button type="submit" disabled={!entry.trim() || (!asleep && !woke)}>
             Add
           </button>
         </div>
@@ -145,10 +146,12 @@ export default function SleepPage() {
         ) : (
           <ul className={styles.list}>
             {entries.map(e => (
-              <li key={e.line_no} className={styles.entry}>
-                <span className={styles.entryText}>{e.text}</span>
+              <li key={e.line} className={styles.entry}>
+                <span className={styles.entryText}>
+                  {e.date} | {e.child} | {e.time} | {e.status}
+                </span>
                 <button
-                  onClick={() => handleDelete(e.line_no)}
+                  onClick={() => handleDelete(e.line)}
                   className="danger ghost"
                 >
                   Delete

@@ -166,7 +166,7 @@ export function DailyPage() {
         <Editor
           content={note.content}
           onSave={async (content) => {
-            await saveDaily(content);
+            await saveDaily({ path: note.path, content });
             setNote({ ...note, content });
             setEditing(false);
           }}

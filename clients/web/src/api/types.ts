@@ -10,8 +10,14 @@ export interface SaveResponse {
   message: string
 }
 
-export interface AppendRequest {
+export interface SaveDailyRequest {
+  path: string
   content: string
+}
+
+export interface AppendRequest {
+  path: string
+  text: string
   pinned?: boolean
 }
 
@@ -62,8 +68,11 @@ export interface UnpinRequest {
 
 // Sleep API types
 export interface SleepEntry {
-  line_no: number
-  text: string
+  line: number
+  date: string
+  child: string
+  time: string
+  status: string
 }
 
 export interface SleepTimesResponse {
@@ -72,9 +81,8 @@ export interface SleepTimesResponse {
 
 export interface AppendSleepRequest {
   child: string
-  entry: string
-  asleep?: boolean
-  woke?: boolean
+  time: string
+  status: 'eingeschlafen' | 'aufgewacht'
 }
 
 export interface DeleteSleepRequest {

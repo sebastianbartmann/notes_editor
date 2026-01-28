@@ -140,20 +140,38 @@ See [01-rest-api-contract.md](./01-rest-api-contract.md) for full API documentat
 ```json
 {
   "entries": [
-    {"line_no": 15, "text": "2026-01-18 | Thomas | 19:30 | eingeschlafen"},
-    {"line_no": 14, "text": "2026-01-17 | Thomas | 06:10 | aufgewacht"}
+    {
+      "line": 15,
+      "date": "2026-01-18",
+      "child": "Thomas",
+      "time": "19:30",
+      "status": "eingeschlafen"
+    },
+    {
+      "line": 14,
+      "date": "2026-01-17",
+      "child": "Thomas",
+      "time": "06:10",
+      "status": "aufgewacht"
+    }
   ]
 }
 ```
 
 **POST /api/sleep-times/append**
-```
-child=Thomas&entry=19:30&asleep=on
+```json
+{
+  "child": "Thomas",
+  "time": "19:30",
+  "status": "eingeschlafen"
+}
 ```
 
 **POST /api/sleep-times/delete**
-```
-line=15
+```json
+{
+  "line": 15
+}
 ```
 
 ---

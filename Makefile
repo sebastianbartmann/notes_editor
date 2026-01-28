@@ -1,27 +1,51 @@
-.PHONY: help run build test install-systemd status-systemd build-android install-android deploy-android debug-android
+.PHONY: help server client test test-server test-client install-client install-systemd status-systemd build-android install-android deploy-android debug-android
 
 .DEFAULT_GOAL := help
 
 help:
 	@echo "Available targets:"
-	@echo "  run             Run the Go dev server (port 8080)"
-	@echo "  build           Build the Go server binary"
-	@echo "  test            Run Go server tests"
-	@echo "  install-systemd Install/update systemd service"
-	@echo "  status-systemd  Show systemd service status"
-	@echo "  build-android   Build the Android debug APK"
-	@echo "  install-android Install the debug APK via adb (USB)"
-	@echo "  deploy-android  Build and install the debug APK"
-	@echo "  debug-android   Print adb error log output"
+	@echo ""
+	@echo "  Development:"
+	@echo "    server        Run the Go server (port 8080)"
+	@echo "    client        Run the React dev server (port 5173)"
+	@echo ""
+	@echo "  Testing:"
+	@echo "    test          Run all tests"
+	@echo "    test-server   Run Go server tests"
+	@echo "    test-client   Run React client tests"
+	@echo ""
+	@echo "  Setup:"
+	@echo "    install-client  Install React client dependencies"
+	@echo ""
+	@echo "  Deployment:"
+	@echo "    install-systemd Install/update systemd service"
+	@echo "    status-systemd  Show systemd service status"
+	@echo ""
+	@echo "  Android:"
+	@echo "    build-android   Build the Android debug APK"
+	@echo "    install-android Install the debug APK via adb (USB)"
+	@echo "    deploy-android  Build and install the debug APK"
+	@echo "    debug-android   Print adb error log output"
 
-run:
-	cd server && go run ./cmd/server
+# Development
+server:
+	./server/bin/server
 
-build:
-	cd server && go build -o bin/server ./cmd/server
+client:
+	cd clients/web && npm run dev
 
-test:
+# Testing
+test: test-server test-client
+
+test-server:
 	cd server && go test -v ./...
+
+test-client:
+	cd clients/web && npm test
+
+# Setup
+install-client:
+	cd clients/web && npm install
 
 install-systemd:
 	sudo cp notes-editor.service /etc/systemd/system/

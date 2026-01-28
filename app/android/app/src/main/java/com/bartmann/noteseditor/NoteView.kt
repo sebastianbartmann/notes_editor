@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.selection.SelectionContainer
 
 private data class NoteLine(
     val lineNo: Int,
@@ -36,8 +37,9 @@ fun NoteView(
         modifier = modifier
             .verticalScroll(scrollState)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            lines.forEach { line ->
+        SelectionContainer {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                lines.forEach { line ->
                 when (line.type) {
                     LineType.EMPTY -> AppText(
                         text = " ",
@@ -88,6 +90,7 @@ fun NoteView(
                         color = AppTheme.colors.text
                     )
                 }
+            }
             }
         }
     }
