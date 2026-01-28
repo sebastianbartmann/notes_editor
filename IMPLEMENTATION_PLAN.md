@@ -227,10 +227,10 @@
 ### 4.4 Go Backend Tests - Services - PARTIAL
 - [x] Test Claude session management (concurrent access)
 - [ ] Test Claude tool execution (requires mock Claude API)
-- [ ] Test NDJSON streaming format
-- [ ] Test 5-second keepalive ping in streaming
-- [ ] Test LinkedIn OAuth token exchange
-- [ ] Test LinkedIn CSV activity logging
+- [x] Test NDJSON streaming format
+- [ ] Test 5-second keepalive ping in streaming (timing-dependent, complex to test)
+- [ ] Test LinkedIn OAuth token exchange (requires HTTP mock)
+- [x] Test LinkedIn CSV activity logging
 
 ### 4.5 Go Backend Tests - API
 - [ ] Integration tests for all endpoints
@@ -304,6 +304,28 @@
 ---
 
 ## Completed
+
+### Go Backend Service Tests - 2026-01-28
+- [x] **LinkedIn CSV Activity Logging Tests** (`linkedin/logging_test.go`):
+  - LogPost: creates file, writes header, appends data row
+  - LogComment: logs comment and reply actions
+  - Appending multiple entries: header written only once
+  - Directory creation: creates nested `{person}/linkedin/` paths
+  - Newline escaping in text fields
+  - compactJSON: compact valid JSON, preserve invalid input
+  - Timestamp format: RFC3339 compliance
+  - Person isolation: separate log files per person
+  - Special character handling: quotes, commas in CSV fields
+- [x] **NDJSON Streaming Format Tests** (`claude/stream_test.go`):
+  - StreamEvent JSON serialization (all 6 event types)
+  - Empty field omission in JSON output
+  - JSON deserialization round-trip
+  - NDJSON format (newline-delimited)
+  - Text delta accumulation for UI display
+  - Tool input types: string, int, bool, nested, array, empty
+  - Special characters: newlines, tabs, quotes, unicode, CRLF
+  - Session ID format preservation
+  - Error message format preservation
 
 ### Go Backend Security Tests - 2026-01-27
 - [x] Installed Go 1.22.5 at `~/go-sdk/go/`
