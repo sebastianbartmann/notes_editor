@@ -120,7 +120,7 @@ describe('apiRequest', () => {
       json: async () => {
         throw new Error('not json')
       },
-    } as Response)
+    } as unknown as Response)
 
     await expect(apiRequest('/api/test')).rejects.toMatchObject({
       message: 'Request failed with status 500',
