@@ -60,7 +60,7 @@ test-server:
 	cd server && go test -v ./...
 
 test-client:
-	cd clients/web && npm test
+	cd clients/web && npx tsc --noEmit && npm test
 
 test-coverage:
 	cd server && go test -v -coverprofile=coverage.out ./...
