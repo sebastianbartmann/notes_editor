@@ -46,17 +46,17 @@ data class AppTypography(
 
 private val LocalAppColors = staticCompositionLocalOf {
     AppColors(
-        background = Color(0xFF1A1C1F),
-        panel = Color(0xFF282B31),
-        panelBorder = Color(0xFF3A3E46),
+        background = Color(0xFF0F1012),
+        panel = Color(0xFF15171A),
+        panelBorder = Color(0xFF2A2D33),
         text = Color(0xFFE6E6E6),
         muted = Color(0xFF9AA0A6),
         accent = Color(0xFFD9832B),
         accentDim = Color(0xFF7A4A1D),
         danger = Color(0xFFD66B6B),
-        input = Color(0xFF1E2024),
-        note = Color(0xFF1F2226),
-        button = Color(0xFF353942),
+        input = Color(0xFF0F1114),
+        note = Color(0xFF101317),
+        button = Color(0xFF1E2227),
         buttonText = Color(0xFFE6E6E6),
         checkboxFill = Color(0xFFE6E6E6),
     )
@@ -108,17 +108,17 @@ fun NotesEditorTheme(content: @Composable () -> Unit) {
         )
     } else {
         AppColors(
-            background = Color(0xFF1A1C1F),
-            panel = Color(0xFF282B31),
-            panelBorder = Color(0xFF3A3E46),
+            background = Color(0xFF0F1012),
+            panel = Color(0xFF15171A),
+            panelBorder = Color(0xFF2A2D33),
             text = Color(0xFFE6E6E6),
             muted = Color(0xFF9AA0A6),
             accent = Color(0xFFD9832B),
             accentDim = Color(0xFF7A4A1D),
             danger = Color(0xFFD66B6B),
-            input = Color(0xFF1E2024),
-            note = Color(0xFF1F2226),
-            button = Color(0xFF353942),
+            input = Color(0xFF0F1114),
+            note = Color(0xFF101317),
+            button = Color(0xFF1E2227),
             buttonText = Color(0xFFE6E6E6),
             checkboxFill = Color(0xFFE6E6E6),
         )

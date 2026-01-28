@@ -1,7 +1,7 @@
 # Implementation Plan
 
 > Last updated: 2026-01-28
-> Status: Active - Phase 5 complete. Next: Phase 6 (Android Alignment)
+> Status: Active - Phase 6.2 complete. Next: Phase 6.1 (Android UI gaps)
 
 ## Instructions
 - Tasks marked `- [ ]` are incomplete
@@ -274,14 +274,14 @@
 - [ ] Implement per-entry unpin UI (API exists: `ApiClient.unpinEntry`)
 - [ ] Remove unused callback parameters in `AppNavigation.kt`
 
-### 6.2 Theme Alignment (spec 12)
-- [ ] Update dark theme colors to match spec:
-  - [ ] `background: #0F1012` (currently #1A1C1F)
-  - [ ] `panel: #15171A` (currently #282B31)
-  - [ ] `panelBorder: #2A2D33` (currently #3A3E46)
-  - [ ] `input: #0F1114` (currently #1E2024)
-  - [ ] `note: #101317` (currently #1F2226)
-  - [ ] `button: #1E2227` (currently #353942)
+### 6.2 Theme Alignment (spec 12) - COMPLETE
+- [x] Update dark theme colors to match spec:
+  - [x] `background: #0F1012` (was #1A1C1F)
+  - [x] `panel: #15171A` (was #282B31)
+  - [x] `panelBorder: #2A2D33` (was #3A3E46)
+  - [x] `input: #0F1114` (was #1E2024)
+  - [x] `note: #101317` (was #1F2226)
+  - [x] `button: #1E2227` (was #353942)
 
 ### 6.3 Manual Testing
 > **Note:** Will be replaced by automated Maestro tests in Phase 8 (spec 21)
@@ -403,6 +403,17 @@ All request data classes created in `Models.kt`:
 ---
 
 ## Completed
+
+### Android Dark Theme Alignment (Phase 6.2) - 2026-01-28
+- [x] Updated `Theme.kt` dark theme colors to match spec 12:
+  - `background`: #1A1C1F → #0F1012
+  - `panel`: #282B31 → #15171A
+  - `panelBorder`: #3A3E46 → #2A2D33
+  - `input`: #1E2024 → #0F1114
+  - `note`: #1F2226 → #101317
+  - `button`: #353942 → #1E2227
+- [x] Updated both `LocalAppColors` default and `NotesEditorTheme` else branch
+- [x] Go tests pass, React tests pass (96 tests)
 
 ### Documentation (Phase 5) - 2026-01-28
 - [x] Created `server/README.md` with setup instructions, development commands, API reference, and deployment guide
