@@ -60,6 +60,14 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 - `make build-android` builds the Android debug APK
 - `make deploy-android` builds and installs the debug APK via adb
 
+### Android Testing (Maestro)
+- `make android-test-setup` one-time setup for Android emulator and Maestro
+- `make android-test` runs all Maestro UI tests with screenshot output
+- `make android-test-daily` runs daily screen tests only
+- `make android-emulator-start` starts headless emulator
+- `make android-emulator-stop` stops emulator
+- Test flows in `app/android/maestro/flows/`, screenshots saved to `app/android/maestro/screenshots/`
+
 ## Coding Style & Naming Conventions
 
 - Go: standard `gofmt`, exported functions `PascalCase`, internal `camelCase`, packages lowercase

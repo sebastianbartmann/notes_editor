@@ -1,0 +1,33 @@
+appId: com.bartmann.noteseditor
+---
+- launchApp
+- takeScreenshot: "01-app-launch"
+
+# Navigate to Daily (should be default)
+- assertVisible: "Daily"
+- takeScreenshot: "02-daily-screen"
+
+# Test refresh
+- tapOn:
+    id: "refresh"
+- waitForAnimationToEnd
+- takeScreenshot: "03-after-refresh"
+
+# Test add work task
+- tapOn: "Work task"
+- assertVisible: "Task description"
+- takeScreenshot: "04-task-input-visible"
+- inputText: "Test task from Maestro"
+- takeScreenshot: "05-task-text-entered"
+- tapOn:
+    id: "save"
+- waitForAnimationToEnd
+- takeScreenshot: "06-task-saved"
+
+# Test edit mode
+- tapOn: "Edit"
+- assertVisible: "Save"
+- assertVisible: "Cancel"
+- takeScreenshot: "07-edit-mode"
+- tapOn: "Cancel"
+- takeScreenshot: "08-edit-cancelled"

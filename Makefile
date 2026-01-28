@@ -1,4 +1,4 @@
-.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd build-android install-android deploy-android debug-android build build-server build-web lint clean
+.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd build-android install-android deploy-android debug-android build build-server build-web lint clean android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-files android-test-sleep android-test-claude android-test-settings android-test-nav
 
 .DEFAULT_GOAL := help
 
@@ -34,6 +34,19 @@ help:
 	@echo "    install-android Install the debug APK via adb (USB)"
 	@echo "    deploy-android  Build and install the debug APK"
 	@echo "    debug-android   Print adb error log output"
+	@echo ""
+	@echo "  Android Testing (Maestro):"
+	@echo "    android-test-setup     One-time setup for Android testing"
+	@echo "    android-emulator-start Start headless emulator"
+	@echo "    android-emulator-stop  Stop emulator"
+	@echo "    android-test           Run all Maestro UI tests"
+	@echo "    android-test-report    Run tests and show summary"
+	@echo "    android-test-daily     Run daily screen tests only"
+	@echo "    android-test-files     Run files screen tests only"
+	@echo "    android-test-sleep     Run sleep screen tests only"
+	@echo "    android-test-claude    Run claude screen tests only"
+	@echo "    android-test-settings  Run settings screen tests only"
+	@echo "    android-test-nav       Run navigation tests only"
 
 # Build
 build: build-web build-server
@@ -100,3 +113,79 @@ deploy-android: build-android install-android
 debug-android:
 	ADB_SERVER_SOCKET=tcp:localhost:5038 \
 	$(PWD)/app/android_sdk/platform-tools/adb logcat -d *:E
+
+# Android Testing with Maestro
+# Uses ANDROID_HOME if set, otherwise defaults to $HOME/android-sdk
+ANDROID_HOME ?= $(HOME)/android-sdk
+MAESTRO_FLOWS := $(PWD)/app/android/maestro/flows
+MAESTRO_SCREENSHOTS := $(PWD)/app/android/maestro/screenshots
+
+android-test-setup:
+	@echo "Installing Android testing dependencies..."
+	@command -v java >/dev/null || (echo "Installing OpenJDK 17..." && sudo apt install -y openjdk-17-jdk)
+	@./scripts/install-android-sdk.sh
+	@echo "Installing Maestro..."
+	@curl -Ls "https://get.maestro.mobile.dev" | bash || true
+	@echo "Creating AVD..."
+	@$(ANDROID_HOME)/cmdline-tools/latest/bin/avdmanager create avd \
+		-n notes_editor_test \
+		-k "system-images;android-33;google_apis;x86_64" \
+		--force
+	@echo ""
+	@echo "Setup complete! Run 'make android-test' to run tests."
+
+android-emulator-start:
+	@if ! $(ANDROID_HOME)/platform-tools/adb devices | grep -q emulator; then \
+		echo "Starting headless emulator..."; \
+		$(ANDROID_HOME)/emulator/emulator -avd notes_editor_test \
+			-no-window -no-audio -gpu swiftshader_indirect & \
+		$(ANDROID_HOME)/platform-tools/adb wait-for-device; \
+		echo "Waiting for emulator to boot..."; \
+		sleep 30; \
+		echo "Emulator ready."; \
+	else \
+		echo "Emulator already running."; \
+	fi
+
+android-emulator-stop:
+	@$(ANDROID_HOME)/platform-tools/adb -s emulator-5554 emu kill 2>/dev/null || echo "No emulator running."
+
+android-test: android-emulator-start
+	@echo "Building and installing debug APK..."
+	@GRADLE_USER_HOME="$(PWD)/.gradle" \
+	$(PWD)/app/gradle-8.7/bin/gradle --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
+	@$(ANDROID_HOME)/platform-tools/adb install -r $(PWD)/app/android/app/build/outputs/apk/debug/app-debug.apk
+	@echo "Running Maestro tests..."
+	@mkdir -p $(MAESTRO_SCREENSHOTS)
+	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS) --output $(MAESTRO_SCREENSHOTS)
+	@echo ""
+	@echo "Screenshots saved to: app/android/maestro/screenshots/"
+
+android-test-report: android-test
+	@echo ""
+	@echo "=== Test Screenshots ==="
+	@ls -la $(MAESTRO_SCREENSHOTS)/*.png 2>/dev/null || echo "No screenshots generated."
+
+android-test-daily: android-emulator-start
+	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/daily-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+	@echo "Screenshots saved to: app/android/maestro/screenshots/"
+
+android-test-files: android-emulator-start
+	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/files-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+	@echo "Screenshots saved to: app/android/maestro/screenshots/"
+
+android-test-sleep: android-emulator-start
+	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/sleep-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+	@echo "Screenshots saved to: app/android/maestro/screenshots/"
+
+android-test-claude: android-emulator-start
+	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/claude-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+	@echo "Screenshots saved to: app/android/maestro/screenshots/"
+
+android-test-settings: android-emulator-start
+	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/settings-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+	@echo "Screenshots saved to: app/android/maestro/screenshots/"
+
+android-test-nav: android-emulator-start
+	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/full-navigation.yaml --output $(MAESTRO_SCREENSHOTS)
+	@echo "Screenshots saved to: app/android/maestro/screenshots/"

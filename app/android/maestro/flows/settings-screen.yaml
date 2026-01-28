@@ -1,0 +1,30 @@
+appId: com.bartmann.noteseditor
+---
+- launchApp
+- tapOn: "Tools"
+- waitForAnimationToEnd
+
+# Navigate to Settings
+- tapOn: "Settings"
+- waitForAnimationToEnd
+- takeScreenshot: "settings-01-initial"
+
+# Verify settings elements
+- assertVisible: "Person"
+- assertVisible: "Theme"
+- takeScreenshot: "settings-02-elements"
+
+# Test theme toggle
+- tapOn: "Light"
+- waitForAnimationToEnd
+- takeScreenshot: "settings-03-light-theme"
+
+# Switch back to dark
+- tapOn: "Dark"
+- waitForAnimationToEnd
+- takeScreenshot: "settings-04-dark-theme"
+
+# Test person selection
+- tapOn: "Sebastian"
+- waitForAnimationToEnd
+- takeScreenshot: "settings-05-person-selected"

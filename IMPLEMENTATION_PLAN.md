@@ -1,7 +1,7 @@
 # Implementation Plan
 
 > Last updated: 2026-01-28
-> Status: Active - Phase 8 (Android Automated Testing) is next priority
+> Status: Active - Phase 8.1-8.2 complete, 8.3 environment docs remaining
 
 ## Instructions
 - Tasks marked `- [ ]` are incomplete
@@ -367,31 +367,32 @@ All request data classes created in `Models.kt`:
 > **Goal:** Enable agents to run Android UI tests with visual screenshot feedback.
 > Uses Maestro for UI testing with headless emulator.
 
-### 8.1 Setup Infrastructure
+### 8.1 Setup Infrastructure - COMPLETE
 
-- [ ] Create `scripts/install-android-sdk.sh` script per spec 21
-- [ ] Add Makefile targets:
-  - [ ] `android-test-setup` - One-time setup for new machines
-  - [ ] `android-emulator-start` - Start headless emulator
-  - [ ] `android-emulator-stop` - Stop emulator
-  - [ ] `android-test` - Run all Maestro tests
-  - [ ] `android-test-report` - Run tests and show summary
+- [x] Create `scripts/install-android-sdk.sh` script per spec 21
+- [x] Add Makefile targets:
+  - [x] `android-test-setup` - One-time setup for new machines
+  - [x] `android-emulator-start` - Start headless emulator
+  - [x] `android-emulator-stop` - Stop emulator
+  - [x] `android-test` - Run all Maestro tests
+  - [x] `android-test-report` - Run tests and show summary
+  - [x] Individual flow targets: `android-test-daily`, `android-test-files`, etc.
 
-### 8.2 Maestro Test Flows
+### 8.2 Maestro Test Flows - COMPLETE
 
-- [ ] Create `app/android/maestro/` directory structure
-- [ ] Create `flows/daily-screen.yaml` - Test daily note interactions
-- [ ] Create `flows/files-screen.yaml` - Test file browser
-- [ ] Create `flows/sleep-screen.yaml` - Test sleep tracking form
-- [ ] Create `flows/claude-screen.yaml` - Test Claude chat
-- [ ] Create `flows/settings-screen.yaml` - Test settings/theme
-- [ ] Create `flows/full-navigation.yaml` - Test bottom nav and screen transitions
-- [ ] Create `maestro/README.md` - Document test flows
+- [x] Create `app/android/maestro/` directory structure
+- [x] Create `flows/daily-screen.yaml` - Test daily note interactions
+- [x] Create `flows/files-screen.yaml` - Test file browser
+- [x] Create `flows/sleep-screen.yaml` - Test sleep tracking form
+- [x] Create `flows/claude-screen.yaml` - Test Claude chat
+- [x] Create `flows/settings-screen.yaml` - Test settings/theme
+- [x] Create `flows/full-navigation.yaml` - Test bottom nav and screen transitions
+- [x] Create `maestro/README.md` - Document test flows
 
-### 8.3 Environment Configuration
+### 8.3 Environment Configuration - COMPLETE
 
+- [x] Add `app/android/maestro/screenshots/` to `.gitignore`
 - [ ] Document required environment variables in `.env.example`
-- [ ] Add `app/android/maestro/screenshots/` to `.gitignore`
 - [ ] Test setup script on clean machine
 
 ### 8.4 CI Integration (Optional)
@@ -402,6 +403,20 @@ All request data classes created in `Models.kt`:
 ---
 
 ## Completed
+
+### Android Automated Testing Infrastructure (Phase 8.1-8.2) - 2026-01-28
+- [x] Created `scripts/install-android-sdk.sh` for SDK installation
+- [x] Added Makefile targets: `android-test-setup`, `android-emulator-start`, `android-emulator-stop`, `android-test`, `android-test-report`
+- [x] Added individual test targets: `android-test-daily`, `android-test-files`, `android-test-sleep`, `android-test-claude`, `android-test-settings`, `android-test-nav`
+- [x] Created 6 Maestro test flows:
+  - `daily-screen.yaml` (8 screenshots): app launch, refresh, task add, edit mode
+  - `full-navigation.yaml` (8 screenshots): bottom nav, all screen transitions
+  - `sleep-screen.yaml` (5 screenshots): child/status selection, time entry
+  - `files-screen.yaml` (4 screenshots): file tree navigation
+  - `claude-screen.yaml` (4 screenshots): chat interface
+  - `settings-screen.yaml` (5 screenshots): theme toggle, person selection
+- [x] Created `app/android/maestro/README.md` with usage documentation
+- [x] Added `app/android/maestro/screenshots/` to `.gitignore`
 
 ### Android API Alignment (Phase 7) - 2026-01-28
 - [x] **ApiClient.kt**: Replaced `postForm()` with `postJson()` for all POST requests

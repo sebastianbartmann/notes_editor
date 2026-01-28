@@ -1,0 +1,24 @@
+appId: com.bartmann.noteseditor
+---
+- launchApp
+- tapOn: "Tools"
+- waitForAnimationToEnd
+
+# Navigate to Claude
+- tapOn: "Claude"
+- waitForAnimationToEnd
+- takeScreenshot: "claude-01-initial"
+
+# Verify chat interface elements
+- assertVisible: "Clear"
+- takeScreenshot: "claude-02-chat-interface"
+
+# Input a message (but don't send to avoid API calls)
+- tapOn:
+    hint: "Message"
+- inputText: "Hello Claude"
+- takeScreenshot: "claude-03-message-typed"
+
+# Clear the input
+- clearText
+- takeScreenshot: "claude-04-input-cleared"

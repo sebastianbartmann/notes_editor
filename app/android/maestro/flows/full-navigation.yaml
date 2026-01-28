@@ -1,0 +1,44 @@
+appId: com.bartmann.noteseditor
+---
+- launchApp
+- takeScreenshot: "nav-01-launch"
+
+# Verify bottom nav exists
+- assertVisible: "Daily"
+- assertVisible: "Files"
+- assertVisible: "Sleep"
+- assertVisible: "Tools"
+
+# Navigate to Files
+- tapOn: "Files"
+- waitForAnimationToEnd
+- takeScreenshot: "nav-02-files"
+
+# Navigate to Sleep
+- tapOn: "Sleep"
+- waitForAnimationToEnd
+- takeScreenshot: "nav-03-sleep"
+
+# Navigate to Tools
+- tapOn: "Tools"
+- waitForAnimationToEnd
+- takeScreenshot: "nav-04-tools"
+
+# Navigate to Claude via Tools
+- tapOn: "Claude"
+- waitForAnimationToEnd
+- takeScreenshot: "nav-05-claude"
+
+# Back to Tools
+- back
+- takeScreenshot: "nav-06-back-to-tools"
+
+# Navigate to Settings
+- tapOn: "Settings"
+- waitForAnimationToEnd
+- takeScreenshot: "nav-07-settings"
+
+# Back to Daily
+- tapOn: "Daily"
+- waitForAnimationToEnd
+- takeScreenshot: "nav-08-back-to-daily"

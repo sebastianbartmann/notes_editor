@@ -1,0 +1,24 @@
+appId: com.bartmann.noteseditor
+---
+- launchApp
+- tapOn: "Sleep"
+- waitForAnimationToEnd
+- takeScreenshot: "sleep-01-initial"
+
+# Select child
+- tapOn: "Thomas"
+- takeScreenshot: "sleep-02-thomas-selected"
+
+# Select status
+- tapOn: "Eingeschlafen"
+- takeScreenshot: "sleep-03-status-selected"
+
+# Enter time
+- tapOn:
+    hint: "Entry"
+- inputText: "20:30"
+- takeScreenshot: "sleep-04-time-entered"
+
+# Verify ready to submit (don't actually submit to avoid side effects)
+- assertVisible: "Append"
+- takeScreenshot: "sleep-05-ready-to-submit"

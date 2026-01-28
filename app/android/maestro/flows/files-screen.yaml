@@ -1,0 +1,19 @@
+appId: com.bartmann.noteseditor
+---
+- launchApp
+- tapOn: "Files"
+- waitForAnimationToEnd
+- takeScreenshot: "files-01-initial"
+
+# Verify file tree is visible
+- assertVisible: "daily"
+- takeScreenshot: "files-02-file-tree"
+
+# Tap on daily folder to expand
+- tapOn: "daily"
+- waitForAnimationToEnd
+- takeScreenshot: "files-03-daily-expanded"
+
+# Scroll to see more content if present
+- scroll
+- takeScreenshot: "files-04-scrolled"
