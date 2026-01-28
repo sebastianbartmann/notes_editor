@@ -1,9 +1,14 @@
-.PHONY: help server client test test-server test-client install-client install-systemd status-systemd build-android install-android deploy-android debug-android
+.PHONY: help server client test test-server test-client install-client install-systemd status-systemd build-android install-android deploy-android debug-android build build-server build-web
 
 .DEFAULT_GOAL := help
 
 help:
 	@echo "Available targets:"
+	@echo ""
+	@echo "  Build:"
+	@echo "    build         Build everything (server + web UI)"
+	@echo "    build-server  Build Go server binary"
+	@echo "    build-web     Build React web UI"
 	@echo ""
 	@echo "  Development:"
 	@echo "    server        Run the Go server (port 8080)"
@@ -26,6 +31,17 @@ help:
 	@echo "    install-android Install the debug APK via adb (USB)"
 	@echo "    deploy-android  Build and install the debug APK"
 	@echo "    debug-android   Print adb error log output"
+
+# Build
+build: build-web build-server
+
+build-server:
+	cd server && go build -o bin/server ./cmd/server
+
+build-web:
+	cd clients/web && npm install && npm run build
+	rm -rf server/static
+	cp -r clients/web/dist server/static
 
 # Development
 server:

@@ -1,17 +1,8 @@
-.PHONY: build build-web test test-coverage lint run clean
+.PHONY: build test test-coverage lint run clean
 
 # Build the server binary
 build:
 	go build -o bin/server ./cmd/server
-
-# Build web UI and copy to static directory
-build-web:
-	cd ../clients/web && npm install && npm run build
-	rm -rf static
-	cp -r ../clients/web/dist static
-
-# Build everything (server + web UI)
-build-all: build-web build
 
 # Run all tests
 test:
