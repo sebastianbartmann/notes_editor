@@ -80,7 +80,10 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 ### Go Backend
 - Tests are in `*_test.go` files alongside source code
 - Run `cd server && make test` for all tests
-- Key test files: `auth/auth_test.go`, `vault/paths_test.go`, `vault/store_test.go`, `vault/daily_test.go`, `claude/session_test.go`
+- Key test files:
+  - `api/handlers_test.go` (endpoint integration, request validation, CORS, error responses)
+  - `api/middleware_test.go`, `api/security_test.go` (auth, person isolation, path traversal)
+  - `auth/auth_test.go`, `vault/paths_test.go`, `vault/store_test.go`, `vault/daily_test.go`, `claude/session_test.go`
 
 ### React Web Client
 - Tests are in `*.test.ts(x)` files alongside source code
