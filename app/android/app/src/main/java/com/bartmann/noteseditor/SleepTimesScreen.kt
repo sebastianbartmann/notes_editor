@@ -93,7 +93,7 @@ fun SleepTimesScreen(modifier: Modifier, onReload: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         AppText(
-                            text = entry.text,
+                            text = "${entry.date} | ${entry.child} | ${entry.time} | ${entry.status}",
                             style = AppTheme.typography.bodySmall,
                             color = AppTheme.colors.text,
                             modifier = Modifier.weight(1f)
@@ -106,7 +106,7 @@ fun SleepTimesScreen(modifier: Modifier, onReload: () -> Unit) {
                             onClick = {
                                 scope.launch {
                                     try {
-                                        val response = ApiClient.deleteSleepEntry(entry.lineNo)
+                                        val response = ApiClient.deleteSleepEntry(entry.line)
                                         message = response.message
                                         refresh()
                                     } catch (exc: Exception) {

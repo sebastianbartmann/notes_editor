@@ -19,9 +19,11 @@ data class SleepTimesResponse(
 
 @Serializable
 data class SleepEntry(
-    @SerialName("line_no")
-    val lineNo: Int,
-    val text: String
+    val line: Int,
+    val date: String,
+    val child: String,
+    val time: String,
+    val status: String
 )
 
 @Serializable
