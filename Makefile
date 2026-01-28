@@ -1,4 +1,4 @@
-.PHONY: help server client test test-server test-client install-client install-systemd status-systemd build-android install-android deploy-android debug-android build build-server build-web
+.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd build-android install-android deploy-android debug-android build build-server build-web lint clean
 
 .DEFAULT_GOAL := help
 
@@ -18,6 +18,9 @@ help:
 	@echo "    test          Run all tests"
 	@echo "    test-server   Run Go server tests"
 	@echo "    test-client   Run React client tests"
+	@echo "    test-coverage Run Go tests with coverage report"
+	@echo "    lint          Run Go linter"
+	@echo "    clean         Remove build artifacts"
 	@echo ""
 	@echo "  Setup:"
 	@echo "    install-client  Install React client dependencies"
@@ -58,6 +61,17 @@ test-server:
 
 test-client:
 	cd clients/web && npm test
+
+test-coverage:
+	cd server && go test -v -coverprofile=coverage.out ./...
+	cd server && go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: server/coverage.html"
+
+lint:
+	cd server && golangci-lint run ./...
+
+clean:
+	rm -rf server/bin server/static server/coverage.out server/coverage.html
 
 # Setup
 install-client:
