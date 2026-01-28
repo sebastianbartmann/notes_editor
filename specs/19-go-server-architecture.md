@@ -1,8 +1,8 @@
 # Go Server Architecture
 
 > Status: Draft
-> Version: 1.0
-> Last Updated: 2026-01-27
+> Version: 1.1
+> Last Updated: 2026-01-28
 
 ## Overview
 
@@ -270,11 +270,34 @@ Environment variables loaded from `.env`:
 ```
 NOTES_TOKEN=secret-bearer-token
 NOTES_ROOT=/home/user/notes
+STATIC_DIR=./static
 ANTHROPIC_API_KEY=sk-ant-...
 LINKEDIN_CLIENT_ID=...
 LINKEDIN_CLIENT_SECRET=...
 LINKEDIN_ACCESS_TOKEN=...
 ```
+
+## Static File Serving
+
+The Go server serves the React web UI as static files from the `STATIC_DIR` directory (defaults to `./static`).
+
+**Route structure:**
+- `/api/*` - API endpoints (protected by auth middleware)
+- `/*` - Static files (no auth, login handled client-side)
+
+**SPA routing:** For any request that doesn't match a static file, the server returns `index.html` to support client-side routing.
+
+**Build process:**
+```bash
+# Build web UI and copy to static directory
+cd clients/web && npm run build
+cp -r dist ../server/static
+
+# Or use the root Makefile
+make build  # Builds both web UI and server
+```
+
+**Deployment:** The systemd service runs the Go binary which serves both the API and web UI on port 8080.
 
 ## HTTP Server Setup
 
@@ -297,30 +320,32 @@ func main() {
 ## Middleware Stack
 
 ```go
-func NewRouter(h *Handler, token string) http.Handler {
+func NewRouter(srv *Server) http.Handler {
     r := chi.NewRouter()
 
-    // Global middleware
-    r.Use(middleware.Logger)
-    r.Use(middleware.Recoverer)
+    // Global middleware (no auth)
+    r.Use(RecovererMiddleware)
+    r.Use(LoggingMiddleware)
     r.Use(cors.Handler(cors.Options{
         AllowedOrigins:   []string{"*"},
-        AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
-        AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Notes-Person"},
+        AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Notes-Person"},
+        AllowCredentials: true,
+        MaxAge:           300,
     }))
 
-    // Protected routes
-    r.Group(func(r chi.Router) {
-        r.Use(AuthMiddleware(token))
+    // API routes with auth
+    r.Route("/api", func(r chi.Router) {
+        r.Use(AuthMiddleware(srv.config.NotesToken))
         r.Use(PersonMiddleware)
 
-        r.Get("/api/daily", h.GetDaily)
-        r.Post("/api/save", h.SaveDaily)
-        // ... other routes
+        r.Get("/daily", srv.handleGetDaily)
+        r.Post("/save", srv.handleSaveDaily)
+        // ... other API routes
     })
 
-    // Public routes (OAuth callbacks)
-    r.Get("/api/linkedin/oauth/callback", h.LinkedInCallback)
+    // Static file serving for web UI (no auth)
+    r.Get("/*", staticFileHandler(srv.config.StaticDir))
 
     return r
 }

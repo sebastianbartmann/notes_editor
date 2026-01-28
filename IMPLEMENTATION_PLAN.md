@@ -1,7 +1,7 @@
 # Implementation Plan
 
-> Last updated: 2026-01-27
-> Status: Active - Go + React Migration
+> Last updated: 2026-01-28
+> Status: Active - Phase 7 (Android API Alignment) is critical priority
 
 ## Instructions
 - Tasks marked `- [ ]` are incomplete
@@ -288,18 +288,160 @@
 - [ ] Test keyboard visibility behavior (bottom nav hides, accessory shows)
 - [ ] Test with person=null (only settings accessible)
 
-### 6.4 Android API Compatibility
-> **Issue Found:** Android client uses form-encoded POST requests, but Go handlers only parse JSON.
-> The todos endpoints were fixed in 4.2. These handlers still need form support:
+### 6.4 Android API Compatibility - DEPRECATED
+> **SUPERSEDED by Phase 7.** The correct approach is to update the Android app to send JSON
+> (matching the spec), not to add form support to the Go server. Phase 7 handles this properly.
 
-- [ ] Add form support to `handleSaveDaily` (/api/save)
-- [ ] Add form support to `handleAppendDaily` (/api/append)
-- [ ] Add form support to `handleClearPinned` (/api/clear-pinned)
-- [ ] Add form support to `handleAppendSleepTime` (/api/sleep-times/append)
-- [ ] Add form support to `handleDeleteSleepTime` (/api/sleep-times/delete)
-- [ ] Add form support to `handleCreateFile` (/api/files/create)
-- [ ] Add form support to `handleSaveFile` (/api/files/save)
-- [ ] Add form support to `handleDeleteFile` (/api/files/delete)
+---
+
+## Phase 7: Android API Alignment (Critical)
+
+> **Root Cause:** The Android app was built for the old Python/FastAPI backend which accepted
+> form-encoded data. The spec (01-rest-api-contract.md) correctly specifies JSON for all POST
+> requests. The Go server follows the spec. The Android app must be updated to match.
+>
+> **Principle:** The spec is the source of truth. Do not implement multiple solutions.
+> Update the Android app to send JSON, not add form support to Go.
+
+### 7.1 Android ApiClient - Switch from Form to JSON
+
+**Current state:** `ApiClient.kt` uses `postForm()` which sends `application/x-www-form-urlencoded`
+**Required state:** All POST requests must send `application/json`
+
+- [ ] Add `postJson()` function to ApiClient.kt that:
+  - Serializes request body to JSON
+  - Sets `Content-Type: application/json`
+  - Uses same auth/person headers as existing methods
+- [ ] Remove `postForm()` function after migration (or mark deprecated)
+- [ ] Remove unused `FormBody` import
+
+### 7.2 Android ApiClient - Fix Endpoint Paths
+
+| Current (Wrong) | Correct (per spec) |
+|-----------------|-------------------|
+| `/api/files/save-json` | `/api/files/save` |
+| `/api/files/delete-json` | `/api/files/delete` |
+
+- [ ] Update `saveFile()` to use `/api/files/save`
+- [ ] Update `deleteFile()` to use `/api/files/delete`
+
+### 7.3 Android ApiClient - Fix Request Field Names
+
+#### `/api/save` (saveDaily)
+| Current | Correct |
+|---------|---------|
+| `content` only | `path`, `content` |
+
+- [ ] Update `saveDaily()` to accept `path` parameter
+- [ ] Update `saveDaily()` to send JSON with `path` and `content` fields
+- [ ] Update all callers (DailyScreen.kt) to pass `path`
+
+#### `/api/append` (appendDaily)
+| Current | Correct |
+|---------|---------|
+| `content`, `pinned` ("on"/"") | `path`, `text`, `pinned` (boolean) |
+
+- [ ] Update `appendDaily()` to accept `path` parameter
+- [ ] Rename `content` parameter to `text`
+- [ ] Change `pinned` from string ("on"/"") to boolean
+- [ ] Update all callers (DailyScreen.kt) to pass `path` and use correct field names
+
+#### `/api/clear-pinned` (clearPinned)
+| Current | Correct |
+|---------|---------|
+| empty map | `path` |
+
+- [ ] Update `clearPinned()` to accept `path` parameter
+- [ ] Send JSON with `path` field
+- [ ] Update all callers (DailyScreen.kt) to pass `path`
+
+#### `/api/sleep-times/append` (appendSleepTimes)
+| Current | Correct |
+|---------|---------|
+| `child`, `entry`, `asleep` ("on"), `woke` ("on") | `child`, `time`, `status` |
+
+- [ ] Rename `entry` parameter to `time`
+- [ ] Replace `asleep`/`woke` booleans with single `status` string
+- [ ] `status` value: "eingeschlafen" or "aufgewacht"
+- [ ] Update SleepTimesScreen.kt to pass correct parameters
+
+#### `/api/sleep-times/delete` (deleteSleepEntry)
+| Current | Correct |
+|---------|---------|
+| `line` (form string) | `line` (JSON integer) |
+
+- [ ] Update to send JSON with integer `line` field
+
+#### `/api/files/create` (createFile)
+- [ ] Update to send JSON with `path` field
+
+#### `/api/files/save` (saveFile)
+- [ ] Update to send JSON with `path` and `content` fields
+
+#### `/api/files/delete` (deleteFile)
+- [ ] Update to send JSON with `path` field
+
+#### `/api/files/unpin` (unpinEntry)
+- [ ] Update to send JSON with `path` and `line` fields
+
+#### `/api/claude/chat` (claudeChat)
+- [ ] Update to send JSON with `message` and optional `session_id` fields
+
+#### `/api/claude/chat-stream` (claudeChatStream)
+- [ ] Update to send JSON with `message` and optional `session_id` fields
+- [ ] Keep `Accept: application/x-ndjson` header
+
+#### `/api/claude/clear` (claudeClear)
+- [ ] Update to send JSON with `session_id` field
+
+#### `/api/settings/env` POST (saveEnv)
+| Current | Correct |
+|---------|---------|
+| `env_content` | `content` |
+
+- [ ] Rename field from `env_content` to `content`
+- [ ] Update to send JSON
+
+### 7.4 Android Request Models
+
+Create Kotlin data classes for JSON serialization:
+
+- [ ] Create `SaveDailyRequest` data class: `path`, `content`
+- [ ] Create `AppendDailyRequest` data class: `path`, `text`, `pinned`
+- [ ] Create `ClearPinnedRequest` data class: `path`
+- [ ] Create `AddTodoRequest` data class: `category`, `text` (optional)
+- [ ] Create `ToggleTodoRequest` data class: `path`, `line`
+- [ ] Create `AppendSleepRequest` data class: `child`, `time`, `status`
+- [ ] Create `DeleteSleepRequest` data class: `line`
+- [ ] Create `CreateFileRequest` data class: `path`
+- [ ] Create `SaveFileRequest` data class: `path`, `content`
+- [ ] Create `DeleteFileRequest` data class: `path`
+- [ ] Create `UnpinEntryRequest` data class: `path`, `line`
+- [ ] Create `ClaudeChatRequest` data class: `message`, `session_id` (optional)
+- [ ] Create `ClaudeClearRequest` data class: `session_id`
+- [ ] Create `SaveEnvRequest` data class: `content`
+
+### 7.5 Go Server - Remove Form Support from Todos
+
+> The todos endpoints had form support added in Phase 4.2 for "Android compatibility".
+> This was the wrong approach. Once Android is updated, remove this.
+
+- [ ] Remove form-encoded parsing from `handleAddTodo`
+- [ ] Remove form-encoded parsing from `handleToggleTodo`
+- [ ] Keep only JSON parsing (per spec)
+
+### 7.6 Testing
+
+- [ ] Test all Android API calls against Go server after changes
+- [ ] Verify React web client still works (should be unaffected)
+- [ ] Run existing Go server tests (should pass)
+- [ ] Run existing React client tests (should pass)
+
+### 7.7 Cleanup
+
+- [ ] Remove `-json` suffix endpoint aliases from old Python backend references in any docs
+- [ ] Update AGENTS.md if it mentions form-encoded requests
+- [ ] Verify no other clients depend on form-encoded format
 
 ---
 
