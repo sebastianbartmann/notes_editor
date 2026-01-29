@@ -2,7 +2,7 @@
 
 > Status: Draft
 > Version: 1.0
-> Last Updated: 2026-01-18
+> Last Updated: 2026-01-29
 
 ## Overview
 
@@ -173,8 +173,8 @@ When creating a new daily note, content is inherited from the most recent previo
 **Extraction Process:**
 1. Find `## todos` section
 2. Extract all lines until next `## ` section or end of file
-3. Filter out lines matching `^\s*-\s*\[x\]` (completed tasks)
-4. Include remaining lines (unchecked tasks + category headers)
+3. Filter out lines matching `^\s*-\s*\[[xX]\]` (completed tasks, case-insensitive)
+4. Include all remaining lines (preserving empty lines, headings, subtasks, and any other content)
 
 **Example:**
 Previous note:
@@ -184,6 +184,9 @@ Previous note:
 ### work
 - [x] Deploy
 - [ ] Review PR
+  - [ ] Check tests
+  - [x] Review code style
+  Notes about this PR
 
 ### priv
 - [ ] Call dentist
@@ -191,14 +194,16 @@ Previous note:
 
 Inherited content:
 ```markdown
-## todos
-
 ### work
 - [ ] Review PR
+  - [ ] Check tests
+  Notes about this PR
 
 ### priv
 - [ ] Call dentist
 ```
+
+Note: The completed subtask `- [x] Review code style` is also filtered out.
 
 #### Pinned Notes
 **Extraction Process:**

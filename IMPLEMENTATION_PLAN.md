@@ -1,13 +1,54 @@
 # Implementation Plan
 
-> Last updated: 2026-01-28
-> Status: Active - Phase 6.1 complete. Next: Phase 6.3 (Manual Testing)
+> Last updated: 2026-01-29
+> Status: Active - Phase 9 (Bug Fix) in progress
 
 ## Instructions
 - Tasks marked `- [ ]` are incomplete
 - Tasks marked `- [x]` are complete
 - Work from top to bottom (highest priority first)
 - Add new tasks as you discover them
+
+---
+
+## Phase 9: Bug Fix - Daily Note Todo Inheritance (Critical)
+
+> **Root Cause:** The Go implementation of `extractIncompleteTodos()` uses a whitelist approach
+> (only includes specific patterns) instead of the Python blacklist approach (includes everything,
+> removes only completed todos). This causes structure loss when creating new daily notes.
+>
+> **Symptoms:**
+> - Empty lines between todos are removed (structure collapses)
+> - Subtasks (indented todos) may be orphaned or lost
+> - Non-todo content under headings is lost (notes, descriptions not starting with `-`)
+
+### 9.1 Fix `extractIncompleteTodos()` in `server/internal/vault/daily.go`
+
+- [ ] Change from whitelist to blacklist approach:
+  - Extract entire `## todos` section content
+  - Only filter OUT lines matching `^\s*-\s*\[[xX]\]` (completed todos)
+  - Preserve ALL other lines (empty lines, headings, subtasks, notes)
+- [ ] Verify pinned notes extraction is correct (appears to be working based on existing tests)
+
+### 9.2 Add Regression Tests in `server/internal/vault/daily_test.go`
+
+- [ ] Add `TestDaily_TodoInheritance_PreservesStructure` test:
+  - Input: todos with empty lines between categories
+  - Input: todos with indented subtasks (`  - [ ] subtask`)
+  - Input: todos with non-checkbox content (plain text, bullet notes)
+  - Verify: empty lines preserved
+  - Verify: subtasks preserved with indentation
+  - Verify: non-todo content preserved
+  - Verify: completed todos (including completed subtasks) excluded
+
+- [ ] Add `TestDaily_TodoInheritance_ComplexStructure` test:
+  - Input: mixed structure with multiple heading levels, subtasks, notes
+  - Verify: entire structure preserved except `- [x]` lines
+
+### 9.3 Verify Pinned Notes Inheritance
+
+- [ ] Review `extractPinnedNotes()` - confirm only pinned entries copied (existing test covers this)
+- [ ] Add test for non-pinned entries NOT being copied (existing test covers this)
 
 ---
 
