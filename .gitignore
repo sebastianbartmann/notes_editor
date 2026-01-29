@@ -61,3 +61,6 @@ server/.env
 
 # Maestro test screenshots
 app/android/maestro/screenshots/
+
+# Go build output
+server/bin/
