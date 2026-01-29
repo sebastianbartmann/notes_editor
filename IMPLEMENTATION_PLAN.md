@@ -221,8 +221,8 @@
 - [x] Test todo toggle (checked/unchecked)
 - [x] Test task addition to categories
 - [x] Test pinned marker operations
-- [ ] Test git pull with conflict resolution (requires git repo setup)
-- [ ] Test git commit and push with retry (requires git repo setup)
+- [x] Test git pull with conflict resolution
+- [x] Test git commit and push with retry
 
 ### 4.4 Go Backend Tests - Services - PARTIAL
 - [x] Test Claude session management (concurrent access)
@@ -403,6 +403,26 @@ All request data classes created in `Models.kt`:
 ---
 
 ## Completed
+
+### Git Operations Tests (Phase 4.3) - 2026-01-29
+- [x] **Created comprehensive git tests** in `server/internal/vault/git_test.go`:
+  - `TestGit_Pull_Success`: successful pull with remote changes
+  - `TestGit_Pull_NoRemoteChanges`: pull when already up to date
+  - `TestGit_Pull_ConflictResolution`: conflict resolved with "theirs" strategy (remote wins)
+  - `TestGit_Pull_FallbackToFetchReset`: fallback to fetch+reset on diverged history
+  - `TestGit_Pull_AbortsOngoingMerge`: aborts conflicted merge state before pulling
+  - `TestGit_CommitAndPush_Success`: successful commit and push
+  - `TestGit_CommitAndPush_NoChanges`: handles empty commits gracefully
+  - `TestGit_CommitAndPush_PushRetry`: retry push after remote changes (pull, then push)
+  - `TestGit_CommitAndPush_PushFailureGraceful`: graceful degradation when push fails
+  - `TestGit_CommitAndPush_MultipleFiles`: commit multiple files at once
+  - `TestGit_CommitAndPush_ModifyFile`: commit file modifications
+  - `TestGit_CommitAndPush_DeleteFile`: commit file deletions
+  - `TestGit_Status`: test status output
+  - `TestGit_getCurrentBranch`: test branch detection
+  - `TestGit_AbortOngoingOperations`: test rebase/merge abort
+- [x] **Test infrastructure**: created helper functions for setting up bare remote + local clone test repos
+- [x] All Go tests pass (15 new git tests), all React tests pass (96 tests)
 
 ### LinkedIn OAuth Token Exchange Tests (Phase 4.4) - 2026-01-29
 - [x] **Added configurable `TokenURL` field** to `LinkedInConfig` in `config/config.go`:
