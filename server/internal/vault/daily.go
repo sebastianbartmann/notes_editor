@@ -125,6 +125,8 @@ func (d *Daily) findPreviousNote(person string, date time.Time) (string, error) 
 }
 
 // extractIncompleteTodos extracts incomplete todos from a daily note's ## todos section.
+// Uses a blacklist approach: extracts everything, only filtering out completed tasks.
+// This preserves empty lines, headings, subtasks, notes, and any other content.
 func (d *Daily) extractIncompleteTodos(content string) string {
 	// Find the ## todos section
 	todosStart := strings.Index(content, "## todos")
@@ -139,51 +141,25 @@ func (d *Daily) extractIncompleteTodos(content string) string {
 		sectionContent = sectionContent[:nextSection]
 	}
 
-	// Extract lines that are incomplete todos (- [ ]) or category headers (###)
-	var result []string
+	// Filter out completed todos only, preserving everything else
 	completedPattern := regexp.MustCompile(`^\s*-\s*\[[xX]\]`)
-	todoPattern := regexp.MustCompile(`^\s*-\s*\[ \]`)
-	headerPattern := regexp.MustCompile(`^###\s+`)
 
 	lines := strings.Split(sectionContent, "\n")
-	inCategory := false
+	var result []string
 
 	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-
-		if headerPattern.MatchString(line) {
-			// Category header - include it
-			result = append(result, line)
-			inCategory = true
-			continue
-		}
-
+		// Only filter out completed todos
 		if completedPattern.MatchString(line) {
-			// Skip completed todos
 			continue
 		}
-
-		if todoPattern.MatchString(line) {
-			// Include incomplete todos
-			result = append(result, line)
-			inCategory = true
-			continue
-		}
-
-		// Include non-todo lines if we're in a category context
-		if inCategory && strings.HasPrefix(trimmed, "-") {
-			result = append(result, line)
-		}
+		result = append(result, line)
 	}
 
-	if len(result) == 0 {
-		return ""
-	}
+	// Join and trim leading newlines, but preserve internal structure
+	output := strings.Join(result, "\n")
+	output = strings.TrimLeft(output, "\n")
 
-	return strings.Join(result, "\n")
+	return output
 }
 
 // extractPinnedNotes extracts pinned entries from a daily note's ## custom notes section.

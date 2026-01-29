@@ -1,54 +1,13 @@
 # Implementation Plan
 
 > Last updated: 2026-01-29
-> Status: Active - Phase 9 (Bug Fix) in progress
+> Status: Active
 
 ## Instructions
 - Tasks marked `- [ ]` are incomplete
 - Tasks marked `- [x]` are complete
 - Work from top to bottom (highest priority first)
 - Add new tasks as you discover them
-
----
-
-## Phase 9: Bug Fix - Daily Note Todo Inheritance (Critical)
-
-> **Root Cause:** The Go implementation of `extractIncompleteTodos()` uses a whitelist approach
-> (only includes specific patterns) instead of the Python blacklist approach (includes everything,
-> removes only completed todos). This causes structure loss when creating new daily notes.
->
-> **Symptoms:**
-> - Empty lines between todos are removed (structure collapses)
-> - Subtasks (indented todos) may be orphaned or lost
-> - Non-todo content under headings is lost (notes, descriptions not starting with `-`)
-
-### 9.1 Fix `extractIncompleteTodos()` in `server/internal/vault/daily.go`
-
-- [ ] Change from whitelist to blacklist approach:
-  - Extract entire `## todos` section content
-  - Only filter OUT lines matching `^\s*-\s*\[[xX]\]` (completed todos)
-  - Preserve ALL other lines (empty lines, headings, subtasks, notes)
-- [ ] Verify pinned notes extraction is correct (appears to be working based on existing tests)
-
-### 9.2 Add Regression Tests in `server/internal/vault/daily_test.go`
-
-- [ ] Add `TestDaily_TodoInheritance_PreservesStructure` test:
-  - Input: todos with empty lines between categories
-  - Input: todos with indented subtasks (`  - [ ] subtask`)
-  - Input: todos with non-checkbox content (plain text, bullet notes)
-  - Verify: empty lines preserved
-  - Verify: subtasks preserved with indentation
-  - Verify: non-todo content preserved
-  - Verify: completed todos (including completed subtasks) excluded
-
-- [ ] Add `TestDaily_TodoInheritance_ComplexStructure` test:
-  - Input: mixed structure with multiple heading levels, subtasks, notes
-  - Verify: entire structure preserved except `- [x]` lines
-
-### 9.3 Verify Pinned Notes Inheritance
-
-- [ ] Review `extractPinnedNotes()` - confirm only pinned entries copied (existing test covers this)
-- [ ] Add test for non-pinned entries NOT being copied (existing test covers this)
 
 ---
 
@@ -444,6 +403,17 @@ All request data classes created in `Models.kt`:
 ---
 
 ## Completed
+
+### Daily Note Todo Inheritance Bug Fix (Phase 9) - 2026-01-29
+- [x] **Fixed `extractIncompleteTodos()` in `server/internal/vault/daily.go`**:
+  - Changed from whitelist to blacklist approach per spec 06
+  - Now extracts entire `## todos` section and only filters OUT completed tasks (`^\s*-\s*\[[xX]\]`)
+  - Preserves empty lines, headings, subtasks, non-todo content, and all other structure
+- [x] **Added regression tests**:
+  - `TestDaily_TodoInheritance_PreservesStructure`: tests empty lines, subtasks, non-checkbox content
+  - `TestDaily_TodoInheritance_ComplexStructure`: tests mixed structure with categories, notes, subtasks
+- [x] **Verified pinned notes extraction**: existing `TestDaily_PinnedInheritance` test confirms correct behavior
+- [x] All Go tests pass, all React tests pass (96 tests)
 
 ### Android UI Gaps (Phase 6.1) - 2026-01-28
 - [x] **Per-entry unpin UI implemented** in `NoteView.kt`:

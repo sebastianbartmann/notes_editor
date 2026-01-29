@@ -353,3 +353,191 @@ func TestDaily_AppendEntry(t *testing.T) {
 		t.Error("pinned content not found")
 	}
 }
+
+func TestDaily_TodoInheritance_PreservesStructure(t *testing.T) {
+	daily, store, _ := setupDailyTest(t)
+
+	// Create previous day's note with complex structure:
+	// - Empty lines between categories
+	// - Indented subtasks
+	// - Non-checkbox content (notes, descriptions)
+	prevContent := `# 2024-01-14
+
+## todos
+
+### work
+- [ ] Review PR
+  - [ ] Check tests
+  - [x] Review code style
+  Notes about this PR
+
+- [x] Deploy
+
+### priv
+- [ ] Call dentist
+
+## custom notes
+
+### 10:00
+Some notes here.
+`
+	err := store.WriteFile("sebastian", "daily/2024-01-14.md", prevContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create today's note
+	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	content, _, err := daily.GetOrCreateDaily("sebastian", date)
+	if err != nil {
+		t.Fatalf("GetOrCreateDaily() error = %v", err)
+	}
+
+	// Verify empty lines are preserved (check for double newline before ### priv)
+	if !strings.Contains(content, "\n\n### priv") {
+		t.Error("empty line before ### priv not preserved")
+	}
+
+	// Verify incomplete subtask is preserved with indentation
+	if !strings.Contains(content, "  - [ ] Check tests") {
+		t.Error("incomplete subtask not preserved with indentation")
+	}
+
+	// Verify completed subtask is excluded
+	if strings.Contains(content, "Review code style") {
+		t.Error("completed subtask should be excluded")
+	}
+
+	// Verify non-checkbox content is preserved
+	if !strings.Contains(content, "Notes about this PR") {
+		t.Error("non-checkbox content not preserved")
+	}
+
+	// Verify completed main task is excluded
+	if strings.Contains(content, "Deploy") {
+		t.Error("completed main task should be excluded")
+	}
+
+	// Verify incomplete tasks are preserved
+	if !strings.Contains(content, "- [ ] Review PR") {
+		t.Error("incomplete task not preserved")
+	}
+	if !strings.Contains(content, "- [ ] Call dentist") {
+		t.Error("incomplete task not preserved")
+	}
+}
+
+func TestDaily_TodoInheritance_ComplexStructure(t *testing.T) {
+	daily, store, _ := setupDailyTest(t)
+
+	// Create previous day's note with complex mixed structure
+	prevContent := `# 2024-01-14
+
+## todos
+
+### work
+Important context for work tasks:
+- [x] Completed task A
+- [ ] Active task B
+  Supporting notes for task B
+  - [ ] Subtask B1
+  - [x] Subtask B2
+  - [ ] Subtask B3
+- [ ] Active task C
+
+### priv
+Personal notes here
+- [x] Done task
+- [ ] Pending task
+  with extra details
+
+### shopping
+- [ ] Buy milk
+- [x] Buy eggs
+Grocery notes
+
+## custom notes
+
+### 10:00
+Meeting notes
+`
+	err := store.WriteFile("sebastian", "daily/2024-01-14.md", prevContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create today's note
+	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	content, _, err := daily.GetOrCreateDaily("sebastian", date)
+	if err != nil {
+		t.Fatalf("GetOrCreateDaily() error = %v", err)
+	}
+
+	// Verify all category headers preserved
+	if !strings.Contains(content, "### work") {
+		t.Error("work header not preserved")
+	}
+	if !strings.Contains(content, "### priv") {
+		t.Error("priv header not preserved")
+	}
+	if !strings.Contains(content, "### shopping") {
+		t.Error("shopping header not preserved")
+	}
+
+	// Verify context text before tasks is preserved
+	if !strings.Contains(content, "Important context for work tasks:") {
+		t.Error("context text not preserved")
+	}
+
+	// Verify personal notes preserved
+	if !strings.Contains(content, "Personal notes here") {
+		t.Error("personal notes not preserved")
+	}
+
+	// Verify grocery notes preserved
+	if !strings.Contains(content, "Grocery notes") {
+		t.Error("grocery notes not preserved")
+	}
+
+	// Verify incomplete tasks preserved
+	if !strings.Contains(content, "- [ ] Active task B") {
+		t.Error("active task B not preserved")
+	}
+	if !strings.Contains(content, "- [ ] Active task C") {
+		t.Error("active task C not preserved")
+	}
+	if !strings.Contains(content, "- [ ] Subtask B1") {
+		t.Error("subtask B1 not preserved")
+	}
+	if !strings.Contains(content, "- [ ] Subtask B3") {
+		t.Error("subtask B3 not preserved")
+	}
+	if !strings.Contains(content, "- [ ] Pending task") {
+		t.Error("pending task not preserved")
+	}
+	if !strings.Contains(content, "- [ ] Buy milk") {
+		t.Error("buy milk not preserved")
+	}
+
+	// Verify supporting notes preserved
+	if !strings.Contains(content, "Supporting notes for task B") {
+		t.Error("supporting notes not preserved")
+	}
+	if !strings.Contains(content, "with extra details") {
+		t.Error("extra details not preserved")
+	}
+
+	// Verify completed tasks excluded
+	if strings.Contains(content, "Completed task A") {
+		t.Error("completed task A should be excluded")
+	}
+	if strings.Contains(content, "Subtask B2") {
+		t.Error("completed subtask B2 should be excluded")
+	}
+	if strings.Contains(content, "Done task") {
+		t.Error("done task should be excluded")
+	}
+	if strings.Contains(content, "Buy eggs") {
+		t.Error("buy eggs should be excluded")
+	}
+}
