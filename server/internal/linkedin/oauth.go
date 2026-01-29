@@ -20,6 +20,9 @@ type TokenResponse struct {
 	Scope       string `json:"scope"`
 }
 
+// DefaultTokenURL is the LinkedIn OAuth token exchange endpoint.
+const DefaultTokenURL = "https://www.linkedin.com/oauth/v2/accessToken"
+
 // ExchangeCodeForToken exchanges an authorization code for an access token.
 func ExchangeCodeForToken(cfg *config.LinkedInConfig, code string) (*TokenResponse, error) {
 	data := url.Values{}
@@ -29,7 +32,12 @@ func ExchangeCodeForToken(cfg *config.LinkedInConfig, code string) (*TokenRespon
 	data.Set("client_id", cfg.ClientID)
 	data.Set("client_secret", cfg.ClientSecret)
 
-	resp, err := http.PostForm("https://www.linkedin.com/oauth/v2/accessToken", data)
+	tokenURL := cfg.TokenURL
+	if tokenURL == "" {
+		tokenURL = DefaultTokenURL
+	}
+
+	resp, err := http.PostForm(tokenURL, data)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange request failed: %w", err)
 	}

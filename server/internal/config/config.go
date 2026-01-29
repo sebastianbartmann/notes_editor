@@ -28,6 +28,8 @@ type LinkedInConfig struct {
 	ClientSecret string
 	RedirectURI  string
 	AccessToken  string
+	// TokenURL is the OAuth token exchange endpoint. Defaults to LinkedIn's URL if empty.
+	TokenURL string
 }
 
 // Load reads configuration from environment variables.

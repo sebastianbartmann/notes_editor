@@ -229,7 +229,7 @@
 - [ ] Test Claude tool execution (requires mock Claude API)
 - [x] Test NDJSON streaming format
 - [ ] Test 5-second keepalive ping in streaming (timing-dependent, complex to test)
-- [ ] Test LinkedIn OAuth token exchange (requires HTTP mock)
+- [x] Test LinkedIn OAuth token exchange (requires HTTP mock)
 - [x] Test LinkedIn CSV activity logging
 
 ### 4.5 Go Backend Tests - API - COMPLETE
@@ -403,6 +403,22 @@ All request data classes created in `Models.kt`:
 ---
 
 ## Completed
+
+### LinkedIn OAuth Token Exchange Tests (Phase 4.4) - 2026-01-29
+- [x] **Added configurable `TokenURL` field** to `LinkedInConfig` in `config/config.go`:
+  - Allows tests to override the LinkedIn OAuth URL with `httptest.Server` URL
+  - Defaults to `DefaultTokenURL` constant when empty
+- [x] **Updated `ExchangeCodeForToken()`** in `linkedin/oauth.go`:
+  - Uses `cfg.TokenURL` if set, otherwise falls back to LinkedIn's URL
+  - Added `DefaultTokenURL` constant for production endpoint
+- [x] **Created comprehensive OAuth tests** in `linkedin/oauth_test.go`:
+  - `TestExchangeCodeForToken_Success`: verifies form data and response parsing
+  - `TestExchangeCodeForToken_HTTPError`: tests 400, 401, 403, 500 responses
+  - `TestExchangeCodeForToken_InvalidJSON`: tests malformed response handling
+  - `TestExchangeCodeForToken_NetworkError`: tests connection failures
+  - `TestExchangeCodeForToken_EmptyResponse`: tests empty token response
+  - `TestPersistAccessToken_*`: 8 tests covering new file, update existing, add to file, special chars, edge cases
+- [x] All Go tests pass, all React tests pass (96 tests)
 
 ### Daily Note Todo Inheritance Bug Fix (Phase 9) - 2026-01-29
 - [x] **Fixed `extractIncompleteTodos()` in `server/internal/vault/daily.go`**:
