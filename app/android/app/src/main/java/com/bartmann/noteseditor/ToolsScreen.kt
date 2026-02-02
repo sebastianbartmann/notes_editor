@@ -11,35 +11,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-
-data class ToolItem(
-    val id: String,
-    val icon: ImageVector,
-    val label: String,
-    val route: String?,
-    val externalUrl: String? = null
-)
-
-val toolItems = listOf(
-    ToolItem("claude", Icons.AutoMirrored.Filled.Chat, "Claude", "tool-claude"),
-    ToolItem("noise", Icons.AutoMirrored.Filled.VolumeUp, "Noise", "tool-noise"),
-    ToolItem("notifications", Icons.Default.Notifications, "Notifications", "tool-notifications"),
-    ToolItem("settings", Icons.Default.Settings, "Settings", "settings"),
-    ToolItem("kiosk", Icons.AutoMirrored.Filled.OpenInNew, "Kiosk", null, "https://thirdpartycheck.com/admin/kiosk")
-)
 
 @Composable
 fun ToolsScreen(
@@ -47,12 +26,14 @@ fun ToolsScreen(
     onNavigate: (String) -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
+    val hiddenIds = UserSettings.bottomNavIds.toSet()
+    val items = selectableNavEntries.filter { it.id !in hiddenIds }
 
     ScreenLayout(modifier = modifier) {
-        ScreenHeader(title = "Tools")
+        ScreenHeader(title = "More")
 
         Panel(fill = false) {
-            toolItems.forEach { item ->
+            items.forEach { item ->
                 ToolRow(
                     item = item,
                     onClick = {
@@ -70,7 +51,7 @@ fun ToolsScreen(
 
 @Composable
 private fun ToolRow(
-    item: ToolItem,
+    item: NavEntry,
     onClick: () -> Unit
 ) {
     Row(

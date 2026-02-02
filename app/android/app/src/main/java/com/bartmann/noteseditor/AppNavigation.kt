@@ -17,16 +17,11 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.ime
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,32 +37,21 @@ sealed class Screen(val route: String, val label: String) {
     data object Daily : Screen("daily", "Daily")
     data object Files : Screen("files", "Files")
     data object Sleep : Screen("sleep", "Sleep")
-    data object Tools : Screen("tools", "Tools")
+    data object Tools : Screen("tools", "More")
     data object Settings : Screen("settings", "Settings")
     data object ToolClaude : Screen("tool-claude", "Claude")
     data object ToolNoise : Screen("tool-noise", "Noise")
     data object ToolNotifications : Screen("tool-notifications", "Notifications")
 }
 
-data class BottomNavItem(
-    val route: String,
-    val label: String,
-    val icon: ImageVector
-)
-
-val bottomNavItems = listOf(
-    BottomNavItem("daily", "Daily", Icons.Default.CalendarToday),
-    BottomNavItem("files", "Files", Icons.Default.Folder),
-    BottomNavItem("sleep", "Sleep", Icons.Default.NightsStay),
-    BottomNavItem("tools", "Tools", Icons.Default.Build)
-)
-
 @Composable
 fun BottomNavBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
+    onOpenExternal: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val navItems = bottomNavEntriesFor(UserSettings.bottomNavIds) + fixedMoreEntry
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -76,7 +60,7 @@ fun BottomNavBar(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        bottomNavItems.forEach { item ->
+        navItems.forEach { item ->
             val isActive = currentRoute == item.route
             val iconColor = if (isActive) AppTheme.colors.accent else AppTheme.colors.muted
             val textColor = if (isActive) AppTheme.colors.accent else AppTheme.colors.muted
@@ -84,7 +68,12 @@ fun BottomNavBar(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable { onNavigate(item.route) },
+                    .clickable {
+                        when {
+                            item.externalUrl != null -> onOpenExternal(item.externalUrl)
+                            item.route != null -> onNavigate(item.route)
+                        }
+                    },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -110,6 +99,7 @@ fun NotesEditorApp() {
     val density = LocalDensity.current
     val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0
     val navController = rememberNavController()
+    val uriHandler = LocalUriHandler.current
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val currentRoute = currentDestination?.route
@@ -190,6 +180,7 @@ fun NotesEditorApp() {
             BottomNavBar(
                 currentRoute = currentRoute,
                 onNavigate = { route -> navigateByRoute(route) },
+                onOpenExternal = { url -> uriHandler.openUri(url) },
                 modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
             )
         }

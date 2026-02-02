@@ -1,10 +1,21 @@
 package com.bartmann.noteseditor
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,6 +25,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
@@ -24,6 +37,19 @@ fun SettingsScreen(modifier: Modifier) {
     var envContent by remember { mutableStateOf("") }
     var envStatus by remember { mutableStateOf("") }
     var isSavingEnv by remember { mutableStateOf(false) }
+    var navStatus by remember { mutableStateOf("") }
+    val selectedNavIds = UserSettings.bottomNavIds
+
+    fun moveNavItem(id: String, delta: Int) {
+        val currentIndex = selectedNavIds.indexOf(id)
+        if (currentIndex == -1) return
+        val targetIndex = currentIndex + delta
+        if (targetIndex !in selectedNavIds.indices) return
+        val updated = selectedNavIds.toMutableList()
+        val item = updated.removeAt(currentIndex)
+        updated.add(targetIndex, item)
+        UserSettings.updateBottomNav(updated)
+    }
 
     LaunchedEffect(Unit) {
         try {
@@ -73,6 +99,82 @@ fun SettingsScreen(modifier: Modifier) {
             ) {
                 ThemeButton(label = "Dark", value = "dark")
                 ThemeButton(label = "Light", value = "light")
+            }
+            CompactDivider()
+            SectionTitle(text = "Navigation")
+            AppText(
+                text = "Choose up to 3 items for the footer. The rest show under More.",
+                style = AppTheme.typography.bodySmall,
+                color = AppTheme.colors.muted
+            )
+            selectableNavEntries.forEach { item ->
+                val isSelected = selectedNavIds.contains(item.id)
+                val isBlocked = !isSelected && selectedNavIds.size >= 3
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(AppTheme.colors.input, RoundedCornerShape(6.dp))
+                        .clickable {
+                            navStatus = ""
+                            if (isSelected) {
+                                UserSettings.updateBottomNav(selectedNavIds.filter { it != item.id })
+                            } else if (!isBlocked) {
+                                UserSettings.updateBottomNav(selectedNavIds + item.id)
+                            } else {
+                                navStatus = "Remove one item to add another."
+                            }
+                        }
+                        .padding(horizontal = AppTheme.spacing.sm, vertical = AppTheme.spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppCheckbox(checked = isSelected)
+                    Image(
+                        painter = rememberVectorPainter(item.icon),
+                        contentDescription = item.label,
+                        colorFilter = ColorFilter.tint(AppTheme.colors.accent),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    AppText(
+                        text = item.label,
+                        style = AppTheme.typography.body,
+                        color = if (isBlocked) AppTheme.colors.muted else AppTheme.colors.text,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (isSelected) {
+                        val index = selectedNavIds.indexOf(item.id)
+                        val canMoveUp = index > 0
+                        val canMoveDown = index < selectedNavIds.lastIndex
+                        IconButton(
+                            onClick = { moveNavItem(item.id, -1) },
+                            enabled = canMoveUp
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Move up",
+                                tint = if (canMoveUp) AppTheme.colors.accent else AppTheme.colors.muted
+                            )
+                        }
+                        IconButton(
+                            onClick = { moveNavItem(item.id, 1) },
+                            enabled = canMoveDown
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Move down",
+                                tint = if (canMoveDown) AppTheme.colors.accent else AppTheme.colors.muted
+                            )
+                        }
+                    }
+                }
+            }
+            AppText(
+                text = "${selectedNavIds.size} of 3 selected",
+                style = AppTheme.typography.label,
+                color = AppTheme.colors.muted
+            )
+            if (navStatus.isNotBlank()) {
+                StatusMessage(text = navStatus, showDivider = false)
             }
         }
         Panel(fill = false) {
