@@ -100,6 +100,21 @@ fun DailyScreen(
         }
     }
 
+    fun submitTask(category: String) {
+        val taskText = taskInputText
+        taskInputMode = null
+        taskInputText = ""
+        scope.launch {
+            try {
+                val response = ApiClient.addTodo(category, taskText)
+                message = response.message
+                refresh(selectToday = path == todayPath)
+            } catch (exc: Exception) {
+                message = "Add failed: ${exc.message}"
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         refresh(selectToday = true)
     }
@@ -295,18 +310,8 @@ fun DailyScreen(
                                         onDone = {
                                             val category = taskInputMode
                                             if (category != null) {
-                                                scope.launch {
-                                                    try {
-                                                        val response = ApiClient.addTodo(category, taskInputText)
-                                                        message = response.message
-                                                        refresh(selectToday = path == todayPath)
-                                                    } catch (exc: Exception) {
-                                                        message = "Add failed: ${exc.message}"
-                                                    }
-                                                }
+                                                submitTask(category)
                                             }
-                                            taskInputMode = null
-                                            taskInputText = ""
                                         }
                                     )
                                 )
@@ -314,18 +319,8 @@ fun DailyScreen(
                                     onClick = {
                                         val category = taskInputMode
                                         if (category != null) {
-                                            scope.launch {
-                                                try {
-                                                    val response = ApiClient.addTodo(category, taskInputText)
-                                                    message = response.message
-                                                    refresh(selectToday = path == todayPath)
-                                                } catch (exc: Exception) {
-                                                    message = "Add failed: ${exc.message}"
-                                                }
-                                            }
+                                            submitTask(category)
                                         }
-                                        taskInputMode = null
-                                        taskInputText = ""
                                     },
                                     modifier = Modifier.size(32.dp)
                                 ) {
