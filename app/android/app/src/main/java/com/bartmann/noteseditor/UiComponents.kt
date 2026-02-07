@@ -133,8 +133,12 @@ fun CompactButton(
 }
 
 @Composable
-fun CompactTextButton(text: String, onClick: () -> Unit) {
-    CompactButton(text = text, onClick = onClick)
+fun CompactTextButton(
+    text: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    CompactButton(text = text, modifier = modifier, onClick = onClick)
 }
 
 @Composable

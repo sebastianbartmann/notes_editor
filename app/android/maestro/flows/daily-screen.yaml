@@ -6,6 +6,18 @@ appId: com.bartmann.noteseditor
 # Navigate to Daily (should be default)
 - assertVisible: "Daily"
 - takeScreenshot: "02-daily-screen"
+- assertVisible: "prev"
+- assertVisible: "next"
+- tapOn: "prev"
+- waitForAnimationToEnd
+- takeScreenshot: "02a-after-prev"
+- tapOn: "next"
+- waitForAnimationToEnd
+- takeScreenshot: "02b-after-next"
+- tapOn:
+    id: "daily-today-link"
+- waitForAnimationToEnd
+- takeScreenshot: "02c-after-today-link"
 
 # Test refresh
 - tapOn:

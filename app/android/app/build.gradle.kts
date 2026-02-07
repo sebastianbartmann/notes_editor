@@ -61,4 +61,5 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.8")
+    testImplementation("junit:junit:4.13.2")
 }

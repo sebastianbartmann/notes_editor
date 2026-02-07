@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -43,19 +44,51 @@ fun DailyScreen(
     var message by remember { mutableStateOf("") }
     var path by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("") }
+    var todayPath by remember { mutableStateOf("") }
+    var availableDailyPaths by remember { mutableStateOf<List<String>>(emptyList()) }
     var isEditing by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     var taskInputMode by remember { mutableStateOf<String?>(null) }
     var taskInputText by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    fun refresh(keepEditing: Boolean = false) {
+    suspend fun saveCurrentBeforeSwitch(): Boolean {
+        if (path.isBlank()) {
+            return true
+        }
+        return try {
+            ApiClient.saveDaily(path, content)
+            true
+        } catch (exc: Exception) {
+            message = "Save failed: ${exc.message}"
+            false
+        }
+    }
+
+    fun refresh(keepEditing: Boolean = false, selectToday: Boolean = false) {
         scope.launch {
+            val previousPath = path
             try {
                 val daily = ApiClient.fetchDaily()
-                content = daily.content
-                path = daily.path
-                date = daily.date
+                todayPath = daily.path
+                val entries = try {
+                    ApiClient.listFiles("daily").entries
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                val fromFiles = DailyNavigation.collectAvailableDailyPaths(entries, daily.date)
+                availableDailyPaths = (fromFiles + daily.path).distinct().sorted()
+
+                if (selectToday || previousPath.isBlank() || previousPath == daily.path) {
+                    content = daily.content
+                    path = daily.path
+                    date = daily.date
+                } else {
+                    val selected = ApiClient.readFile(previousPath)
+                    content = selected.content
+                    path = selected.path
+                    date = DailyNavigation.dateFromPath(selected.path) ?: date
+                }
                 if (!keepEditing) {
                     isEditing = false
                 }
@@ -68,7 +101,7 @@ fun DailyScreen(
     }
 
     LaunchedEffect(Unit) {
-        refresh()
+        refresh(selectToday = true)
     }
 
     BackHandler(enabled = isEditing || taskInputMode != null) {
@@ -119,11 +152,63 @@ fun DailyScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     SectionTitle(text = "Current note")
-                    AppText(
-                        text = "Today: $date",
-                        style = AppTheme.typography.label,
-                        color = AppTheme.colors.muted
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CompactTextButton(text = "prev", modifier = Modifier.testTag("daily-prev")) {
+                            val targetPath = DailyNavigation.previousPath(availableDailyPaths, path) ?: return@CompactTextButton
+                            scope.launch {
+                                if (!saveCurrentBeforeSwitch()) {
+                                    return@launch
+                                }
+                                try {
+                                    val selected = ApiClient.readFile(targetPath)
+                                    content = selected.content
+                                    path = selected.path
+                                    date = DailyNavigation.dateFromPath(selected.path) ?: date
+                                    isEditing = false
+                                    message = "Loaded."
+                                } catch (exc: Exception) {
+                                    message = "Failed to load: ${exc.message}"
+                                }
+                            }
+                        }
+                        CompactTextButton(text = "next", modifier = Modifier.testTag("daily-next")) {
+                            val targetPath = DailyNavigation.nextPath(availableDailyPaths, path) ?: return@CompactTextButton
+                            scope.launch {
+                                if (!saveCurrentBeforeSwitch()) {
+                                    return@launch
+                                }
+                                try {
+                                    val selected = ApiClient.readFile(targetPath)
+                                    content = selected.content
+                                    path = selected.path
+                                    date = DailyNavigation.dateFromPath(selected.path) ?: date
+                                    isEditing = false
+                                    message = "Loaded."
+                                } catch (exc: Exception) {
+                                    message = "Failed to load: ${exc.message}"
+                                }
+                            }
+                        }
+                        AppText(
+                            text = date,
+                            style = AppTheme.typography.label,
+                            color = AppTheme.colors.accent,
+                            modifier = Modifier
+                                .testTag("daily-today-link")
+                                .clickable {
+                                    scope.launch {
+                                        if (!saveCurrentBeforeSwitch()) {
+                                            return@launch
+                                        }
+                                        isRefreshing = true
+                                        refresh(selectToday = true)
+                                    }
+                                }
+                        )
+                    }
                 }
                 if (isEditing) {
                     CompactTextField(
@@ -144,7 +229,7 @@ fun DailyScreen(
                                     try {
                                         val response = ApiClient.toggleTodo(path, lineNo)
                                         message = response.message
-                                        refresh()
+                                        refresh(selectToday = path == todayPath)
                                     } catch (exc: Exception) {
                                         message = "Toggle failed: ${exc.message}"
                                     }
@@ -157,7 +242,7 @@ fun DailyScreen(
                                     try {
                                         val response = ApiClient.unpinEntry(path, lineNo)
                                         message = response.message
-                                        refresh()
+                                        refresh(selectToday = path == todayPath)
                                     } catch (exc: Exception) {
                                         message = "Unpin failed: ${exc.message}"
                                     }
@@ -180,7 +265,7 @@ fun DailyScreen(
                                     try {
                                         val response = ApiClient.saveDaily(path, content)
                                         message = response.message
-                                        refresh()
+                                        refresh(selectToday = path == todayPath)
                                     } catch (exc: Exception) {
                                         message = "Save failed: ${exc.message}"
                                     }
@@ -214,7 +299,7 @@ fun DailyScreen(
                                                     try {
                                                         val response = ApiClient.addTodo(category, taskInputText)
                                                         message = response.message
-                                                        refresh()
+                                                        refresh(selectToday = path == todayPath)
                                                     } catch (exc: Exception) {
                                                         message = "Add failed: ${exc.message}"
                                                     }
@@ -233,7 +318,7 @@ fun DailyScreen(
                                                 try {
                                                     val response = ApiClient.addTodo(category, taskInputText)
                                                     message = response.message
-                                                    refresh()
+                                                    refresh(selectToday = path == todayPath)
                                                 } catch (exc: Exception) {
                                                     message = "Add failed: ${exc.message}"
                                                 }
@@ -288,7 +373,7 @@ fun DailyScreen(
                                     try {
                                         val response = ApiClient.clearPinned(path)
                                         message = response.message
-                                        refresh()
+                                        refresh(selectToday = path == todayPath)
                                     } catch (exc: Exception) {
                                         message = "Clear failed: ${exc.message}"
                                     }
@@ -316,7 +401,7 @@ fun DailyScreen(
                                         message = response.message
                                         appendText = ""
                                         pinned = false
-                                        refresh()
+                                        refresh(selectToday = path == todayPath)
                                     } catch (exc: Exception) {
                                         message = "Append failed: ${exc.message}"
                                     }
