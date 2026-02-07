@@ -1,6 +1,13 @@
 appId: com.bartmann.noteseditor
 ---
 - launchApp
+- tapOn:
+    text: "Sebastian"
+    optional: true
+- waitForAnimationToEnd
+- assertVisible: "Daily"
+- tapOn: "More"
+- waitForAnimationToEnd
 - tapOn: "Sleep"
 - waitForAnimationToEnd
 - takeScreenshot: "sleep-01-initial"
@@ -14,8 +21,7 @@ appId: com.bartmann.noteseditor
 - takeScreenshot: "sleep-03-status-selected"
 
 # Enter time
-- tapOn:
-    hint: "Entry"
+- tapOn: "Entry (19:30-06:10 | night)"
 - inputText: "20:30"
 - takeScreenshot: "sleep-04-time-entered"
 

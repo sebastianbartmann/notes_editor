@@ -79,46 +79,6 @@ fun SleepTimesScreen(modifier: Modifier) {
             )
 
             Panel {
-            SectionTitle(text = "Recent entries")
-            if (entries.isEmpty()) {
-                AppText(
-                    text = "No entries found.",
-                    style = AppTheme.typography.label,
-                    color = AppTheme.colors.muted
-                )
-            } else {
-                entries.forEach { entry ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        AppText(
-                            text = "${entry.date} | ${entry.child} | ${entry.time} | ${entry.status}",
-                            style = AppTheme.typography.bodySmall,
-                            color = AppTheme.colors.text,
-                            modifier = Modifier.weight(1f)
-                        )
-                        CompactButton(
-                            text = "Delete",
-                            background = AppTheme.colors.danger,
-                            border = AppTheme.colors.danger,
-                            textColor = AppTheme.colors.text,
-                            onClick = {
-                                scope.launch {
-                                    try {
-                                        val response = ApiClient.deleteSleepEntry(entry.line)
-                                        message = response.message
-                                        refresh()
-                                    } catch (exc: Exception) {
-                                        message = "Delete failed: ${exc.message}"
-                                    }
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-            CompactDivider()
             SectionTitle(text = "Log")
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -238,6 +198,46 @@ fun SleepTimesScreen(modifier: Modifier) {
                 )
             }
             StatusMessage(text = message)
+            CompactDivider()
+            SectionTitle(text = "Recent entries")
+            if (entries.isEmpty()) {
+                AppText(
+                    text = "No entries found.",
+                    style = AppTheme.typography.label,
+                    color = AppTheme.colors.muted
+                )
+            } else {
+                entries.forEach { entry ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        AppText(
+                            text = "${entry.date} | ${entry.child} | ${entry.time} | ${entry.status}",
+                            style = AppTheme.typography.bodySmall,
+                            color = AppTheme.colors.text,
+                            modifier = Modifier.weight(1f)
+                        )
+                        CompactButton(
+                            text = "Delete",
+                            background = AppTheme.colors.danger,
+                            border = AppTheme.colors.danger,
+                            textColor = AppTheme.colors.text,
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val response = ApiClient.deleteSleepEntry(entry.line)
+                                        message = response.message
+                                        refresh()
+                                    } catch (exc: Exception) {
+                                        message = "Delete failed: ${exc.message}"
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
         }
         }
     }

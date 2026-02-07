@@ -14,11 +14,9 @@ appId: com.bartmann.noteseditor
 - takeScreenshot: "claude-02-chat-interface"
 
 # Input a message (but don't send to avoid API calls)
-- tapOn:
-    hint: "Message"
+- tapOn: "Message"
 - inputText: "Hello Claude"
 - takeScreenshot: "claude-03-message-typed"
 
-# Clear the input
-- clearText
-- takeScreenshot: "claude-04-input-cleared"
+# Keep input state visible for compatibility with older Maestro versions
+- takeScreenshot: "claude-04-message-still-typed"
