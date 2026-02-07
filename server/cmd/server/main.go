@@ -27,7 +27,7 @@ func main() {
 
 	// Create HTTP server
 	httpServer := &http.Server{
-		Addr:         ":8080",
+		Addr:         cfg.ServerAddr,
 		Handler:      router,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 0, // Disable for streaming
@@ -36,7 +36,7 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("Server starting on :8080")
+		log.Printf("Server starting on %s", cfg.ServerAddr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}

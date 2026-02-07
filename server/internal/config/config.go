@@ -18,6 +18,8 @@ type Config struct {
 	AnthropicKey string
 	// StaticDir is the directory for serving static web UI files.
 	StaticDir string
+	// ServerAddr is the HTTP listen address (e.g., :80, :8080).
+	ServerAddr string
 	// LinkedIn configuration for OAuth and API access.
 	LinkedIn LinkedInConfig
 }
@@ -43,6 +45,7 @@ func Load() (*Config, error) {
 		NotesRoot:    os.Getenv("NOTES_ROOT"),
 		AnthropicKey: os.Getenv("ANTHROPIC_API_KEY"),
 		StaticDir:    os.Getenv("STATIC_DIR"),
+		ServerAddr:   os.Getenv("SERVER_ADDR"),
 		LinkedIn: LinkedInConfig{
 			ClientID:     os.Getenv("LINKEDIN_CLIENT_ID"),
 			ClientSecret: os.Getenv("LINKEDIN_CLIENT_SECRET"),
@@ -65,6 +68,9 @@ func (c *Config) Validate() error {
 	}
 	if c.NotesRoot == "" {
 		return errors.New("NOTES_ROOT is required")
+	}
+	if c.ServerAddr == "" {
+		c.ServerAddr = ":80"
 	}
 	// AnthropicKey is optional - Claude features will be disabled without it
 	// LinkedIn config is optional - LinkedIn features will be disabled without it

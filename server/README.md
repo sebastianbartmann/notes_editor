@@ -24,6 +24,7 @@ Go backend server for the Notes Editor application.
 
    Optional variables:
    - `STATIC_DIR` - Path to static files (defaults to `./static`)
+   - `SERVER_ADDR` - HTTP listen address (defaults to `:80`)
    - `LINKEDIN_*` - LinkedIn OAuth credentials (for LinkedIn integration)
 
 2. **Initialize the vault**
@@ -56,7 +57,7 @@ Or using the root Makefile:
 make server
 ```
 
-The server starts on port 8080.
+The server starts on port 80 by default. For local development, set `SERVER_ADDR=:8080`.
 
 **Run tests:**
 

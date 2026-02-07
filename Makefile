@@ -11,7 +11,7 @@ help:
 	@echo "    build-web     Build React web UI"
 	@echo ""
 	@echo "  Development:"
-	@echo "    server        Run the Go server (port 8080)"
+	@echo "    server        Run the Go server (dev: port 8080)"
 	@echo "    client        Run the React dev server (port 5173)"
 	@echo ""
 	@echo "  Testing:"
@@ -61,7 +61,7 @@ build-web:
 
 # Development
 server:
-	./server/bin/server
+	SERVER_ADDR=:8080 ./server/bin/server
 
 client:
 	cd clients/web && npm run dev
@@ -119,13 +119,26 @@ debug-android:
 ANDROID_HOME ?= $(HOME)/android-sdk
 MAESTRO_FLOWS := $(PWD)/app/android/maestro/flows
 MAESTRO_SCREENSHOTS := $(PWD)/app/android/maestro/screenshots
+MAESTRO_BIN := $(shell command -v maestro 2>/dev/null)
+ifeq ($(MAESTRO_BIN),)
+MAESTRO_BIN := $(HOME)/.maestro/bin/maestro
+endif
 
 android-test-setup:
 	@echo "Installing Android testing dependencies..."
 	@command -v java >/dev/null || (echo "Installing OpenJDK 17..." && sudo apt install -y openjdk-17-jdk)
 	@./scripts/install-android-sdk.sh
 	@echo "Installing Maestro..."
-	@curl -Ls "https://get.maestro.mobile.dev" | bash || true
+	@curl -Ls "https://get.maestro.mobile.dev" | bash
+	@if command -v maestro >/dev/null 2>&1; then \
+		echo "Maestro installed at: $$(command -v maestro)"; \
+	elif [ -x "$(HOME)/.maestro/bin/maestro" ]; then \
+		echo "Maestro installed at: $(HOME)/.maestro/bin/maestro"; \
+	else \
+		echo "Maestro install did not produce an executable."; \
+		echo "Ensure maestro is on PATH or available at ~/.maestro/bin/maestro."; \
+		exit 1; \
+	fi
 	@echo "Creating AVD..."
 	@$(ANDROID_HOME)/cmdline-tools/latest/bin/avdmanager create avd \
 		-n notes_editor_test \
@@ -150,14 +163,22 @@ android-emulator-start:
 android-emulator-stop:
 	@$(ANDROID_HOME)/platform-tools/adb -s emulator-5554 emu kill 2>/dev/null || echo "No emulator running."
 
-android-test: android-emulator-start
+android-check-maestro:
+	@if [ ! -x "$(MAESTRO_BIN)" ]; then \
+		echo "Maestro executable not found."; \
+		echo "Expected either 'maestro' on PATH or $(HOME)/.maestro/bin/maestro."; \
+		echo "Run 'make android-test-setup' to install prerequisites."; \
+		exit 1; \
+	fi
+
+android-test: android-emulator-start android-check-maestro
 	@echo "Building and installing debug APK..."
 	@GRADLE_USER_HOME="$(PWD)/.gradle" \
 	$(PWD)/app/gradle-8.7/bin/gradle --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
 	@$(ANDROID_HOME)/platform-tools/adb install -r $(PWD)/app/android/app/build/outputs/apk/debug/app-debug.apk
 	@echo "Running Maestro tests..."
 	@mkdir -p $(MAESTRO_SCREENSHOTS)
-	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS) --output $(MAESTRO_SCREENSHOTS)
+	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS) --output $(MAESTRO_SCREENSHOTS)
 	@echo ""
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
@@ -166,26 +187,26 @@ android-test-report: android-test
 	@echo "=== Test Screenshots ==="
 	@ls -la $(MAESTRO_SCREENSHOTS)/*.png 2>/dev/null || echo "No screenshots generated."
 
-android-test-daily: android-emulator-start
-	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/daily-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+android-test-daily: android-emulator-start android-check-maestro
+	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/daily-screen.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
-android-test-files: android-emulator-start
-	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/files-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+android-test-files: android-emulator-start android-check-maestro
+	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/files-screen.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
-android-test-sleep: android-emulator-start
-	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/sleep-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+android-test-sleep: android-emulator-start android-check-maestro
+	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/sleep-screen.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
-android-test-claude: android-emulator-start
-	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/claude-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+android-test-claude: android-emulator-start android-check-maestro
+	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/claude-screen.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
-android-test-settings: android-emulator-start
-	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/settings-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+android-test-settings: android-emulator-start android-check-maestro
+	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/settings-screen.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
-android-test-nav: android-emulator-start
-	@~/.maestro/bin/maestro test $(MAESTRO_FLOWS)/full-navigation.yaml --output $(MAESTRO_SCREENSHOTS)
+android-test-nav: android-emulator-start android-check-maestro
+	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/full-navigation.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"

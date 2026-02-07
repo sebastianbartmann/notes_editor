@@ -8,6 +8,8 @@ User=dev
 WorkingDirectory=/home/dev/notes_editor/server
 EnvironmentFile=/home/dev/notes_editor/server/.env
 Environment="PATH=/usr/local/go/bin:/home/dev/.local/bin:/usr/local/bin:/usr/bin:/bin"
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 StandardOutput=journal
 StandardError=journal
 ExecStart=/home/dev/notes_editor/server/bin/server
