@@ -39,11 +39,13 @@ val selectableNavEntries = listOf(
 
 val fixedMoreEntry = NavEntry("more", "More", Icons.Default.MoreHoriz, Screen.Tools.route)
 
+const val maxBottomNavItems = 4
+
 val defaultBottomNavIds = listOf("daily", "files", "sleep")
 
 fun sanitizeBottomNavIds(ids: List<String>): List<String> {
     val allowed = selectableNavEntries.map { it.id }.toSet()
-    return ids.filter { it in allowed }.distinct().take(3)
+    return ids.filter { it in allowed }.distinct().take(maxBottomNavItems)
 }
 
 fun sanitizeStoredBottomNavIds(ids: List<String>): List<String> {

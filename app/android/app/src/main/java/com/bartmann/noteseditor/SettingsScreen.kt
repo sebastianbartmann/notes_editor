@@ -103,13 +103,13 @@ fun SettingsScreen(modifier: Modifier) {
             CompactDivider()
             SectionTitle(text = "Navigation")
             AppText(
-                text = "Choose up to 3 items for the footer. The rest show under More.",
+                text = "Choose up to $maxBottomNavItems items for the footer. The rest show under More.",
                 style = AppTheme.typography.bodySmall,
                 color = AppTheme.colors.muted
             )
             selectableNavEntries.forEach { item ->
                 val isSelected = selectedNavIds.contains(item.id)
-                val isBlocked = !isSelected && selectedNavIds.size >= 3
+                val isBlocked = !isSelected && selectedNavIds.size >= maxBottomNavItems
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -169,7 +169,7 @@ fun SettingsScreen(modifier: Modifier) {
                 }
             }
             AppText(
-                text = "${selectedNavIds.size} of 3 selected",
+                text = "${selectedNavIds.size} of $maxBottomNavItems selected",
                 style = AppTheme.typography.label,
                 color = AppTheme.colors.muted
             )
