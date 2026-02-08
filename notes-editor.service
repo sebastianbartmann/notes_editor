@@ -1,6 +1,8 @@
 [Unit]
 Description=Daily Notes Editor (Go Server)
 After=network.target
+After=notes-pi-gateway.service
+Requires=notes-pi-gateway.service
 
 [Service]
 Type=simple
