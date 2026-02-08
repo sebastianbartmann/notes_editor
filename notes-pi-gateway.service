@@ -14,8 +14,8 @@ Environment=PI_GATEWAY_CLAUDE_BIN=/usr/local/bin/claude
 ExecStart=/usr/bin/node /home/dev/notes_editor/pi-gateway/dist/server.js
 Restart=always
 RestartSec=3
-StandardOutput=append:/home/dev/notes_editor/pi-gateway/gateway.log
-StandardError=append:/home/dev/notes_editor/pi-gateway/gateway.err.log
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
