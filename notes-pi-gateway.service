@@ -10,7 +10,7 @@ Group=dev
 WorkingDirectory=/home/dev/notes_editor/pi-gateway
 Environment=PI_GATEWAY_PORT=4317
 Environment=PI_GATEWAY_MODE=claude_cli
-Environment=PI_GATEWAY_CLAUDE_BIN=/home/dev/.local/bin/claude
+Environment=PI_GATEWAY_CLAUDE_BIN=/usr/local/bin/claude
 ExecStart=/usr/bin/node /home/dev/notes_editor/pi-gateway/dist/server.js
 Restart=always
 RestartSec=3
