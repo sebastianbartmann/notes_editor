@@ -2,11 +2,16 @@ package linkedin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"strings"
+	"time"
 
 	"notes-editor/internal/config"
 )
@@ -17,6 +22,11 @@ type Service struct {
 	vaultRoot string
 	client    *http.Client
 }
+
+const (
+	linkedinRetryAttempts = 3
+	linkedinRetryDelay    = 300 * time.Millisecond
+)
 
 // NewService creates a new LinkedIn service.
 func NewService(cfg *config.LinkedInConfig, vaultRoot string) *Service {
@@ -34,32 +44,9 @@ func (s *Service) IsConfigured() bool {
 
 // GetPersonURN retrieves the authenticated user's URN.
 func (s *Service) GetPersonURN() (string, error) {
-	req, err := http.NewRequest("GET", "https://api.linkedin.com/v2/userinfo", nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+s.config.AccessToken)
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		Sub string `json:"sub"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return "urn:li:person:" + result.Sub, nil
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return s.getPersonURNWithRetry(ctx)
 }
 
 // CreatePost creates a new LinkedIn post.
@@ -108,7 +95,7 @@ func (s *Service) CreatePost(text, person string) (string, error) {
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		return "", mapLinkedInAPIError(resp.StatusCode, string(respBody))
 	}
 
 	var result struct {
@@ -151,7 +138,7 @@ func (s *Service) ReadComments(postURN string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		return "", mapLinkedInAPIError(resp.StatusCode, string(body))
 	}
 
 	return string(body), nil
@@ -202,7 +189,7 @@ func (s *Service) CreateComment(postURN, text, parentURN, person string) (string
 	respBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		return "", mapLinkedInAPIError(resp.StatusCode, string(respBody))
 	}
 
 	// Parse response to get comment URN
@@ -228,3 +215,85 @@ func (s *Service) CreateComment(postURN, text, parentURN, person string) (string
 	return string(respBody), nil
 }
 
+// Validate checks whether the configured access token is currently usable.
+func (s *Service) Validate(ctx context.Context) error {
+	_, err := s.getPersonURNWithRetry(ctx)
+	return err
+}
+
+func (s *Service) getPersonURNWithRetry(ctx context.Context) (string, error) {
+	var lastErr error
+
+	for attempt := 1; attempt <= linkedinRetryAttempts; attempt++ {
+		urn, retry, err := s.getPersonURNOnce(ctx)
+		if err == nil {
+			return urn, nil
+		}
+		lastErr = err
+		if !retry || attempt == linkedinRetryAttempts {
+			break
+		}
+
+		select {
+		case <-time.After(linkedinRetryDelay * time.Duration(attempt)):
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = errors.New("unknown linkedin validation failure")
+	}
+	return "", lastErr
+}
+
+func (s *Service) getPersonURNOnce(ctx context.Context) (string, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.linkedin.com/v2/userinfo", nil)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+s.config.AccessToken)
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) {
+			return "", true, fmt.Errorf("linkedin network error: %w", err)
+		}
+		return "", false, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		retry := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+		return "", retry, mapLinkedInAPIError(resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Sub string `json:"sub"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", false, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return "urn:li:person:" + result.Sub, false, nil
+}
+
+func mapLinkedInAPIError(status int, body string) error {
+	body = strings.TrimSpace(body)
+	switch status {
+	case http.StatusUnauthorized:
+		return fmt.Errorf("linkedin authentication failed (401): reconnect LinkedIn in Settings")
+	case http.StatusForbidden:
+		return fmt.Errorf("linkedin authorization failed (403): token missing required scopes or expired")
+	case http.StatusTooManyRequests:
+		return fmt.Errorf("linkedin rate limit reached (429)")
+	default:
+		if body == "" {
+			return fmt.Errorf("linkedin API error (status %d)", status)
+		}
+		return fmt.Errorf("linkedin API error (status %d): %s", status, body)
+	}
+}

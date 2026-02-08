@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"notes-editor/internal/linkedin"
 )
@@ -36,10 +38,26 @@ func (s *Server) handleLinkedInCallback(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Update runtime config
+	s.mu.Lock()
 	s.config.LinkedIn.AccessToken = tokenResp.AccessToken
-
-	// Reinitialize LinkedIn service
-	s.linkedin = linkedin.NewService(&s.config.LinkedIn, s.config.NotesRoot)
+	s.mu.Unlock()
+	if err := s.reloadRuntimeServices(); err != nil {
+		writeBadRequest(w, "Token saved but runtime reload failed: "+err.Error())
+		return
+	}
 
 	writeSuccess(w, "LinkedIn connected successfully")
+}
+
+// handleLinkedInHealth reports LinkedIn runtime health and token status.
+func (s *Server) handleLinkedInHealth(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requirePerson(w, r); !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	defer cancel()
+
+	health := s.linkedinHealth(ctx)
+	writeJSON(w, http.StatusOK, health)
 }

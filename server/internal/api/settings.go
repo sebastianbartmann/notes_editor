@@ -47,6 +47,10 @@ func (s *Server) handleSetEnv(w http.ResponseWriter, r *http.Request) {
 		writeBadRequest(w, err.Error())
 		return
 	}
+	if err := s.reloadRuntimeServices(); err != nil {
+		writeBadRequest(w, "Settings saved but reload failed: "+err.Error())
+		return
+	}
 
 	writeSuccess(w, "Settings saved")
 }

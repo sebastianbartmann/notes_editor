@@ -1,4 +1,4 @@
-.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd build-android install-android deploy-android debug-android build build-server build-web lint clean android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-settings android-test-nav
+.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd build-android install-android deploy-android debug-android build build-server build-web lint clean build-pi-gateway run-pi-gateway android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-settings android-test-nav
 
 .DEFAULT_GOAL := help
 
@@ -13,6 +13,7 @@ help:
 	@echo "  Development:"
 	@echo "    server        Run the Go server (dev: port 8080)"
 	@echo "    client        Run the React dev server (port 5173)"
+	@echo "    run-pi-gateway Build and run Pi gateway sidecar"
 	@echo ""
 	@echo "  Testing:"
 	@echo "    test          Run all tests"
@@ -24,6 +25,7 @@ help:
 	@echo ""
 	@echo "  Setup:"
 	@echo "    install-client  Install React client dependencies"
+	@echo "    build-pi-gateway Install deps and build Pi gateway sidecar"
 	@echo ""
 	@echo "  Deployment:"
 	@echo "    install-systemd Install/update systemd service"
@@ -86,6 +88,12 @@ lint:
 
 clean:
 	rm -rf server/bin server/static server/coverage.out server/coverage.html
+
+build-pi-gateway:
+	cd pi-gateway && npm install && npm run build
+
+run-pi-gateway: build-pi-gateway
+	cd pi-gateway && npm start
 
 # Setup
 install-client:

@@ -283,3 +283,20 @@ func TestRecovererMiddleware(t *testing.T) {
 		t.Errorf("error detail = %q, want %q", errResp.Detail, "Internal server error")
 	}
 }
+
+func TestLoggingMiddlewarePreservesFlusher(t *testing.T) {
+	handler := LoggingMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := w.(http.Flusher); !ok {
+			t.Fatal("response writer does not implement http.Flusher")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}

@@ -1,0 +1,319 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+
+	"notes-editor/internal/agent"
+)
+
+// StopRunRequest is the request body for stopping an active agent run.
+type StopRunRequest struct {
+	RunID string `json:"run_id"`
+}
+
+// AgentActionRunRequest controls action execution behavior.
+type AgentActionRunRequest struct {
+	SessionID string `json:"session_id,omitempty"`
+	Message   string `json:"message,omitempty"`
+	Confirm   bool   `json:"confirm,omitempty"`
+}
+
+// handleAgentChat handles non-streaming agent chat requests.
+func (s *Server) handleAgentChat(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	var req agent.ChatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "Invalid request body")
+		return
+	}
+	if req.Message == "" && req.ActionID == "" {
+		writeBadRequest(w, "Message or action_id is required")
+		return
+	}
+
+	resp, err := agentSvc.Chat(person, req)
+	if err != nil {
+		if errors.Is(err, agent.ErrSessionBusy) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBadRequest(w, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleAgentChatStream handles streaming chat requests with NDJSON v2 events.
+func (s *Server) handleAgentChatStream(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	var req agent.ChatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "Invalid request body")
+		return
+	}
+	if req.Message == "" && req.ActionID == "" {
+		writeBadRequest(w, "Message or action_id is required")
+		return
+	}
+
+	run, err := agentSvc.ChatStream(r.Context(), person, req)
+	if err != nil {
+		if errors.Is(err, agent.ErrSessionBusy) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBadRequest(w, err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Transfer-Encoding", "chunked")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeBadRequest(w, "Streaming not supported")
+		return
+	}
+
+	for event := range run.Events {
+		data, err := json.Marshal(event)
+		if err != nil {
+			continue
+		}
+		_, _ = w.Write(data)
+		_, _ = w.Write([]byte("\n"))
+		flusher.Flush()
+	}
+}
+
+// handleAgentSessionClear clears a chat session.
+func (s *Server) handleAgentSessionClear(w http.ResponseWriter, r *http.Request) {
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	var req ClearSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "Invalid request body")
+		return
+	}
+	if req.SessionID == "" {
+		writeBadRequest(w, "Session ID is required")
+		return
+	}
+
+	if err := agentSvc.ClearSession(req.SessionID); err != nil {
+		writeBadRequest(w, err.Error())
+		return
+	}
+	writeSuccess(w, "Session cleared")
+}
+
+// handleAgentSessionHistory returns session history.
+func (s *Server) handleAgentSessionHistory(w http.ResponseWriter, r *http.Request) {
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID == "" {
+		writeBadRequest(w, "Session ID is required")
+		return
+	}
+
+	history, err := agentSvc.GetHistory(sessionID)
+	if err != nil {
+		writeBadRequest(w, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"messages": history,
+	})
+}
+
+// handleAgentStopRun stops an active streaming run.
+func (s *Server) handleAgentStopRun(w http.ResponseWriter, r *http.Request) {
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	var req StopRunRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "Invalid request body")
+		return
+	}
+	if req.RunID == "" {
+		writeBadRequest(w, "Run ID is required")
+		return
+	}
+
+	if !agentSvc.StopRun(req.RunID) {
+		writeNotFound(w, "Run not found")
+		return
+	}
+
+	writeSuccess(w, "Run stopped")
+}
+
+// handleAgentConfigGet returns per-person agent config including prompt content.
+func (s *Server) handleAgentConfigGet(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	cfg, err := agentSvc.GetConfig(person)
+	if err != nil {
+		writeBadRequest(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+// handleAgentConfigSave updates per-person agent config.
+func (s *Server) handleAgentConfigSave(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	var req agent.ConfigUpdate
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "Invalid request body")
+		return
+	}
+
+	cfg, err := agentSvc.SaveConfig(person, req)
+	if err != nil {
+		writeBadRequest(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+// handleAgentActionsList returns file-backed prompt actions for the active person.
+func (s *Server) handleAgentActionsList(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	actions, err := agentSvc.ListActions(person)
+	if err != nil {
+		writeBadRequest(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"actions": actions,
+	})
+}
+
+// handleAgentActionRun executes one action by ID as a chat request.
+func (s *Server) handleAgentActionRun(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeBadRequest(w, "Action ID is required")
+		return
+	}
+
+	var req AgentActionRunRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err == io.EOF {
+			req = AgentActionRunRequest{}
+		} else {
+			writeBadRequest(w, "Invalid request body")
+			return
+		}
+	}
+
+	resp, err := agentSvc.Chat(person, agent.ChatRequest{
+		SessionID: req.SessionID,
+		ActionID:  id,
+		Message:   req.Message,
+		Confirm:   req.Confirm,
+	})
+	if err != nil {
+		if errors.Is(err, agent.ErrSessionBusy) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBadRequest(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleAgentGatewayHealth reports gateway runtime health.
+func (s *Server) handleAgentGatewayHealth(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requirePerson(w, r); !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+	defer cancel()
+
+	health := s.gatewayHealth(ctx)
+	writeJSON(w, http.StatusOK, health)
+}

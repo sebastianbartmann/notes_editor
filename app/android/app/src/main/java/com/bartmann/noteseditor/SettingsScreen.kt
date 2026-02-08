@@ -37,6 +37,10 @@ fun SettingsScreen(modifier: Modifier) {
     var envContent by remember { mutableStateOf("") }
     var envStatus by remember { mutableStateOf("") }
     var isSavingEnv by remember { mutableStateOf(false) }
+    var runtimeMode by remember { mutableStateOf("gateway_subscription") }
+    var agentPrompt by remember { mutableStateOf("") }
+    var agentStatus by remember { mutableStateOf("") }
+    var isSavingAgent by remember { mutableStateOf(false) }
     var navStatus by remember { mutableStateOf("") }
     val selectedNavIds = UserSettings.bottomNavIds
 
@@ -60,6 +64,19 @@ fun SettingsScreen(modifier: Modifier) {
             envStatus = "Failed to load .env: ${exc.message}"
         }
     }
+
+    LaunchedEffect(currentPerson) {
+        if (currentPerson == null) return@LaunchedEffect
+        try {
+            val config = ApiClient.fetchAgentConfig()
+            runtimeMode = config.runtimeMode
+            agentPrompt = config.prompt
+            agentStatus = ""
+        } catch (exc: Exception) {
+            agentStatus = "Failed to load agent config: ${exc.message}"
+        }
+    }
+
     ScreenLayout(modifier = modifier) {
         ScreenHeader(title = "Settings")
 
@@ -99,6 +116,62 @@ fun SettingsScreen(modifier: Modifier) {
             ) {
                 ThemeButton(label = "Dark", value = "dark")
                 ThemeButton(label = "Light", value = "light")
+            }
+            CompactDivider()
+            SectionTitle(text = "Agent")
+            AppText(
+                text = "Per-person runtime mode and system prompt (agents.md).",
+                style = AppTheme.typography.bodySmall,
+                color = AppTheme.colors.muted
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RuntimeModeButton(
+                    label = "Anthropic",
+                    value = "anthropic_api_key",
+                    runtimeMode = runtimeMode,
+                    onSelect = { runtimeMode = "anthropic_api_key" }
+                )
+                RuntimeModeButton(
+                    label = "Gateway (Claude CLI)",
+                    value = "gateway_subscription",
+                    runtimeMode = runtimeMode,
+                    onSelect = { runtimeMode = "gateway_subscription" }
+                )
+            }
+            CompactTextField(
+                value = agentPrompt,
+                onValueChange = { agentPrompt = it },
+                placeholder = "Enter agents.md prompt...",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+                minLines = 6
+            )
+            CompactButton(
+                text = if (isSavingAgent) "Saving..." else "Save agent",
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    if (isSavingAgent || currentPerson == null) return@CompactButton
+                    isSavingAgent = true
+                    agentStatus = ""
+                    scope.launch {
+                        try {
+                            ApiClient.saveAgentConfig(runtimeMode, agentPrompt)
+                            agentStatus = "Saved agent settings"
+                        } catch (exc: Exception) {
+                            agentStatus = "Save failed: ${exc.message}"
+                        } finally {
+                            isSavingAgent = false
+                        }
+                    }
+                }
+            )
+            if (agentStatus.isNotBlank()) {
+                StatusMessage(text = agentStatus, showDivider = false)
             }
             CompactDivider()
             SectionTitle(text = "Navigation")
@@ -248,5 +321,23 @@ private fun RowScope.ThemeButton(label: String, value: String) {
         border = if (selected) AppTheme.colors.accent else AppTheme.colors.panelBorder,
         textColor = AppTheme.colors.text,
         onClick = { UserSettings.updateTheme(value) }
+    )
+}
+
+@Composable
+private fun RowScope.RuntimeModeButton(
+    label: String,
+    value: String,
+    runtimeMode: String,
+    onSelect: () -> Unit
+) {
+    val selected = runtimeMode == value
+    CompactButton(
+        text = label,
+        modifier = Modifier.weight(1f),
+        background = if (selected) AppTheme.colors.accentDim else AppTheme.colors.input,
+        border = if (selected) AppTheme.colors.accent else AppTheme.colors.panelBorder,
+        textColor = AppTheme.colors.text,
+        onClick = onSelect
     )
 }

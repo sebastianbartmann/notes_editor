@@ -2,9 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
-	"notes-editor/internal/claude"
+	"notes-editor/internal/agent"
 )
 
 // handleClaudeChat handles non-streaming chat requests.
@@ -14,12 +15,13 @@ func (s *Server) handleClaudeChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.claude == nil {
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
 		writeBadRequest(w, "Claude service not configured")
 		return
 	}
 
-	var req claude.ChatRequest
+	var req agent.ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeBadRequest(w, "Invalid request body")
 		return
@@ -30,13 +32,20 @@ func (s *Server) handleClaudeChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := s.claude.Chat(person, req)
+	resp, err := agentSvc.Chat(person, req)
 	if err != nil {
+		if errors.Is(err, agent.ErrSessionBusy) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
 		writeBadRequest(w, err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"response":   resp.Response,
+		"session_id": resp.SessionID,
+	})
 }
 
 // handleClaudeChatStream handles streaming chat requests with NDJSON response.
@@ -46,12 +55,13 @@ func (s *Server) handleClaudeChatStream(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if s.claude == nil {
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
 		writeBadRequest(w, "Claude service not configured")
 		return
 	}
 
-	var req claude.ChatRequest
+	var req agent.ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeBadRequest(w, "Invalid request body")
 		return
@@ -59,6 +69,16 @@ func (s *Server) handleClaudeChatStream(w http.ResponseWriter, r *http.Request) 
 
 	if req.Message == "" {
 		writeBadRequest(w, "Message is required")
+		return
+	}
+
+	run, err := agentSvc.ChatStream(r.Context(), person, req)
+	if err != nil {
+		if errors.Is(err, agent.ErrSessionBusy) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeBadRequest(w, err.Error())
 		return
 	}
 
@@ -74,15 +94,8 @@ func (s *Server) handleClaudeChatStream(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	events, err := s.claude.ChatStream(person, req)
-	if err != nil {
-		writeStreamError(w, err.Error())
-		flusher.Flush()
-		return
-	}
-
-	for event := range events {
-		data, err := json.Marshal(event)
+	for event := range run.Events {
+		data, err := json.Marshal(mapToLegacyStreamEvent(event))
 		if err != nil {
 			continue
 		}
@@ -99,7 +112,8 @@ type ClearSessionRequest struct {
 
 // handleClaudeClear clears a chat session.
 func (s *Server) handleClaudeClear(w http.ResponseWriter, r *http.Request) {
-	if s.claude == nil {
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
 		writeBadRequest(w, "Claude service not configured")
 		return
 	}
@@ -115,13 +129,17 @@ func (s *Server) handleClaudeClear(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.claude.Sessions().Clear(req.SessionID)
+	if err := agentSvc.ClearSession(req.SessionID); err != nil {
+		writeBadRequest(w, err.Error())
+		return
+	}
 	writeSuccess(w, "Session cleared")
 }
 
 // handleClaudeHistory returns the message history for a session.
 func (s *Server) handleClaudeHistory(w http.ResponseWriter, r *http.Request) {
-	if s.claude == nil {
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
 		writeBadRequest(w, "Claude service not configured")
 		return
 	}
@@ -132,12 +150,52 @@ func (s *Server) handleClaudeHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	history := s.claude.Sessions().GetHistory(sessionID)
-	if history == nil {
-		history = []claude.ChatMessage{}
+	history, err := agentSvc.GetHistory(sessionID)
+	if err != nil {
+		writeBadRequest(w, err.Error())
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"messages": history,
 	})
+}
+
+func mapToLegacyStreamEvent(event agent.StreamEvent) map[string]any {
+	switch event.Type {
+	case "start":
+		return map[string]any{
+			"type":       "session",
+			"session_id": event.SessionID,
+		}
+	case "tool_call":
+		return map[string]any{
+			"type":  "tool_use",
+			"name":  event.Tool,
+			"input": event.Args,
+		}
+	case "tool_result":
+		msg := event.Summary
+		if msg == "" {
+			msg = "Tool executed"
+		}
+		return map[string]any{
+			"type":    "status",
+			"message": msg,
+		}
+	default:
+		out := map[string]any{
+			"type": event.Type,
+		}
+		if event.Delta != "" {
+			out["delta"] = event.Delta
+		}
+		if event.SessionID != "" {
+			out["session_id"] = event.SessionID
+		}
+		if event.Message != "" {
+			out["message"] = event.Message
+		}
+		return out
+	}
 }

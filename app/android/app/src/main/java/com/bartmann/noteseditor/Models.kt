@@ -85,6 +85,53 @@ data class ClaudeStreamEvent(
     val message: String? = null
 )
 
+@Serializable
+data class AgentStreamEvent(
+    val type: String,
+    @SerialName("session_id")
+    val sessionId: String? = null,
+    @SerialName("run_id")
+    val runId: String? = null,
+    val delta: String? = null,
+    val tool: String? = null,
+    val args: JsonElement? = null,
+    val ok: Boolean? = null,
+    val summary: String? = null,
+    val message: String? = null
+)
+
+@Serializable
+data class AgentConfig(
+    @SerialName("runtime_mode")
+    val runtimeMode: String = "gateway_subscription",
+    @SerialName("prompt_path")
+    val promptPath: String = "agents.md",
+    @SerialName("actions_path")
+    val actionsPath: String = "agent/actions",
+    val prompt: String = ""
+)
+
+@Serializable
+data class AgentActionMetadata(
+    @SerialName("requires_confirmation")
+    val requiresConfirmation: Boolean = false,
+    @SerialName("max_steps")
+    val maxSteps: Int? = null
+)
+
+@Serializable
+data class AgentAction(
+    val id: String,
+    val label: String,
+    val path: String,
+    val metadata: AgentActionMetadata
+)
+
+@Serializable
+data class AgentActionsResponse(
+    val actions: List<AgentAction> = emptyList()
+)
+
 // Request models for JSON serialization
 
 @Serializable
@@ -156,6 +203,23 @@ data class ClaudeChatRequest(
     val message: String,
     @SerialName("session_id")
     val sessionId: String? = null
+)
+
+@Serializable
+data class AgentChatRequest(
+    val message: String,
+    @SerialName("session_id")
+    val sessionId: String? = null,
+    @SerialName("action_id")
+    val actionId: String? = null,
+    val confirm: Boolean? = null
+)
+
+@Serializable
+data class AgentConfigUpdateRequest(
+    @SerialName("runtime_mode")
+    val runtimeMode: String? = null,
+    val prompt: String? = null
 )
 
 @Serializable

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { usePerson } from '../hooks/usePerson'
-import { chatStream, clearSession } from '../api/claude'
-import type { ChatMessage, StreamEvent } from '../api/types'
+import { agentChatStream, clearAgentSession, listAgentActions } from '../api/agent'
+import type { AgentAction, AgentChatRequest, AgentStreamEvent, ChatMessage } from '../api/types'
 import styles from './ClaudePage.module.css'
 
 export default function ClaudePage() {
@@ -13,30 +13,45 @@ export default function ClaudePage() {
   const [streamingText, setStreamingText] = useState('')
   const [toolStatus, setToolStatus] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [actions, setActions] = useState<AgentAction[]>([])
+  const [actionsError, setActionsError] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingText])
 
+  useEffect(() => {
+    if (!person) return
+    listAgentActions()
+      .then(setActions)
+      .catch(err => setActionsError(err instanceof Error ? err.message : 'Failed to load actions'))
+  }, [person])
+
   const handleSend = async () => {
     if (!input.trim() || isStreaming) return
-
     const userMessage = input.trim()
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }])
+    await runStream(
+      { message: userMessage, session_id: sessionId || undefined },
+      userMessage
+    )
+  }
+
+  const runStream = async (request: AgentChatRequest, userBubble?: string) => {
+    if (isStreaming) return
+
+    if (userBubble) {
+      setMessages(prev => [...prev, { role: 'user', content: userBubble }])
+    }
     setIsStreaming(true)
     setStreamingText('')
     setToolStatus(null)
     setError('')
 
     let fullResponse = ''
-
     try {
-      for await (const event of chatStream({
-        message: userMessage,
-        session_id: sessionId || undefined,
-      })) {
+      for await (const event of agentChatStream(request)) {
         handleStreamEvent(event, (text) => {
           fullResponse += text
           setStreamingText(fullResponse)
@@ -55,30 +70,56 @@ export default function ClaudePage() {
     }
   }
 
+  const handleActionRun = async (action: AgentAction) => {
+    if (isStreaming) return
+    if (action.metadata.requires_confirmation) {
+      const ok = window.confirm(`Run action "${action.label}"?`)
+      if (!ok) return
+    }
+    await runStream(
+      {
+        message: '',
+        action_id: action.id,
+        session_id: sessionId || undefined,
+        confirm: action.metadata.requires_confirmation || undefined,
+      },
+      `Run action: ${action.label}`
+    )
+  }
+
   const handleStreamEvent = (
-    event: StreamEvent,
+    event: AgentStreamEvent,
     onText: (text: string) => void
   ) => {
     switch (event.type) {
+      case 'start':
+        if (event.session_id) {
+          setSessionId(event.session_id)
+        }
+        break
       case 'text':
         if (event.delta) {
           onText(event.delta)
         }
         break
-      case 'session':
-        if (event.session_id) {
-          setSessionId(event.session_id)
+      case 'tool_call':
+        if (event.tool) {
+          setToolStatus(`Using ${event.tool}...`)
         }
         break
-      case 'tool_use':
-        if (event.name) {
-          setToolStatus(`Using ${event.name}...`)
+      case 'tool_result':
+        if (event.summary) {
+          setToolStatus(event.summary)
+        } else if (event.tool) {
+          setToolStatus(`Tool ${event.tool} finished`)
         }
+        break
+      case 'status':
+        setToolStatus(event.message || null)
         break
       case 'error':
         setError(event.message || 'Stream error')
         break
-      case 'ping':
       case 'done':
         // Ignore
         break
@@ -88,7 +129,7 @@ export default function ClaudePage() {
   const handleClear = async () => {
     if (sessionId) {
       try {
-        await clearSession({ session_id: sessionId })
+        await clearAgentSession(sessionId)
       } catch {
         // Ignore clear errors
       }
@@ -122,6 +163,21 @@ export default function ClaudePage() {
           Clear
         </button>
       </div>
+
+      <div className={styles.actionsRow}>
+        {actions.map(action => (
+          <button
+            key={action.id}
+            className={styles.actionButton}
+            onClick={() => handleActionRun(action)}
+            disabled={isStreaming}
+            title={action.metadata.requires_confirmation ? 'Requires confirmation' : action.path}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+      {actionsError && <div className={styles.error}>{actionsError}</div>}
 
       <div className={styles.chat}>
         <div className={styles.messages}>

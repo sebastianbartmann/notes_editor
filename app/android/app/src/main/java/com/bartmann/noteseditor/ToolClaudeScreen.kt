@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,9 +42,13 @@ fun ToolClaudeScreen(modifier: Modifier) {
     var inputText by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("") }
+    var actions by remember { mutableStateOf<List<AgentAction>>(emptyList()) }
+    var actionsError by remember { mutableStateOf("") }
+    var pendingConfirmation by remember { mutableStateOf<AgentAction?>(null) }
     val messages = ClaudeSessionStore.messages
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val person = UserSettings.person
 
     fun sendMessage() {
         val text = inputText.trim()
@@ -58,29 +63,99 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 val assistantIndex = messages.size
                 messages.add(ChatMessage(role = "assistant", content = ""))
                 var assistantText = ""
-                ApiClient.claudeChatStream(text, ClaudeSessionStore.sessionId).collect { event ->
+                ApiClient.agentChatStream(text, ClaudeSessionStore.sessionId).collect { event ->
                     when (event.type) {
+                        "start" -> {
+                            if (!event.sessionId.isNullOrBlank()) {
+                                ClaudeSessionStore.sessionId = event.sessionId
+                            }
+                        }
                         "text" -> {
                             assistantText += event.delta.orEmpty()
                             messages[assistantIndex] = ChatMessage(role = "assistant", content = assistantText)
                         }
-                        "status" -> {
-                            statusMessage = event.message ?: "Working..."
-                        }
-                        "tool" -> {
-                            val url = event.input
+                        "tool_call" -> {
+                            val url = event.args
                                 ?.jsonObject
                                 ?.get("url")
                                 ?.jsonPrimitive
                                 ?.contentOrNull
                             statusMessage = if (url != null) {
-                                "Tool: ${event.name} $url"
+                                "Tool: ${event.tool} $url"
                             } else {
-                                "Tool: ${event.name ?: "working"}"
+                                "Tool: ${event.tool ?: "working"}"
                             }
                         }
-                        "ping" -> {
-                            // Keep-alive event; no UI update.
+                        "tool_result" -> {
+                            statusMessage = event.summary
+                                ?: "Tool ${event.tool ?: "unknown"} finished"
+                        }
+                        "status" -> {
+                            statusMessage = event.message ?: "Working..."
+                        }
+                        "done" -> {
+                            if (!event.sessionId.isNullOrBlank()) {
+                                ClaudeSessionStore.sessionId = event.sessionId
+                            }
+                            statusMessage = ""
+                        }
+                        "error" -> {
+                            statusMessage = "Error: ${event.message}"
+                        }
+                    }
+                }
+            } catch (exc: Exception) {
+                statusMessage = "Error: ${exc.message}"
+            } finally {
+                isLoading = false
+                if (!statusMessage.startsWith("Error")) {
+                    statusMessage = ""
+                }
+            }
+        }
+    }
+
+    fun runAction(action: AgentAction) {
+        if (isLoading) return
+        if (action.metadata.requiresConfirmation && pendingConfirmation?.id != action.id) {
+            pendingConfirmation = action
+            statusMessage = "Confirm action: ${action.label}"
+            return
+        }
+        pendingConfirmation = null
+        isLoading = true
+        statusMessage = "Running ${action.label}..."
+        messages.add(ChatMessage(role = "user", content = "Run action: ${action.label}"))
+
+        scope.launch {
+            try {
+                val assistantIndex = messages.size
+                messages.add(ChatMessage(role = "assistant", content = ""))
+                var assistantText = ""
+                ApiClient.agentChatStream(
+                    message = "",
+                    sessionId = ClaudeSessionStore.sessionId,
+                    actionId = action.id,
+                    confirm = action.metadata.requiresConfirmation
+                ).collect { event ->
+                    when (event.type) {
+                        "start" -> {
+                            if (!event.sessionId.isNullOrBlank()) {
+                                ClaudeSessionStore.sessionId = event.sessionId
+                            }
+                        }
+                        "text" -> {
+                            assistantText += event.delta.orEmpty()
+                            messages[assistantIndex] = ChatMessage(role = "assistant", content = assistantText)
+                        }
+                        "tool_call" -> {
+                            statusMessage = "Tool: ${event.tool ?: "working"}"
+                        }
+                        "tool_result" -> {
+                            statusMessage = event.summary ?: "Tool finished"
+                        }
+                        "status" -> {
+                            statusMessage = event.message ?: "Working..."
                         }
                         "done" -> {
                             if (!event.sessionId.isNullOrBlank()) {
@@ -108,9 +183,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
         scope.launch {
             val currentSessionId = ClaudeSessionStore.sessionId
             if (currentSessionId != null) {
-                ApiClient.claudeClear(currentSessionId)
+                ApiClient.clearAgentSession(currentSessionId)
             }
             ClaudeSessionStore.clear()
+            pendingConfirmation = null
             statusMessage = ""
         }
     }
@@ -121,9 +197,20 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
     }
 
+    LaunchedEffect(person) {
+        if (person == null) return@LaunchedEffect
+        try {
+            actions = ApiClient.listAgentActions()
+            actionsError = ""
+        } catch (exc: Exception) {
+            actions = emptyList()
+            actionsError = "Failed to load actions: ${exc.message}"
+        }
+    }
+
     ScreenLayout(modifier = modifier) {
         ScreenHeader(
-            title = "Claude",
+            title = "Agent",
             actionButton = {
                 IconButton(onClick = ::clearChat) {
                     Icon(
@@ -134,6 +221,45 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 }
             }
         )
+
+        if (actions.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(actions) { action ->
+                    CompactButton(
+                        text = if (action.metadata.requiresConfirmation) "${action.label} *" else action.label,
+                        onClick = { runAction(action) }
+                    )
+                }
+            }
+        } else if (actionsError.isNotBlank()) {
+            StatusMessage(text = actionsError, showDivider = false)
+        }
+        if (pendingConfirmation != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CompactButton(
+                    text = "Confirm: ${pendingConfirmation?.label}",
+                    modifier = Modifier.weight(1f),
+                    background = AppTheme.colors.accentDim,
+                    border = AppTheme.colors.accent,
+                    onClick = { pendingConfirmation?.let { runAction(it) } }
+                )
+                CompactButton(
+                    text = "Cancel",
+                    modifier = Modifier.width(96.dp),
+                    onClick = {
+                        pendingConfirmation = null
+                        statusMessage = ""
+                    }
+                )
+            }
+        }
 
         Panel(modifier = Modifier.weight(1f)) {
             LazyColumn(
@@ -161,7 +287,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 CompactTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
-                    placeholder = "Ask Claude...",
+                    placeholder = "Ask Agent...",
                     modifier = Modifier.weight(1f),
                     minLines = 2
                 )
@@ -200,7 +326,7 @@ private fun ChatBubble(message: ChatMessage) {
                 .padding(10.dp)
         ) {
             AppText(
-                text = if (isUser) "You" else "Claude",
+                text = if (isUser) "You" else "Agent",
                 style = AppTheme.typography.label,
                 color = AppTheme.colors.muted
             )

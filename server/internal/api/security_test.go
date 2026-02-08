@@ -257,8 +257,19 @@ func TestAuthenticationRequired(t *testing.T) {
 		{"POST", "/api/claude/chat-stream", `{"message":"hi"}`},
 		{"POST", "/api/claude/clear", `{"session_id":"abc"}`},
 		{"GET", "/api/claude/history?session_id=abc", ""},
+		{"POST", "/api/agent/chat", `{"message":"hi"}`},
+		{"POST", "/api/agent/chat-stream", `{"message":"hi"}`},
+		{"POST", "/api/agent/session/clear", `{"session_id":"abc"}`},
+		{"GET", "/api/agent/session/history?session_id=abc", ""},
+		{"POST", "/api/agent/stop", `{"run_id":"abc"}`},
+		{"GET", "/api/agent/config", ""},
+		{"POST", "/api/agent/config", `{"runtime_mode":"anthropic_api_key"}`},
+		{"GET", "/api/agent/actions", ""},
+		{"POST", "/api/agent/actions/test/run", `{}`},
+		{"GET", "/api/agent/gateway/health", ""},
 		{"GET", "/api/settings/env", ""},
 		{"POST", "/api/settings/env", `{"content":"KEY=value"}`},
+		{"GET", "/api/linkedin/health", ""},
 	}
 
 	for _, ep := range endpoints {
@@ -359,6 +370,14 @@ func TestPersonRequiredForProtectedEndpoints(t *testing.T) {
 		{"POST", "/api/files/create", `{"path":"test.md"}`},
 		{"POST", "/api/files/save", `{"path":"test.md","content":"test"}`},
 		{"POST", "/api/files/delete", `{"path":"test.md"}`},
+		{"POST", "/api/agent/chat", `{"message":"hi"}`},
+		{"POST", "/api/agent/chat-stream", `{"message":"hi"}`},
+		{"GET", "/api/agent/config", ""},
+		{"POST", "/api/agent/config", `{"runtime_mode":"anthropic_api_key"}`},
+		{"GET", "/api/agent/actions", ""},
+		{"POST", "/api/agent/actions/test/run", `{}`},
+		{"GET", "/api/agent/gateway/health", ""},
+		{"GET", "/api/linkedin/health", ""},
 	}
 
 	for _, ep := range personRequiredEndpoints {

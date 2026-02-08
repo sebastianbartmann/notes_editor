@@ -39,7 +39,7 @@ sealed class Screen(val route: String, val label: String) {
     data object Sleep : Screen("sleep", "Sleep")
     data object Tools : Screen("tools", "More")
     data object Settings : Screen("settings", "Settings")
-    data object ToolClaude : Screen("tool-claude", "Claude")
+    data object ToolClaude : Screen("tool-agent", "Agent")
     data object ToolNoise : Screen("tool-noise", "Noise")
     data object ToolNotifications : Screen("tool-notifications", "Notifications")
 }

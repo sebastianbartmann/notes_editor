@@ -24,7 +24,7 @@ val selectableNavEntries = listOf(
     NavEntry("daily", "Daily", Icons.Default.CalendarToday, Screen.Daily.route),
     NavEntry("files", "Files", Icons.Default.Folder, Screen.Files.route),
     NavEntry("sleep", "Sleep", Icons.Default.NightsStay, Screen.Sleep.route),
-    NavEntry("claude", "Claude", Icons.AutoMirrored.Filled.Chat, Screen.ToolClaude.route),
+    NavEntry("claude", "Agent", Icons.AutoMirrored.Filled.Chat, Screen.ToolClaude.route),
     NavEntry("noise", "Noise", Icons.AutoMirrored.Filled.VolumeUp, Screen.ToolNoise.route),
     NavEntry("notifications", "Notifications", Icons.Default.Notifications, Screen.ToolNotifications.route),
     NavEntry("settings", "Settings", Icons.Default.Settings, Screen.Settings.route),

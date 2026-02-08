@@ -52,9 +52,10 @@ object ApiClient {
         throw (lastError ?: IOException("No reachable servers"))
     }
 
-    private fun executeStream(
-        buildRequest: (String) -> Request
-    ): Flow<ClaudeStreamEvent> = channelFlow {
+    private fun <T> executeStream(
+        buildRequest: (String) -> Request,
+        parseLine: (String) -> T
+    ): Flow<T> = channelFlow {
         val job = launch(Dispatchers.IO) {
             var lastError: IOException? = null
             for (baseUrl in baseUrls) {
@@ -85,7 +86,7 @@ object ApiClient {
                     while (!source.exhausted()) {
                         val line = source.readUtf8Line() ?: break
                         if (line.isBlank()) continue
-                        val event = json.decodeFromString<ClaudeStreamEvent>(line)
+                        val event = parseLine(line)
                         send(event)
                     }
                 } catch (exc: Exception) {
@@ -127,10 +128,10 @@ object ApiClient {
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
-    private suspend inline fun <reified T, reified R> postJson(path: String, body: R): T =
+    private suspend inline fun <reified T, reified R> postJson(path: String, payload: R): T =
         executeRequest(
             buildRequest = { baseUrl ->
-                val jsonBody = json.encodeToString(body).toRequestBody(JSON_MEDIA_TYPE)
+                val jsonBody = json.encodeToString(payload).toRequestBody(JSON_MEDIA_TYPE)
                 val builder = Request.Builder()
                     .url("$baseUrl$path")
                     .header("Authorization", authHeader)
@@ -143,7 +144,7 @@ object ApiClient {
                 }
                 builder.build()
             },
-            parse = { body -> decode(body) }
+            parse = { raw -> decode(raw) }
         )
 
     suspend fun fetchDaily(): DailyNote = getJson("/api/daily")
@@ -198,7 +199,8 @@ object ApiClient {
 
     fun claudeChatStream(message: String, sessionId: String?): Flow<ClaudeStreamEvent> {
         val request = ClaudeChatRequest(message = message, sessionId = sessionId)
-        return executeStream { baseUrl ->
+        return executeStream(
+            buildRequest = { baseUrl ->
             val jsonBody = json.encodeToString(request).toRequestBody(JSON_MEDIA_TYPE)
             val builder = Request.Builder()
                 .url("$baseUrl/api/claude/chat-stream")
@@ -211,11 +213,61 @@ object ApiClient {
                 builder.header(PERSON_HEADER, person)
             }
             builder.build()
-        }
+            },
+            parseLine = { line -> json.decodeFromString<ClaudeStreamEvent>(line) }
+        )
     }
 
     suspend fun claudeClear(sessionId: String): ApiMessage =
         postJson("/api/claude/clear", ClaudeClearRequest(sessionId = sessionId))
+
+    fun agentChatStream(
+        message: String,
+        sessionId: String?,
+        actionId: String? = null,
+        confirm: Boolean = false
+    ): Flow<AgentStreamEvent> {
+        val request = AgentChatRequest(
+            message = message,
+            sessionId = sessionId,
+            actionId = actionId,
+            confirm = if (confirm) true else null
+        )
+        return executeStream(
+            buildRequest = { baseUrl ->
+                val jsonBody = json.encodeToString(request).toRequestBody(JSON_MEDIA_TYPE)
+                val builder = Request.Builder()
+                    .url("$baseUrl/api/agent/chat-stream")
+                    .header("Authorization", authHeader)
+                    .header("Accept", "application/x-ndjson")
+                    .header("Content-Type", "application/json")
+                    .post(jsonBody)
+                val person = UserSettings.person
+                if (person != null) {
+                    builder.header(PERSON_HEADER, person)
+                }
+                builder.build()
+            },
+            parseLine = { line -> json.decodeFromString<AgentStreamEvent>(line) }
+        )
+    }
+
+    suspend fun clearAgentSession(sessionId: String): ApiMessage =
+        postJson("/api/agent/session/clear", ClaudeClearRequest(sessionId = sessionId))
+
+    suspend fun fetchAgentConfig(): AgentConfig = getJson("/api/agent/config")
+
+    suspend fun saveAgentConfig(runtimeMode: String, prompt: String): AgentConfig =
+        postJson(
+            "/api/agent/config",
+            AgentConfigUpdateRequest(
+                runtimeMode = runtimeMode,
+                prompt = prompt
+            )
+        )
+
+    suspend fun listAgentActions(): List<AgentAction> =
+        getJson<AgentActionsResponse>("/api/agent/actions").actions
 
     suspend fun fetchEnv(): EnvResponse = getJson("/api/settings/env")
 

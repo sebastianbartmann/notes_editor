@@ -135,3 +135,66 @@ export interface StreamEvent {
   message?: string
 }
 
+// Agent API types
+export interface AgentChatRequest {
+  message: string
+  session_id?: string
+  action_id?: string
+  confirm?: boolean
+}
+
+export interface AgentChatResponse {
+  response: string
+  session_id: string
+  run_id: string
+}
+
+export interface AgentStreamEvent {
+  type: 'start' | 'text' | 'tool_call' | 'tool_result' | 'status' | 'error' | 'done'
+  session_id?: string
+  run_id?: string
+  delta?: string
+  tool?: string
+  args?: Record<string, unknown>
+  ok?: boolean
+  summary?: string
+  message?: string
+}
+
+export interface AgentConfig {
+  runtime_mode: string
+  prompt_path: string
+  actions_path: string
+  prompt: string
+}
+
+export interface AgentConfigUpdate {
+  runtime_mode?: string
+  prompt?: string
+}
+
+export interface AgentActionMetadata {
+  requires_confirmation: boolean
+  max_steps?: number
+}
+
+export interface AgentAction {
+  id: string
+  label: string
+  path: string
+  metadata: AgentActionMetadata
+}
+
+export interface AgentActionsResponse {
+  actions: AgentAction[]
+}
+
+export interface AgentGatewayHealth {
+  url: string
+  configured: boolean
+  reachable: boolean
+  healthy: boolean
+  mode?: string
+  last_checked?: string
+  last_error?: string
+}

@@ -5,10 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 
+	"notes-editor/internal/agent"
+	"notes-editor/internal/auth"
 	"notes-editor/internal/claude"
 	"notes-editor/internal/config"
 	"notes-editor/internal/linkedin"
@@ -17,29 +20,25 @@ import (
 
 // Server holds all dependencies for the HTTP server.
 type Server struct {
+	mu       sync.RWMutex
 	config   *config.Config
 	store    *vault.Store
 	daily    *vault.Daily
 	git      *vault.Git
 	claude   *claude.Service
+	agent    *agent.Service
 	linkedin *linkedin.Service
 }
 
 // NewServer creates a new server with all dependencies.
 func NewServer(cfg *config.Config) *Server {
+	auth.SetValidPersons(cfg.ValidPersons)
+
 	store := vault.NewStore(cfg.NotesRoot)
 	daily := vault.NewDaily(store)
 	git := vault.NewGit(cfg.NotesRoot)
 
-	var linkedinSvc *linkedin.Service
-	if cfg.LinkedIn.AccessToken != "" {
-		linkedinSvc = linkedin.NewService(&cfg.LinkedIn, cfg.NotesRoot)
-	}
-
-	var claudeSvc *claude.Service
-	if cfg.AnthropicKey != "" {
-		claudeSvc = claude.NewService(cfg.AnthropicKey, store, linkedinSvc)
-	}
+	linkedinSvc, claudeSvc, agentSvc := buildRuntimeServices(cfg, store)
 
 	return &Server{
 		config:   cfg,
@@ -47,6 +46,7 @@ func NewServer(cfg *config.Config) *Server {
 		daily:    daily,
 		git:      git,
 		claude:   claudeSvc,
+		agent:    agentSvc,
 		linkedin: linkedinSvc,
 	}
 }
@@ -100,12 +100,25 @@ func NewRouter(srv *Server) http.Handler {
 		r.Post("/claude/clear", srv.handleClaudeClear)
 		r.Get("/claude/history", srv.handleClaudeHistory)
 
+		// Agent routes
+		r.Post("/agent/chat", srv.handleAgentChat)
+		r.Post("/agent/chat-stream", srv.handleAgentChatStream)
+		r.Post("/agent/session/clear", srv.handleAgentSessionClear)
+		r.Get("/agent/session/history", srv.handleAgentSessionHistory)
+		r.Post("/agent/stop", srv.handleAgentStopRun)
+		r.Get("/agent/config", srv.handleAgentConfigGet)
+		r.Post("/agent/config", srv.handleAgentConfigSave)
+		r.Get("/agent/actions", srv.handleAgentActionsList)
+		r.Post("/agent/actions/{id}/run", srv.handleAgentActionRun)
+		r.Get("/agent/gateway/health", srv.handleAgentGatewayHealth)
+
 		// Settings routes
 		r.Get("/settings/env", srv.handleGetEnv)
 		r.Post("/settings/env", srv.handleSetEnv)
 
 		// LinkedIn OAuth
 		r.Get("/linkedin/oauth/callback", srv.handleLinkedInCallback)
+		r.Get("/linkedin/health", srv.handleLinkedInHealth)
 	})
 
 	// Static file serving for web UI (no auth)
@@ -116,6 +129,27 @@ func NewRouter(srv *Server) http.Handler {
 	r.Get("/*", staticFileHandler(staticDir))
 
 	return r
+}
+
+func buildRuntimeServices(cfg *config.Config, store *vault.Store) (*linkedin.Service, *claude.Service, *agent.Service) {
+	var linkedinSvc *linkedin.Service
+	if cfg.LinkedIn.AccessToken != "" {
+		linkedinSvc = linkedin.NewService(&cfg.LinkedIn, cfg.NotesRoot)
+	}
+
+	var claudeSvc *claude.Service
+	if cfg.AnthropicKey != "" {
+		claudeSvc = claude.NewService(cfg.AnthropicKey, store, linkedinSvc)
+	}
+	fallback := cfg.AgentEnablePiFallback
+	options := agent.ServiceOptions{
+		MaxRunDuration:  cfg.AgentMaxRunDuration,
+		MaxToolCalls:    cfg.AgentMaxToolCallsPerRun,
+		AllowPiFallback: &fallback,
+	}
+	agentSvc := agent.NewServiceWithOptions(claudeSvc, store, linkedinSvc, cfg.PiGatewayURL, options)
+
+	return linkedinSvc, claudeSvc, agentSvc
 }
 
 // staticFileHandler serves static files and falls back to index.html for SPA routing.
