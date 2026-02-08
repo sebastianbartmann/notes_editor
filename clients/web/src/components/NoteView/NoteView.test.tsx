@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import NoteView, { parseLine, escapeHtml } from './NoteView'
+import NoteView, { parseLine } from './NoteView'
 
 describe('parseLine', () => {
   describe('headings', () => {
@@ -229,53 +229,13 @@ describe('parseLine', () => {
   })
 })
 
-describe('escapeHtml', () => {
-  it('escapes ampersand', () => {
-    expect(escapeHtml('A & B')).toBe('A &amp; B')
-  })
-
-  it('escapes less than', () => {
-    expect(escapeHtml('a < b')).toBe('a &lt; b')
-  })
-
-  it('escapes greater than', () => {
-    expect(escapeHtml('a > b')).toBe('a &gt; b')
-  })
-
-  it('escapes double quotes', () => {
-    expect(escapeHtml('"quoted"')).toBe('&quot;quoted&quot;')
-  })
-
-  it('escapes single quotes', () => {
-    expect(escapeHtml("it's")).toBe('it&#039;s')
-  })
-
-  it('escapes multiple characters', () => {
-    expect(escapeHtml('<script>alert("xss")</script>')).toBe(
-      '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'
-    )
-  })
-
-  it('handles empty string', () => {
-    expect(escapeHtml('')).toBe('')
-  })
-
-  it('handles string with no special characters', () => {
-    expect(escapeHtml('Hello World')).toBe('Hello World')
-  })
-
-  it('handles already escaped content correctly', () => {
-    expect(escapeHtml('&amp;')).toBe('&amp;amp;')
-  })
-})
-
 describe('NoteView component', () => {
   it('renders headings correctly', () => {
     const content = `# Main Title
 ## Section
 ### Subsection`
 
-    render(<NoteView content={content} path="/test.md" />)
+    render(<NoteView content={content} />)
 
     expect(screen.getByText('Main Title')).toBeInTheDocument()
     expect(screen.getByText('Section')).toBeInTheDocument()
@@ -286,7 +246,7 @@ describe('NoteView component', () => {
     const content = `- [ ] Unchecked
 - [x] Checked`
 
-    render(<NoteView content={content} path="/test.md" />)
+    render(<NoteView content={content} />)
 
     const checkboxes = screen.getAllByRole('checkbox')
     expect(checkboxes).toHaveLength(2)
@@ -299,7 +259,7 @@ describe('NoteView component', () => {
     const content = `# Title
 - [ ] Task on line 2`
 
-    render(<NoteView content={content} path="/test.md" onTaskToggle={onTaskToggle} />)
+    render(<NoteView content={content} onTaskToggle={onTaskToggle} />)
 
     const checkbox = screen.getByRole('checkbox')
     fireEvent.click(checkbox)
@@ -312,7 +272,7 @@ describe('NoteView component', () => {
 
 Line 3`
 
-    const { container } = render(<NoteView content={content} path="/test.md" />)
+    const { container } = render(<NoteView content={content} />)
 
     const lines = container.querySelectorAll('[class*="line"]')
     expect(lines).toHaveLength(3)
@@ -323,7 +283,7 @@ Line 3`
   it('renders plain text', () => {
     const content = 'Just some plain text'
 
-    render(<NoteView content={content} path="/test.md" />)
+    render(<NoteView content={content} />)
 
     expect(screen.getByText('Just some plain text')).toBeInTheDocument()
   })
@@ -332,7 +292,7 @@ Line 3`
     const onUnpin = vi.fn()
     const content = '### 14:30 <pinned>'
 
-    render(<NoteView content={content} path="/test.md" onUnpin={onUnpin} />)
+    render(<NoteView content={content} onUnpin={onUnpin} />)
 
     const unpinButton = screen.getByRole('button', { name: 'Unpin' })
     expect(unpinButton).toBeInTheDocument()
@@ -343,7 +303,7 @@ Line 3`
     const content = `# Title
 ### Note <pinned>`
 
-    render(<NoteView content={content} path="/test.md" onUnpin={onUnpin} />)
+    render(<NoteView content={content} onUnpin={onUnpin} />)
 
     const unpinButton = screen.getByRole('button', { name: 'Unpin' })
     fireEvent.click(unpinButton)
@@ -354,7 +314,7 @@ Line 3`
   it('does not render unpin button without onUnpin callback', () => {
     const content = '### Note <pinned>'
 
-    render(<NoteView content={content} path="/test.md" />)
+    render(<NoteView content={content} />)
 
     expect(screen.queryByRole('button', { name: 'Unpin' })).not.toBeInTheDocument()
   })
@@ -362,7 +322,7 @@ Line 3`
   it('escapes HTML in rendered content', () => {
     const content = '- [ ] Task with <script>alert(1)</script>'
 
-    const { container } = render(<NoteView content={content} path="/test.md" />)
+    const { container } = render(<NoteView content={content} />)
 
     // Should not have actual script tag
     expect(container.querySelector('script')).toBeNull()
@@ -390,8 +350,7 @@ Regular note`
     render(
       <NoteView
         content={content}
-        path="/test.md"
-        onTaskToggle={onTaskToggle}
+               onTaskToggle={onTaskToggle}
         onUnpin={onUnpin}
       />
     )

@@ -31,10 +31,10 @@ fun NoteView(
     content: String,
     onToggleTask: (Int) -> Unit,
     onUnpin: ((Int) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    scrollState: androidx.compose.foundation.ScrollState = rememberScrollState()
 ) {
     val lines = parseNoteLines(content)
-    val scrollState = rememberScrollState()
     NoteSurface(
         modifier = modifier
             .verticalScroll(scrollState)

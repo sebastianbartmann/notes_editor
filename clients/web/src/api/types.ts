@@ -116,6 +116,15 @@ export interface HistoryResponse {
   history: ChatMessage[]
 }
 
+// Settings API types
+export interface EnvResponse {
+  content: string
+}
+
+export interface UpdateEnvRequest {
+  content: string
+}
+
 // Stream event types
 export interface StreamEvent {
   type: 'text' | 'tool_use' | 'session' | 'ping' | 'error' | 'done'
@@ -126,12 +135,3 @@ export interface StreamEvent {
   message?: string
 }
 
-// Settings API types
-export interface EnvResponse {
-  success: boolean
-  content: string
-}
-
-export interface UpdateEnvRequest {
-  content: string
-}

@@ -115,7 +115,6 @@ export default function DailyPage() {
       ) : (
         <NoteView
           content={content}
-          path={path}
           onTaskToggle={handleTaskToggle}
           onUnpin={handleUnpin}
         />

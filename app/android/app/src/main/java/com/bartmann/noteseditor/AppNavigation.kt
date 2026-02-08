@@ -128,7 +128,7 @@ fun NotesEditorApp() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(appBackgroundBrush())
+            .background(appBackgroundColor())
             .imePadding()
     ) {
         Box(

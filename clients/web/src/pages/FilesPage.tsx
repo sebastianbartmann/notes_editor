@@ -174,7 +174,6 @@ export default function FilesPage() {
             ) : (
               <NoteView
                 content={content}
-                path={selectedPath}
                 onTaskToggle={handleTaskToggle}
                 onUnpin={handleUnpin}
               />

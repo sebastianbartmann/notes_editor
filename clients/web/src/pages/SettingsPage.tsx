@@ -1,12 +1,37 @@
+import { useState, useEffect } from 'react'
 import { usePerson } from '../hooks/usePerson'
 import { useTheme } from '../hooks/useTheme'
 import { useAuth } from '../hooks/useAuth'
+import { fetchEnv, saveEnv } from '../api/settings'
 import styles from './SettingsPage.module.css'
 
 export default function SettingsPage() {
   const { person, setPerson } = usePerson()
   const { theme, setTheme } = useTheme()
   const { logout } = useAuth()
+  const [envContent, setEnvContent] = useState('')
+  const [envStatus, setEnvStatus] = useState('')
+  const [isSavingEnv, setIsSavingEnv] = useState(false)
+
+  useEffect(() => {
+    fetchEnv()
+      .then(data => setEnvContent(data.content))
+      .catch(err => setEnvStatus(`Failed to load .env: ${err instanceof Error ? err.message : err}`))
+  }, [])
+
+  const handleSaveEnv = async () => {
+    if (isSavingEnv) return
+    setIsSavingEnv(true)
+    setEnvStatus('')
+    try {
+      await saveEnv({ content: envContent })
+      setEnvStatus('Saved .env')
+    } catch (err) {
+      setEnvStatus(`Save failed: ${err instanceof Error ? err.message : err}`)
+    } finally {
+      setIsSavingEnv(false)
+    }
+  }
 
   return (
     <div className={styles.page}>
@@ -66,6 +91,24 @@ export default function SettingsPage() {
             />
             Light
           </label>
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <h3>Server .env</h3>
+        <p className={styles.hint}>Edit environment variables stored on the server.</p>
+        <textarea
+          value={envContent}
+          onChange={e => setEnvContent(e.target.value)}
+          className={styles.envEditor}
+          rows={8}
+          spellCheck={false}
+        />
+        <div className={styles.envActions}>
+          <button onClick={handleSaveEnv} disabled={isSavingEnv}>
+            {isSavingEnv ? 'Saving...' : 'Save'}
+          </button>
+          {envStatus && <span className={styles.envStatus}>{envStatus}</span>}
         </div>
       </section>
 

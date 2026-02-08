@@ -163,7 +163,6 @@ object ApiClient {
     suspend fun clearPinned(path: String): ApiMessage =
         postJson("/api/clear-pinned", ClearPinnedRequest(path = path))
 
-
     suspend fun fetchSleepTimes(): SleepTimesResponse = getJson("/api/sleep-times")
 
     suspend fun appendSleepTimes(

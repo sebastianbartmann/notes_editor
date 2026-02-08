@@ -129,7 +129,3 @@ func (g *Git) pushWithRetry() error {
 	return err
 }
 
-// Status returns the current git status.
-func (g *Git) Status() (string, error) {
-	return g.runGit("status", "--short")
-}

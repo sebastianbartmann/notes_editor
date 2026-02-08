@@ -16,7 +16,6 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
   - `internal/linkedin/` - LinkedIn OAuth and API
   - `internal/auth/` - token validation and person context
   - `internal/config/` - environment configuration
-- `_archive/python-backend/` contains the archived Python FastAPI backend (superseded by Go)
 - `clients/web/` contains the React web client:
   - `src/api/` - API client modules with TypeScript types
   - `src/components/` - Reusable UI components (NoteView, Editor, FileTree, Layout)

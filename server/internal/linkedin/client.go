@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"notes-editor/internal/config"
 )
@@ -229,7 +228,3 @@ func (s *Service) CreateComment(postURN, text, parentURN, person string) (string
 	return string(respBody), nil
 }
 
-// encodeURN encodes a URN for use in URLs.
-func encodeURN(urn string) string {
-	return strings.ReplaceAll(url.PathEscape(urn), "%3A", ":")
-}

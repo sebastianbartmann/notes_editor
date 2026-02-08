@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"notes-editor/internal/linkedin"
 	"notes-editor/internal/vault"
@@ -184,7 +185,7 @@ func (s *Service) callWithToolLoop(messages []anthropicMsg, toolExec *ToolExecut
 			}
 		}
 
-		return joinStrings(textParts, "\n"), nil
+		return strings.Join(textParts, "\n"), nil
 	}
 }
 
@@ -251,14 +252,3 @@ func buildAnthropicMessages(messages []ChatMessage) []anthropicMsg {
 	return result
 }
 
-// joinStrings joins strings with a separator.
-func joinStrings(parts []string, sep string) string {
-	if len(parts) == 0 {
-		return ""
-	}
-	result := parts[0]
-	for _, part := range parts[1:] {
-		result += sep + part
-	}
-	return result
-}

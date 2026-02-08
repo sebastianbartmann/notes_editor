@@ -353,34 +353,6 @@ func TestGit_CommitAndPush_PushFailureGraceful(t *testing.T) {
 	}
 }
 
-// TestGit_Status tests the Status function.
-func TestGit_Status(t *testing.T) {
-	git, localDir, _ := setupGitTestEnv(t)
-
-	// Clean state
-	status, err := git.Status()
-	if err != nil {
-		t.Fatalf("Status() error = %v", err)
-	}
-	if status != "" {
-		t.Errorf("Status() on clean repo = %q, want empty", status)
-	}
-
-	// Add untracked file
-	newFile := filepath.Join(localDir, "untracked.md")
-	if err := os.WriteFile(newFile, []byte("content"), 0644); err != nil {
-		t.Fatalf("Failed to write file: %v", err)
-	}
-
-	status, err = git.Status()
-	if err != nil {
-		t.Fatalf("Status() error = %v", err)
-	}
-	if !strings.Contains(status, "untracked.md") {
-		t.Errorf("Status() should show untracked file, got: %q", status)
-	}
-}
-
 // TestGit_getCurrentBranch tests getting the current branch name.
 func TestGit_getCurrentBranch(t *testing.T) {
 	git, _, _ := setupGitTestEnv(t)

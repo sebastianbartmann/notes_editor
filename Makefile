@@ -61,7 +61,7 @@ build-web:
 	cp -r clients/web/dist server/static
 
 # Development
-server:
+server: build-server
 	SERVER_ADDR=:8080 ./server/bin/server
 
 client:

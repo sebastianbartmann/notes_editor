@@ -1,113 +1,92 @@
-# Daily Notes Editor
+# Notes Editor
 
-A lightweight web app for quickly editing daily markdown notes with automatic git sync.
+A personal notes app with a Go backend, React web client, and native Android client. Data is stored in a git-synced vault with per-person subfolders.
 
 ## Features
 
-- **Daily Notes**: Automatically creates and edits date-based markdown files
-- **Quick Append**: Add timestamped entries throughout the day
-- **Git Sync**: Auto-commits and pushes changes, pulls latest on page load
-- **Simple UI**: Clean, minimal interface using Pico CSS and HTMX
+- **Daily Notes** - Date-based markdown files with tasks, pinned entries, and quick append
+- **File Browser** - Tree view with create/edit/delete, scoped per person
+- **Sleep Tracking** - Per-child sleep time logging with status tracking
+- **White Noise** - Procedural audio (web) / MP3 playback with media controls (Android)
+- **Claude Chat** - Streaming AI chat with tool use (WIP)
+- **Git Sync** - Auto-commits and pushes on every change, pulls on load
 
-## Setup
+## Architecture
 
-### Requirements
+```
+server/          Go REST API (serves web client + API for Android)
+clients/web/     React/TypeScript SPA (Vite)
+app/android/     Kotlin/Compose native Android client
+```
 
-- Python 3.12+
-- Git repository for storing notes
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
+## Requirements
 
-### Installation
+- Go 1.22+
+- Node.js 18+ (for web client)
+- Git repository for notes storage
+- JDK 17 + Android SDK (for Android builds only)
 
-1. Clone the repository:
+## Configuration
+
+Create `server/.env`:
+```
+NOTES_TOKEN=your-auth-token
+NOTES_ROOT=/path/to/notes/repo
+ANTHROPIC_API_KEY=optional-for-claude
+SERVER_ADDR=:80
+```
+
+Required: `NOTES_TOKEN`, `NOTES_ROOT`. Optional: `ANTHROPIC_API_KEY`, LinkedIn OAuth vars.
+
+## Development
+
 ```bash
-git clone https://github.com/sebastianbartmann/notes_editor
-cd notes_editor
+# Go server (port 8080)
+make build-server && make server
+
+# React dev server (port 5173, proxies API to 8080)
+make install-client
+make client
+
+# Run all tests
+make test
 ```
 
-2. Install dependencies:
+## Production
+
 ```bash
-uv sync
+# Build everything (web client + Go server)
+make build
+
+# Install systemd service
+make install-systemd
+make status-systemd
 ```
 
-3. Configure git identity (required for auto-commits):
+## Android
+
 ```bash
-git config --global user.email "your@email.com"
-git config --global user.name "Your Name"
+# Build debug APK
+make build-android
+
+# Build and install via adb
+make deploy-android
+
+# Run Maestro UI tests
+make android-test
 ```
 
-4. Set the auth token (used by the web app and mobile clients):
+The Android app uses a bearer token configured in `AppConfig.kt`.
+
+## Testing
+
 ```bash
-export NOTES_TOKEN="your-secure-token"
+make test              # All tests (server + web client)
+make test-server       # Go tests only
+make test-client       # React tests (TypeScript check + Vitest)
+make test-coverage     # Go tests with HTML coverage report
+make android-test      # Maestro UI tests (requires emulator)
 ```
-Access the web UI by visiting `/login` and entering the token.
-
-5. Clone the notes repository:
-```bash
-git clone dev@dev:/home/dev/git/notes.git ~/notes
-```
-
-### Running
-
-**Development:**
-```bash
-make run
-```
-
-**Production (systemd service):**
-
-Create `/etc/systemd/system/notes-editor.service`:
-```ini
-[Unit]
-Description=Daily Notes Editor
-After=network.target
-
-[Service]
-Type=simple
-User=YOUR_USERNAME
-WorkingDirectory=/path/to/notes_editor
-Environment="PATH=/home/YOUR_USERNAME/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/path/to/notes_editor/.venv/bin/uvicorn server.web_app.main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable notes-editor
-sudo systemctl start notes-editor
-sudo systemctl status notes-editor
-```
-
-**Alternative (screen/tmux):**
-```bash
-screen -S notes
-cd notes_editor
-source .venv/bin/activate
-uvicorn server.web_app.main:app --host 0.0.0.0 --port 8000
-# Press Ctrl+A then D to detach
-```
-
-Service management:
-- `sudo systemctl status notes-editor` - check status
-- `sudo systemctl restart notes-editor` - restart after code changes
-- `sudo systemctl stop notes-editor` - stop service
-
-## Android app (CLI build)
-
-Android sources live in `app/android/`. Build tooling is CLI-only; no IDE required.
-
-Minimum prerequisites:
-- JDK 17
-- Android SDK command-line tools
-
-Notes:
-- The app expects an MP3 at `app/android/app/src/main/res/raw/noise.mp3`. Replace the placeholder.
-- The app uses the bearer token in `app/android/app/src/main/java/com/bartmann/noteseditor/AppConfig.kt`.
 
 ## License
 

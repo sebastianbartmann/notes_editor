@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.rememberScrollState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,6 +51,7 @@ fun DailyScreen(
     var availableDailyPaths by remember { mutableStateOf<List<String>>(emptyList()) }
     var isEditing by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
+    val noteScrollState = rememberScrollState()
     var taskInputMode by remember { mutableStateOf<String?>(null) }
     var taskInputText by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -104,6 +106,25 @@ fun DailyScreen(
         }
     }
 
+    fun navigateTo(targetPath: String) {
+        scope.launch {
+            if (!saveCurrentBeforeSwitch()) {
+                return@launch
+            }
+            try {
+                val selected = ApiClient.readFile(targetPath)
+                content = selected.content
+                editContent = TextFieldValue(selected.content)
+                path = selected.path
+                date = DailyNavigation.dateFromPath(selected.path) ?: date
+                isEditing = false
+                message = "Loaded."
+            } catch (exc: Exception) {
+                message = "Failed to load: ${exc.message}"
+            }
+        }
+    }
+
     fun submitTask(category: String) {
         val taskText = taskInputText
         taskInputMode = null
@@ -128,7 +149,13 @@ fun DailyScreen(
             taskInputMode = null
             taskInputText = ""
         } else {
+            val cursorPos = editContent.selection.start
+            val fraction = if (content.isNotEmpty()) cursorPos.toFloat() / content.length else 0f
             isEditing = false
+            scope.launch {
+                val target = (noteScrollState.maxValue * fraction).toInt()
+                noteScrollState.scrollTo(target)
+            }
         }
     }
 
@@ -177,41 +204,11 @@ fun DailyScreen(
                     ) {
                         CompactTextButton(text = "prev", modifier = Modifier.testTag("daily-prev")) {
                             val targetPath = DailyNavigation.previousPath(availableDailyPaths, path) ?: return@CompactTextButton
-                            scope.launch {
-                                if (!saveCurrentBeforeSwitch()) {
-                                    return@launch
-                                }
-                                try {
-                                    val selected = ApiClient.readFile(targetPath)
-                                    content = selected.content
-                                    editContent = TextFieldValue(selected.content)
-                                    path = selected.path
-                                    date = DailyNavigation.dateFromPath(selected.path) ?: date
-                                    isEditing = false
-                                    message = "Loaded."
-                                } catch (exc: Exception) {
-                                    message = "Failed to load: ${exc.message}"
-                                }
-                            }
+                            navigateTo(targetPath)
                         }
                         CompactTextButton(text = "next", modifier = Modifier.testTag("daily-next")) {
                             val targetPath = DailyNavigation.nextPath(availableDailyPaths, path) ?: return@CompactTextButton
-                            scope.launch {
-                                if (!saveCurrentBeforeSwitch()) {
-                                    return@launch
-                                }
-                                try {
-                                    val selected = ApiClient.readFile(targetPath)
-                                    content = selected.content
-                                    editContent = TextFieldValue(selected.content)
-                                    path = selected.path
-                                    date = DailyNavigation.dateFromPath(selected.path) ?: date
-                                    isEditing = false
-                                    message = "Loaded."
-                                } catch (exc: Exception) {
-                                    message = "Failed to load: ${exc.message}"
-                                }
-                            }
+                            navigateTo(targetPath)
                         }
                         AppText(
                             text = date,
@@ -276,7 +273,8 @@ fun DailyScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f)
+                            .weight(1f),
+                        scrollState = noteScrollState
                     )
                 }
                 Row(
@@ -296,7 +294,15 @@ fun DailyScreen(
                                     }
                                 }
                             }
-                            CompactTextButton(text = "Cancel") { isEditing = false }
+                            CompactTextButton(text = "Cancel") {
+                                val cursorPos = editContent.selection.start
+                                val fraction = if (content.isNotEmpty()) cursorPos.toFloat() / content.length else 0f
+                                isEditing = false
+                                scope.launch {
+                                    val target = (noteScrollState.maxValue * fraction).toInt()
+                                    noteScrollState.scrollTo(target)
+                                }
+                            }
                         } else if (taskInputMode != null) {
                             val focusRequester = remember { FocusRequester() }
                             LaunchedEffect(Unit) {
@@ -356,7 +362,13 @@ fun DailyScreen(
                             }
                         } else {
                             CompactButton(text = "Edit") {
-                                editContent = TextFieldValue(content)
+                                val maxScroll = noteScrollState.maxValue.coerceAtLeast(1)
+                                val fraction = noteScrollState.value.toFloat() / maxScroll
+                                val cursorIndex = (content.length * fraction).toInt().coerceIn(0, content.length)
+                                editContent = TextFieldValue(
+                                    text = content,
+                                    selection = androidx.compose.ui.text.TextRange(cursorIndex)
+                                )
                                 isEditing = true
                             }
                             CompactTextButton(text = "Work task") { taskInputMode = "work" }

@@ -2,7 +2,6 @@ import styles from './NoteView.module.css'
 
 interface NoteViewProps {
   content: string
-  path: string
   onTaskToggle?: (line: number) => void
   onUnpin?: (line: number) => void
 }
@@ -67,18 +66,8 @@ export function parseLine(line: string, lineNumber: number): ParsedLine {
   }
 }
 
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
-}
-
 export default function NoteView({
   content,
-  path: _path,
   onTaskToggle,
   onUnpin,
 }: NoteViewProps) {
@@ -99,7 +88,7 @@ export default function NoteView({
                 onChange={() => onTaskToggle?.(line.lineNumber)}
                 className={styles.checkbox}
               />
-              <span>{escapeHtml(line.content)}</span>
+              <span>{line.content}</span>
             </label>
           ) : line.type.startsWith('H') ? (
             <div
@@ -107,7 +96,7 @@ export default function NoteView({
                 line.isPinned ? styles.pinned : ''
               }`}
             >
-              <span>{escapeHtml(line.content)}</span>
+              <span>{line.content}</span>
               {line.isPinned && onUnpin && (
                 <button
                   onClick={() => onUnpin(line.lineNumber)}
@@ -118,7 +107,7 @@ export default function NoteView({
               )}
             </div>
           ) : (
-            <span>{escapeHtml(line.content)}</span>
+            <span>{line.content}</span>
           )}
         </div>
       ))}

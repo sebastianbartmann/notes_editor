@@ -1,37 +1,5 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
 # Environment
 .env
-
-# Virtual environments
-venv/
-env/
-ENV/
-.venv
-
-# UV
-.python-version
-uv.lock
 
 # IDE
 .vscode/
@@ -40,27 +8,31 @@ uv.lock
 *.swo
 *~
 
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+server/bin/
+server/coverage.out
+server/coverage.html
+
+# Node
+node_modules/
+
 # Android
 app/android/.gradle/
 app/android/.idea/
 app/android/build/
 app/android/local.properties
+app/android/app/build/
 app/android_sdk/
 app/gradle-8.7/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Gradle
 .gradle/
-
-# Android build outputs
-app/android/app/build/
-server/.env
 
 # Maestro test screenshots
 app/android/maestro/screenshots/
 
-# Go build output
-server/bin/
+# Build output
+build/
+dist/
