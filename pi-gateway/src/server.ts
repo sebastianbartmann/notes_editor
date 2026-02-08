@@ -249,10 +249,33 @@ async function runClaudeDecision(_sessionId: string, prompt: string): Promise<Cl
     let resultText = '';
     let structuredOutput: ClaudeDecision | null = null;
     let stderr = '';
+    let authError: string | null = null;
+    const decisionTimeoutMs = Number(process.env.PI_GATEWAY_CLAUDE_DECISION_TIMEOUT_MS || '15000');
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error(`Claude CLI decision timed out after ${decisionTimeoutMs}ms`));
+    }, decisionTimeoutMs);
 
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
       parseClaudeJsonLines(chunk, lineBuffer, (event) => {
+        // Claude CLI can loop indefinitely when not authenticated; fail fast.
+        if (typeof event?.error === 'string' && event.error === 'authentication_failed') {
+          authError = 'Claude CLI not authenticated. Run: claude setup-token (or /login).';
+          child.kill('SIGTERM');
+          return;
+        }
+        if (event?.type === 'assistant' && event?.message?.content && Array.isArray(event.message.content)) {
+          for (const block of event.message.content) {
+            if (block?.type === 'text' && typeof block.text === 'string') {
+              if (block.text.includes('Invalid API key') || block.text.includes('Please run /login')) {
+                authError = 'Claude CLI not authenticated. Run: claude setup-token (or /login).';
+                child.kill('SIGTERM');
+                return;
+              }
+            }
+          }
+        }
         if (event?.type === 'result' && typeof event?.result === 'string') {
           resultText = event.result;
           if (event?.structured_output && typeof event.structured_output === 'object') {
@@ -270,6 +293,11 @@ async function runClaudeDecision(_sessionId: string, prompt: string): Promise<Cl
     child.on('error', (err) => reject(new Error(`failed to start Claude CLI: ${err.message}`)));
 
     child.on('close', (code) => {
+      clearTimeout(timeout);
+      if (authError) {
+        reject(new Error(authError));
+        return;
+      }
       if (code !== 0 && !resultText) {
         reject(new Error(stderr.trim() || `Claude CLI exited with code ${code}`));
         return;
