@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,6 +40,7 @@ fun DailyScreen(
     modifier: Modifier
 ) {
     var content by remember { mutableStateOf("") }
+    var editContent by remember { mutableStateOf(TextFieldValue("")) }
     var appendText by remember { mutableStateOf("") }
     var pinned by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -81,11 +83,13 @@ fun DailyScreen(
 
                 if (selectToday || previousPath.isBlank() || previousPath == daily.path) {
                     content = daily.content
+                    editContent = TextFieldValue(daily.content)
                     path = daily.path
                     date = daily.date
                 } else {
                     val selected = ApiClient.readFile(previousPath)
                     content = selected.content
+                    editContent = TextFieldValue(selected.content)
                     path = selected.path
                     date = DailyNavigation.dateFromPath(selected.path) ?: date
                 }
@@ -180,6 +184,7 @@ fun DailyScreen(
                                 try {
                                     val selected = ApiClient.readFile(targetPath)
                                     content = selected.content
+                                    editContent = TextFieldValue(selected.content)
                                     path = selected.path
                                     date = DailyNavigation.dateFromPath(selected.path) ?: date
                                     isEditing = false
@@ -198,6 +203,7 @@ fun DailyScreen(
                                 try {
                                     val selected = ApiClient.readFile(targetPath)
                                     content = selected.content
+                                    editContent = TextFieldValue(selected.content)
                                     path = selected.path
                                     date = DailyNavigation.dateFromPath(selected.path) ?: date
                                     isEditing = false
@@ -227,10 +233,14 @@ fun DailyScreen(
                 }
                 if (isEditing) {
                     CompactTextField(
-                        value = content,
-                        onValueChange = { content = it },
+                        value = editContent,
+                        onValueChange = {
+                            editContent = it
+                            content = it.text
+                        },
                         placeholder = "Edit note",
                         modifier = Modifier
+                            .testTag("daily-editor")
                             .fillMaxWidth()
                             .weight(1f),
                         minLines = 10
@@ -345,7 +355,10 @@ fun DailyScreen(
                                 }
                             }
                         } else {
-                            CompactButton(text = "Edit") { isEditing = true }
+                            CompactButton(text = "Edit") {
+                                editContent = TextFieldValue(content)
+                                isEditing = true
+                            }
                             CompactTextButton(text = "Work task") { taskInputMode = "work" }
                             CompactTextButton(text = "Priv task") { taskInputMode = "priv" }
                         }

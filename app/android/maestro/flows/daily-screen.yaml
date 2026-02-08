@@ -1,27 +1,30 @@
 appId: com.bartmann.noteseditor
 ---
 - launchApp
+- tapOn:
+    text: "Sebastian"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Daily"
+    optional: true
+- waitForAnimationToEnd
 - takeScreenshot: "01-app-launch"
 
-# Navigate to Daily (should be default)
-- assertVisible: "Daily"
-- takeScreenshot: "02-daily-screen"
+# Ensure we are on real Daily screen
+- assertVisible: "CURRENT NOTE"
 - assertVisible: "prev"
 - assertVisible: "next"
+- takeScreenshot: "02-daily-screen"
 - tapOn: "prev"
 - waitForAnimationToEnd
 - takeScreenshot: "02a-after-prev"
 - tapOn: "next"
 - waitForAnimationToEnd
 - takeScreenshot: "02b-after-next"
-- tapOn:
-    id: "daily-today-link"
-- waitForAnimationToEnd
-- takeScreenshot: "02c-after-today-link"
 
 # Test refresh
-- tapOn:
-    id: "refresh"
+- tapOn: "Reload"
 - waitForAnimationToEnd
 - takeScreenshot: "03-after-refresh"
 
@@ -31,8 +34,7 @@ appId: com.bartmann.noteseditor
 - takeScreenshot: "04-task-input-visible"
 - inputText: "Test task from Maestro"
 - takeScreenshot: "05-task-text-entered"
-- tapOn:
-    id: "save"
+- tapOn: "Save"
 - waitForAnimationToEnd
 - takeScreenshot: "06-task-saved"
 

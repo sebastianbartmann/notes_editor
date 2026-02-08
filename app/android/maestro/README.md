@@ -46,6 +46,7 @@ This will:
 ### Run Individual Tests
 ```bash
 make android-test-daily      # Daily screen tests
+make android-test-daily-scroll-focus  # Daily editor scroll/focus regression test
 make android-test-files      # Files screen tests
 make android-test-sleep      # Sleep screen tests
 make android-test-claude     # Claude screen tests
@@ -64,6 +65,7 @@ make android-emulator-stop   # Stop emulator
 | Flow | Description | Screenshots |
 |------|-------------|-------------|
 | `daily-screen.yaml` | Tests daily note display, refresh, task add, edit mode | 8 |
+| `daily-editor-scroll-focus.yaml` | Visual regression check: deep editor scroll stays in place after keyboard focus | 3 |
 | `full-navigation.yaml` | Tests bottom nav and screen transitions | 8 |
 | `sleep-screen.yaml` | Tests sleep tracking form | 5 |
 | `files-screen.yaml` | Tests file browser | 4 |

@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -173,6 +174,50 @@ fun CompactTextField(
         decorationBox = { innerTextField ->
             Box {
                 if (value.isBlank()) {
+                    AppText(
+                        text = placeholder,
+                        style = AppTheme.typography.bodySmall,
+                        color = AppTheme.colors.muted
+                    )
+                }
+                innerTextField()
+            }
+        }
+    )
+}
+
+@Composable
+fun CompactTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    placeholder: String,
+    modifier: Modifier,
+    minLines: Int = 1,
+    readOnly: Boolean = false,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(6.dp)
+    val borderColor = if (isFocused) AppTheme.colors.accent else AppTheme.colors.panelBorder
+
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = AppTheme.typography.body.copy(color = AppTheme.colors.text),
+        cursorBrush = SolidColor(AppTheme.colors.accent),
+        readOnly = readOnly,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        modifier = modifier
+            .border(1.dp, borderColor, shape)
+            .background(AppTheme.colors.input, shape)
+            .padding(AppTheme.spacing.sm)
+            .onFocusChanged { isFocused = it.isFocused },
+        minLines = minLines,
+        decorationBox = { innerTextField ->
+            Box {
+                if (value.text.isBlank()) {
                     AppText(
                         text = placeholder,
                         style = AppTheme.typography.bodySmall,

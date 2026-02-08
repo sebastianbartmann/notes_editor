@@ -1,0 +1,65 @@
+appId: com.bartmann.noteseditor
+---
+- launchApp
+- tapOn:
+    text: "Sebastian"
+    optional: true
+- waitForAnimationToEnd
+
+# Ensure we are on Daily and enter edit mode.
+- assertVisible: "CURRENT NOTE"
+- tapOn: "Edit"
+- assertVisible: "Save"
+
+# Seed long content so deep scrolling is available even if backend load fails.
+- tapOn: "Edit note"
+- eraseText
+- inputText: |
+    line 01
+    line 02
+    line 03
+    line 04
+    line 05
+    line 06
+    line 07
+    line 08
+    line 09
+    line 10
+    line 11
+    line 12
+    line 13
+    line 14
+    line 15
+    line 16
+    line 17
+    line 18
+    line 19
+    line 20
+    line 21
+    line 22
+    line 23
+    line 24
+    line 25
+    line 26
+    line 27
+    line 28
+    line 29
+    line 30
+- hideKeyboard
+- takeScreenshot: "daily-scroll-01-seeded-content"
+
+# Scroll deep into the editor before focusing it.
+- scroll
+- scroll
+- scroll
+- scroll
+- scroll
+- takeScreenshot: "daily-scroll-02-deep-before-focus"
+- tapOn: "CURRENT NOTE"
+- waitForAnimationToEnd
+
+# Focus editor to open keyboard; viewport should stay near current cursor/scroll position.
+- tapOn:
+    point: "50%,38%"
+- waitForAnimationToEnd
+- takeScreenshot: "daily-scroll-03-after-focus-keyboard"

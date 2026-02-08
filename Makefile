@@ -1,4 +1,4 @@
-.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd build-android install-android deploy-android debug-android build build-server build-web lint clean android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-files android-test-sleep android-test-claude android-test-settings android-test-nav
+.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd build-android install-android deploy-android debug-android build build-server build-web lint clean android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-settings android-test-nav
 
 .DEFAULT_GOAL := help
 
@@ -42,6 +42,7 @@ help:
 	@echo "    android-test           Run all Maestro UI tests"
 	@echo "    android-test-report    Run tests and show summary"
 	@echo "    android-test-daily     Run daily screen tests only"
+	@echo "    android-test-daily-scroll-focus Run daily editor scroll/focus regression test"
 	@echo "    android-test-files     Run files screen tests only"
 	@echo "    android-test-sleep     Run sleep screen tests only"
 	@echo "    android-test-claude    Run claude screen tests only"
@@ -189,6 +190,10 @@ android-test-report: android-test
 
 android-test-daily: android-emulator-start android-check-maestro
 	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/daily-screen.yaml --output $(MAESTRO_SCREENSHOTS)
+	@echo "Screenshots saved to: app/android/maestro/screenshots/"
+
+android-test-daily-scroll-focus: android-emulator-start android-check-maestro
+	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/daily-editor-scroll-focus.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
 android-test-files: android-emulator-start android-check-maestro
