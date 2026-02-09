@@ -230,6 +230,88 @@ function parseClaudeJsonLines(chunk: string, lineBuffer: { value: string }, onEv
   }
 }
 
+function buildFinalAnswerPrompt(userMessage: string, toolHistory: string[]): string {
+  const lines = [
+    'You are a helpful assistant. Provide the final answer only.',
+    'Do not mention tools or tool history unless explicitly asked.',
+    '',
+    `User message: ${userMessage}`,
+  ];
+
+  if (toolHistory.length > 0) {
+    lines.push('', 'Tool history (for your context):');
+    for (const item of toolHistory) {
+      lines.push(item);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+async function streamClaudeFinalAnswer(
+  req: IncomingMessage,
+  res: ServerResponse,
+  runId: string,
+  userMessage: string,
+  toolHistory: string[],
+): Promise<void> {
+  const prompt = buildFinalAnswerPrompt(userMessage, toolHistory);
+  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
+  if (CLAUDE_MODEL) {
+    args.push('--model', CLAUDE_MODEL);
+  }
+  if (CLAUDE_DISABLE_TOOLS) {
+    args.push('--tools', '');
+  }
+
+  await new Promise<void>((resolve) => {
+    const child = spawn(CLAUDE_BIN, args, {
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stderr = '';
+    const lineBuffer = { value: '' };
+
+    req.on('close', () => {
+      child.kill('SIGTERM');
+    });
+
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      parseClaudeJsonLines(chunk, lineBuffer, (event) => {
+        if (event?.type === 'assistant') {
+          const content = event?.message?.content;
+          if (Array.isArray(content)) {
+            for (const block of content) {
+              if (block && block.type === 'text' && typeof block.text === 'string' && block.text.length > 0) {
+                writeEvent(res, { type: 'text', run_id: runId, delta: block.text });
+              }
+            }
+          }
+        }
+        if (typeof event?.error === 'string' && event.error === 'authentication_failed') {
+          writeEvent(res, { type: 'error', run_id: runId, message: 'Claude CLI not authenticated. Run: claude setup-token (or /login).' });
+          child.kill('SIGTERM');
+        }
+      });
+    });
+
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        const msg = stderr.trim() || `Claude CLI exited with code ${code}`;
+        writeEvent(res, { type: 'error', run_id: runId, message: msg });
+      }
+      resolve();
+    });
+  });
+}
+
 async function runClaudeDecision(_sessionId: string, prompt: string): Promise<ClaudeDecision> {
   const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--json-schema', JSON.stringify(DECISION_SCHEMA)];
   if (CLAUDE_MODEL) {
@@ -388,10 +470,8 @@ async function streamClaudeCliWithToolBridge(
     }
 
     if (decision.kind === 'final') {
-      const finalText = (decision.text || '').trim();
-      if (finalText) {
-        writeEvent(res, { type: 'text', run_id: runId, delta: finalText });
-      }
+      // Stream the final answer from Claude token-by-token.
+      await streamClaudeFinalAnswer(req, res, runId, message, toolHistory);
       writeEvent(res, { type: 'done', session_id: runtimeSessionId, run_id: runId });
       res.end();
       return;
