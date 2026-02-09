@@ -5,6 +5,19 @@ import { randomUUID } from 'node:crypto';
 
 import { PiRpcClient } from './pi-rpc-client.js';
 
+function requireNode20(): void {
+  const major = Number((process.versions.node || '').split('.')[0] || '0');
+  if (Number.isNaN(major) || major < 20) {
+    // Pi dependencies (pi-tui) require Node >= 20 (e.g. RegExp 'v' flag).
+    // Fail fast with a clear message so systemd/journal shows the reason.
+    // eslint-disable-next-line no-console
+    console.error(`Node.js ${process.versions.node} is too old. pi-gateway requires Node >= 20.`);
+    process.exit(1);
+  }
+}
+
+requireNode20();
+
 type ChatRequest = {
   person?: string;
   session_id?: string;

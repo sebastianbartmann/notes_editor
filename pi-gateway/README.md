@@ -25,6 +25,9 @@ pi
 # inside Pi: /login
 ```
 
+Requirements:
+- Node.js >= 20 (Pi uses JS features not available in Node 18)
+
 Optional env vars:
 
 - `PI_GATEWAY_MODE=pi_rpc|mock` (default `pi_rpc`)
