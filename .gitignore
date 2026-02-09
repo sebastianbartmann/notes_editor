@@ -36,3 +36,12 @@ app/android/maestro/screenshots/
 # Build output
 build/
 dist/
+
+# Python
+__pycache__/
+
+# Gateway logs
+pi-gateway/*.log
+
+# Orphaned lock file (no package.json at root)
+/package-lock.json
