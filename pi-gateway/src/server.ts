@@ -211,6 +211,7 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
     // These variables must be in the same scope as the event handler.
     let sawAnyText = false;
     let lastRunError = '';
+    let sawRunError = false;
 
     const unsubscribe = pc.client.onEvent((event: any) => {
       if (cancelled) return;
@@ -228,6 +229,7 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
           const msg = event?.message;
           if (msg?.role === 'assistant' && typeof msg?.errorMessage === 'string' && msg.errorMessage.trim()) {
             lastRunError = msg.errorMessage.trim();
+            sawRunError = true;
             writeEvent(res, { type: 'error', run_id: runId, message: lastRunError });
           }
           break;
@@ -244,6 +246,7 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
         }
         case 'extension_error': {
           lastRunError = String(event.error || 'extension error');
+          sawRunError = true;
           writeEvent(res, { type: 'error', run_id: runId, message: lastRunError });
           break;
         }
@@ -263,7 +266,7 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
       await pc.client.waitForIdle(PI_TIMEOUT_MS);
 
       // If Pi ended with an error but didn't stream it (or we missed it), surface it.
-      if (!cancelled && !sawAnyText && lastRunError) {
+      if (!cancelled && !sawAnyText && lastRunError && !sawRunError) {
         writeEvent(res, { type: 'error', run_id: runId, message: lastRunError });
       }
 
