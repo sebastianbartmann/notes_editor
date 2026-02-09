@@ -30,6 +30,10 @@ object ApiClient {
 
     class ApiHttpException(message: String) : Exception(message)
 
+    @Volatile
+    var lastSuccessfulBaseUrl: String? = null
+        private set
+
     private suspend fun <T> executeRequest(
         buildRequest: (String) -> Request,
         parse: (String) -> T
@@ -43,7 +47,9 @@ object ApiClient {
                     if (!response.isSuccessful) {
                         throw ApiHttpException("HTTP ${response.code}: $body")
                     }
-                    return@withContext parse(body)
+                    val parsed = parse(body)
+                    lastSuccessfulBaseUrl = baseUrl
+                    return@withContext parsed
                 }
             } catch (exc: IOException) {
                 lastError = exc
@@ -74,6 +80,8 @@ object ApiClient {
                     close(ApiHttpException("HTTP ${response.code}: $body"))
                     return@launch
                 }
+
+                lastSuccessfulBaseUrl = baseUrl
 
                 val source: BufferedSource = response.body?.source()
                     ?: run {

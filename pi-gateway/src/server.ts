@@ -256,7 +256,10 @@ async function streamClaudeFinalAnswer(
   toolHistory: string[],
 ): Promise<void> {
   const prompt = buildFinalAnswerPrompt(userMessage, toolHistory);
-  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose'];
+  // Claude Code CLI only emits token deltas in stream-json when used with --print
+  // and --include-partial-messages. Otherwise, it tends to emit a single assistant
+  // message at the end (no streaming).
+  const args = ['-p', prompt, '--print', '--output-format', 'stream-json', '--include-partial-messages', '--verbose'];
   if (CLAUDE_MODEL) {
     args.push('--model', CLAUDE_MODEL);
   }
@@ -272,6 +275,7 @@ async function streamClaudeFinalAnswer(
 
     let stderr = '';
     const lineBuffer = { value: '' };
+    let streamedAnyDelta = false;
 
     req.on('close', () => {
       child.kill('SIGTERM');
@@ -280,7 +284,25 @@ async function streamClaudeFinalAnswer(
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
       parseClaudeJsonLines(chunk, lineBuffer, (event) => {
+        // Streaming deltas arrive as nested stream_event.content_block_delta events.
+        if (event?.type === 'stream_event') {
+          const inner = event?.event;
+          if (inner?.type === 'content_block_delta') {
+            const delta = inner?.delta;
+            if (delta?.type === 'text_delta' && typeof delta?.text === 'string' && delta.text.length > 0) {
+              streamedAnyDelta = true;
+              writeEvent(res, { type: 'text', run_id: runId, delta: delta.text });
+            }
+          }
+        }
+
+        // Fallback for older formats: a single assistant message containing text blocks.
+        // With --include-partial-messages this usually appears at the end; avoid
+        // double-emitting if we already streamed deltas.
         if (event?.type === 'assistant') {
+          if (streamedAnyDelta) {
+            return;
+          }
           const content = event?.message?.content;
           if (Array.isArray(content)) {
             for (const block of content) {
