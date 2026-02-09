@@ -75,83 +75,103 @@ export default function (pi: ExtensionAPI) {
 
   pi.on('before_agent_start', async (event) => {
     if (!lastSystemPrompt) return;
-    return { systemPrompt: lastSystemPrompt };
+    // Anthropic OAuth tokens in Pi run in "Claude Code identity" mode internally.
+    // Custom tool names can cause Anthropic to reject the token ("only authorized for Claude Code").
+    // Therefore we expose only Claude Code tool names (read/write/grep/glob/webfetch/websearch) and
+    // map them to Notes Editor server tools.
+    const toolHint = [
+      'Notes Editor tools:',
+      '- read: read a file from the person vault (path is vault-relative)',
+      '- write: write a file in the person vault (path is vault-relative)',
+      '- grep: search text in the person vault (path optional, vault-relative)',
+      '- glob: find files by glob pattern in the person vault (path optional, vault-relative)',
+      '- webfetch: fetch a URL (server-side)',
+      '- websearch: search the web (server-side)',
+    ].join('\n');
+    return { systemPrompt: `${toolHint}\n\n${lastSystemPrompt}` };
   });
 
-  const toolDefs = [
-    {
-      name: 'read_file',
-      label: 'Read file',
-      description: 'Read a file from the notes vault (person-scoped).',
-      parameters: Type.Object({ path: Type.String() }),
+  // Tool names intentionally match Claude Code's canonical tools (case-insensitive).
+  // Pi's Anthropic OAuth flow relies on this.
+  pi.registerTool({
+    name: 'read',
+    label: 'read',
+    description: 'Read a file from the person vault (path is vault-relative).',
+    parameters: Type.Object({
+      path: Type.String({ description: 'Vault-relative path to read' }),
+      offset: Type.Optional(Type.Number({ description: 'Line number to start reading from (1-indexed)' })),
+      limit: Type.Optional(Type.Number({ description: 'Maximum number of lines to read' })),
+    }),
+    async execute(_toolCallId, params) {
+      const content = await callTool('read_file', params as unknown as Record<string, unknown>);
+      return { content: [{ type: 'text', text: content }], details: {} };
     },
-    {
-      name: 'write_file',
-      label: 'Write file',
-      description: 'Write a file to the notes vault (person-scoped).',
-      parameters: Type.Object({ path: Type.String(), content: Type.String() }),
-    },
-    {
-      name: 'list_directory',
-      label: 'List directory',
-      description: 'List directory entries in the notes vault (person-scoped).',
-      parameters: Type.Object({ path: Type.Optional(Type.String()) }),
-    },
-    {
-      name: 'search_files',
-      label: 'Search files',
-      description: 'Search files in the notes vault (person-scoped).',
-      parameters: Type.Object({ pattern: Type.String(), path: Type.Optional(Type.String()) }),
-    },
-    {
-      name: 'web_search',
-      label: 'Web search',
-      description: 'Search the web (server-side).',
-      parameters: Type.Object({ query: Type.String() }),
-    },
-    {
-      name: 'web_fetch',
-      label: 'Web fetch',
-      description: 'Fetch a URL (server-side).',
-      parameters: Type.Object({ url: Type.String() }),
-    },
-    {
-      name: 'linkedin_post',
-      label: 'LinkedIn post',
-      description: 'Create a LinkedIn post (server-side).',
-      parameters: Type.Object({ text: Type.String() }),
-    },
-    {
-      name: 'linkedin_read_comments',
-      label: 'LinkedIn read comments',
-      description: 'Read comments for a LinkedIn post (server-side).',
-      parameters: Type.Object({ post_urn: Type.String() }),
-    },
-    {
-      name: 'linkedin_post_comment',
-      label: 'LinkedIn post comment',
-      description: 'Post a comment on a LinkedIn post (server-side).',
-      parameters: Type.Object({ post_urn: Type.String(), text: Type.String() }),
-    },
-    {
-      name: 'linkedin_reply_comment',
-      label: 'LinkedIn reply comment',
-      description: 'Reply to a LinkedIn comment (server-side).',
-      parameters: Type.Object({ post_urn: Type.String(), parent_comment_urn: Type.String(), text: Type.String() }),
-    },
-  ] as const;
+  });
 
-  for (const def of toolDefs) {
-    pi.registerTool({
-      name: def.name,
-      label: def.label,
-      description: def.description,
-      parameters: def.parameters,
-      async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-        const content = await callTool(def.name, params as unknown as Record<string, unknown>);
-        return { content: [{ type: 'text', text: content }], details: {} };
-      },
-    });
-  }
+  pi.registerTool({
+    name: 'write',
+    label: 'write',
+    description: 'Write a file to the person vault (path is vault-relative).',
+    parameters: Type.Object({
+      path: Type.String({ description: 'Vault-relative path to write' }),
+      content: Type.String({ description: 'Content to write' }),
+    }),
+    async execute(_toolCallId, params) {
+      const content = await callTool('write_file', params as unknown as Record<string, unknown>);
+      return { content: [{ type: 'text', text: content }], details: {} };
+    },
+  });
+
+  pi.registerTool({
+    name: 'grep',
+    label: 'grep',
+    description: 'Search files in the person vault for a pattern.',
+    parameters: Type.Object({
+      pattern: Type.String({ description: 'Search pattern (regex or literal string)' }),
+      path: Type.Optional(Type.String({ description: 'Vault-relative directory or file to search' })),
+    }),
+    async execute(_toolCallId, params) {
+      const { pattern, path } = params as any;
+      const content = await callTool('search_files', { pattern, path } as Record<string, unknown>);
+      return { content: [{ type: 'text', text: content }], details: {} };
+    },
+  });
+
+  pi.registerTool({
+    name: 'glob',
+    label: 'glob',
+    description: 'Find files in the person vault by glob pattern.',
+    parameters: Type.Object({
+      pattern: Type.String({ description: "Glob pattern, e.g. '*.md' or '**/*.prompt.md'" }),
+      path: Type.Optional(Type.String({ description: 'Vault-relative directory to search in (default: vault root)' })),
+      limit: Type.Optional(Type.Number({ description: 'Maximum number of results (default: 1000)' })),
+    }),
+    async execute(_toolCallId, params) {
+      const { pattern, path, limit } = params as any;
+      const content = await callTool('glob_files', { pattern, path, limit } as Record<string, unknown>);
+      return { content: [{ type: 'text', text: content }], details: {} };
+    },
+  });
+
+  pi.registerTool({
+    name: 'websearch',
+    label: 'websearch',
+    description: 'Search the web (server-side).',
+    parameters: Type.Object({ query: Type.String() }),
+    async execute(_toolCallId, params) {
+      const content = await callTool('web_search', params as unknown as Record<string, unknown>);
+      return { content: [{ type: 'text', text: content }], details: {} };
+    },
+  });
+
+  pi.registerTool({
+    name: 'webfetch',
+    label: 'webfetch',
+    description: 'Fetch a URL (server-side).',
+    parameters: Type.Object({ url: Type.String() }),
+    async execute(_toolCallId, params) {
+      const content = await callTool('web_fetch', params as unknown as Record<string, unknown>);
+      return { content: [{ type: 'text', text: content }], details: {} };
+    },
+  });
 }
-

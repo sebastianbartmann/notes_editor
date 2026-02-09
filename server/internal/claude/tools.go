@@ -79,6 +79,28 @@ var ToolDefinitions = []map[string]any{
 		},
 	},
 	{
+		"name":        "glob_files",
+		"description": "Find files by glob pattern within the notes vault",
+		"input_schema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"pattern": map[string]any{
+					"type":        "string",
+					"description": "Glob pattern to match vault-relative file paths (supports **, *, ?)",
+				},
+				"path": map[string]any{
+					"type":        "string",
+					"description": "Directory to search in, relative to vault root. Defaults to '.'",
+				},
+				"limit": map[string]any{
+					"type":        "number",
+					"description": "Maximum number of results (default: 1000)",
+				},
+			},
+			"required": []string{"pattern"},
+		},
+	},
+	{
 		"name":        "web_search",
 		"description": "Search the web for information",
 		"input_schema": map[string]any{
@@ -203,6 +225,8 @@ func (te *ToolExecutor) ExecuteTool(name string, input map[string]any) (string, 
 		return te.listDirectory(input)
 	case "search_files":
 		return te.searchFiles(input)
+	case "glob_files":
+		return te.globFiles(input)
 	case "web_search":
 		return te.webSearch(input)
 	case "web_fetch":
@@ -259,6 +283,125 @@ func (te *ToolExecutor) listDirectory(input map[string]any) (string, error) {
 		return "", err
 	}
 	return string(result), nil
+}
+
+func (te *ToolExecutor) globFiles(input map[string]any) (string, error) {
+	pattern, ok := input["pattern"].(string)
+	if !ok || strings.TrimSpace(pattern) == "" {
+		return "", fmt.Errorf("pattern is required")
+	}
+	searchPath, ok := input["path"].(string)
+	if !ok || strings.TrimSpace(searchPath) == "" {
+		searchPath = "."
+	}
+
+	limit := 1000
+	if rawLimit, ok := input["limit"]; ok {
+		switch v := rawLimit.(type) {
+		case float64:
+			if int(v) > 0 {
+				limit = int(v)
+			}
+		case int:
+			if v > 0 {
+				limit = v
+			}
+		}
+	}
+
+	fullPath, err := vault.ResolvePath(te.store.RootPath(), te.person, searchPath)
+	if err != nil {
+		return "", err
+	}
+	re, err := compileVaultGlob(pattern)
+	if err != nil {
+		return "", err
+	}
+
+	var matches []string
+
+	err = filepath.Walk(fullPath, func(p string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if strings.HasPrefix(info.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasPrefix(info.Name(), ".") {
+			return nil
+		}
+
+		// Match against path relative to the search root, but return vault-relative paths.
+		relForMatch, relErr := filepath.Rel(fullPath, p)
+		if relErr != nil {
+			return nil
+		}
+		relForMatch = filepath.ToSlash(relForMatch)
+
+		if re.MatchString(relForMatch) {
+			relVault, relVaultErr := filepath.Rel(filepath.Join(te.store.RootPath(), te.person), p)
+			if relVaultErr != nil {
+				return nil
+			}
+			matches = append(matches, filepath.ToSlash(relVault))
+			if len(matches) >= limit {
+				return filepath.SkipAll
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	result, err := json.Marshal(matches)
+	if err != nil {
+		return "", err
+	}
+	return string(result), nil
+}
+
+// compileVaultGlob converts a minimal glob syntax to a regex.
+// Supported:
+// - `*` matches any run of non-separator characters
+// - `?` matches one non-separator character
+// - `**` matches across separators
+func compileVaultGlob(pattern string) (*regexp.Regexp, error) {
+	pattern = strings.TrimSpace(pattern)
+	pattern = filepath.ToSlash(pattern)
+
+	var b strings.Builder
+	b.WriteString("^")
+	for i := 0; i < len(pattern); i++ {
+		ch := pattern[i]
+		switch ch {
+		case '*':
+			if i+1 < len(pattern) && pattern[i+1] == '*' {
+				// Special-case "**/" to also match "no directory" (root-level files).
+				if i+2 < len(pattern) && pattern[i+2] == '/' {
+					b.WriteString(`(?:.*/)?`)
+					i += 2
+				} else {
+					b.WriteString(".*")
+					i++
+				}
+			} else {
+				b.WriteString(`[^/]*`)
+			}
+		case '?':
+			b.WriteString(`[^/]`)
+		case '.', '+', '(', ')', '|', '^', '$', '[', ']', '{', '}', '\\':
+			b.WriteByte('\\')
+			b.WriteByte(ch)
+		default:
+			b.WriteByte(ch)
+		}
+	}
+	b.WriteString("$")
+	return regexp.Compile(b.String())
 }
 
 func (te *ToolExecutor) searchFiles(input map[string]any) (string, error) {
