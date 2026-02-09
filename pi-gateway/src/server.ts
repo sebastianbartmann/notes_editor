@@ -37,7 +37,23 @@ const PI_TIMEOUT_MS = Number(process.env.PI_GATEWAY_PI_TIMEOUT_MS || '120000');
 
 // Our Pi extension registers tools and applies system prompt updates.
 const SELF_DIR = path.dirname(fileURLToPath(import.meta.url));
-const EXTENSION_PATH = (process.env.PI_GATEWAY_PI_EXTENSION_PATH || path.join(SELF_DIR, 'pi-notes-editor-extension.ts')).trim();
+function resolveExtensionPath(): string {
+  const override = (process.env.PI_GATEWAY_PI_EXTENSION_PATH || '').trim();
+  if (override) return override;
+
+  const candidates = [
+    path.join(SELF_DIR, 'pi-notes-editor-extension.js'), // production build output
+    path.join(SELF_DIR, 'pi-notes-editor-extension.ts'), // dev (ts-node)
+    path.join(SELF_DIR, '..', 'src', 'pi-notes-editor-extension.ts'), // running dist/ from project root
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  // Fallback to the most-likely location even if missing (we'll surface error via stderr).
+  return candidates[0];
+}
+
+const EXTENSION_PATH = resolveExtensionPath();
 
 type PersonClient = {
   client: PiRpcClient;
