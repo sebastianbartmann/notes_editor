@@ -155,6 +155,11 @@ object ApiClient {
             parse = { raw -> decode(raw) }
         )
 
+    suspend fun sync(wait: Boolean = false, timeoutMs: Int = 0): SyncStatus =
+        postJson("/api/sync", SyncRequest(wait = wait, timeoutMs = timeoutMs))
+
+    suspend fun fetchSyncStatus(): SyncStatus = getJson("/api/sync/status")
+
     suspend fun fetchDaily(): DailyNote = getJson("/api/daily")
 
     suspend fun saveDaily(path: String, content: String): ApiMessage =

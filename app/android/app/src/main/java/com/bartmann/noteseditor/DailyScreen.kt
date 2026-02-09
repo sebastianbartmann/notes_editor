@@ -73,6 +73,7 @@ fun DailyScreen(
         scope.launch {
             val previousPath = path
             try {
+                AppSync.syncIfStale(timeoutMs = 2_000, maxAgeMs = 30_000)
                 val daily = ApiClient.fetchDaily()
                 todayPath = daily.path
                 val entries = try {

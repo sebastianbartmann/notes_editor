@@ -25,6 +25,7 @@ type Server struct {
 	store    *vault.Store
 	daily    *vault.Daily
 	git      *vault.Git
+	syncMgr  *SyncManager
 	claude   *claude.Service
 	agent    *agent.Service
 	linkedin *linkedin.Service
@@ -40,7 +41,7 @@ func NewServer(cfg *config.Config) *Server {
 
 	linkedinSvc, claudeSvc, agentSvc := buildRuntimeServices(cfg, store)
 
-	return &Server{
+	srv := &Server{
 		config:   cfg,
 		store:    store,
 		daily:    daily,
@@ -49,6 +50,13 @@ func NewServer(cfg *config.Config) *Server {
 		agent:    agentSvc,
 		linkedin: linkedinSvc,
 	}
+
+	// Background git sync (pull/push) for the vault. This avoids doing networked git
+	// operations in read handlers while still keeping clients reasonably up to date.
+	srv.syncMgr = NewSyncManager(&srv.mu, git)
+	srv.syncMgr.Start()
+
+	return srv
 }
 
 // NewRouter creates the HTTP router with all routes configured.
@@ -76,6 +84,10 @@ func NewRouter(srv *Server) http.Handler {
 		r.Post("/save", srv.handleSaveDaily)
 		r.Post("/append", srv.handleAppendDaily)
 		r.Post("/clear-pinned", srv.handleClearPinned)
+
+		// Git sync routes
+		r.Post("/sync", srv.handleSync)
+		r.Get("/sync/status", srv.handleSyncStatus)
 
 		// Todo routes
 		r.Post("/todos/add", srv.handleAddTodo)

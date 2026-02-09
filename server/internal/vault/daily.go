@@ -22,31 +22,32 @@ func NewDaily(store *Store) *Daily {
 
 // GetOrCreateDaily returns today's daily note, creating it if it doesn't exist.
 // The note inherits incomplete todos and pinned entries from the previous note.
-func (d *Daily) GetOrCreateDaily(person string, date time.Time) (string, string, error) {
+// created is true only when the note did not previously exist and was written.
+func (d *Daily) GetOrCreateDaily(person string, date time.Time) (content string, path string, created bool, err error) {
 	filename := date.Format("2006-01-02") + ".md"
-	path := filepath.Join("daily", filename)
+	path = filepath.Join("daily", filename)
 
 	// Check if today's note exists
-	content, err := d.store.ReadFile(person, path)
+	content, err = d.store.ReadFile(person, path)
 	if err == nil {
-		return content, path, nil
+		return content, path, false, nil
 	}
 
 	if !os.IsNotExist(err) {
-		return "", "", err
+		return "", "", false, err
 	}
 
 	// Create new daily note with inheritance
 	content, err = d.generateDailyNote(person, date)
 	if err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
 
 	if err := d.store.WriteFile(person, path, content); err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
 
-	return content, path, nil
+	return content, path, true, nil
 }
 
 // generateDailyNote creates a new daily note with inherited todos and pinned entries.

@@ -52,6 +52,24 @@ data class ApiMessage(
 )
 
 @Serializable
+data class SyncStatus(
+    @SerialName("in_progress")
+    val inProgress: Boolean = false,
+    @SerialName("pending_pull")
+    val pendingPull: Boolean = false,
+    @SerialName("pending_push")
+    val pendingPush: Boolean = false,
+    @SerialName("last_pull_at")
+    val lastPullAt: String? = null,
+    @SerialName("last_push_at")
+    val lastPushAt: String? = null,
+    @SerialName("last_error")
+    val lastError: String? = null,
+    @SerialName("last_error_at")
+    val lastErrorAt: String? = null
+)
+
+@Serializable
 data class EnvResponse(
     val success: Boolean,
     val content: String = "",
@@ -196,6 +214,13 @@ data class DeleteFileRequest(
 data class UnpinEntryRequest(
     val path: String,
     val line: Int
+)
+
+@Serializable
+data class SyncRequest(
+    val wait: Boolean = false,
+    @SerialName("timeout_ms")
+    val timeoutMs: Int = 0
 )
 
 @Serializable

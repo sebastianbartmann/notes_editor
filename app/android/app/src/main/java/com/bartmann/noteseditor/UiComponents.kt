@@ -64,9 +64,51 @@ fun ScreenHeader(
             style = AppTheme.typography.title,
             color = AppTheme.colors.text
         )
-        if (actionButton != null) {
-            actionButton()
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SyncBadge()
+            if (actionButton != null) {
+                actionButton()
+            }
         }
+    }
+}
+
+@Composable
+private fun SyncBadge() {
+    val status = AppSync.status
+    val offline = AppSync.offline
+
+    val text = when {
+        offline -> "Offline"
+        status?.lastError != null -> "Sync error"
+        status?.inProgress == true || status?.pendingPull == true || status?.pendingPush == true -> "Syncing"
+        else -> "Synced"
+    }
+
+    val color = when {
+        offline -> AppTheme.colors.muted
+        status?.lastError != null -> Color(0xFFE74C3C)
+        status?.inProgress == true || status?.pendingPull == true || status?.pendingPush == true -> Color(0xFFF1C40F)
+        else -> Color(0xFF2ECC71)
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(color, RoundedCornerShape(99.dp))
+        )
+        AppText(
+            text = text,
+            style = AppTheme.typography.label,
+            color = AppTheme.colors.muted
+        )
     }
 }
 

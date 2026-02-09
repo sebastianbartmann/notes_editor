@@ -35,19 +35,22 @@ func (s *Server) handleAddTodo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get or create today's daily note
-	_, path, err := s.daily.GetOrCreateDaily(person, time.Now())
+	s.mu.Lock()
+	_, path, _, err := s.daily.GetOrCreateDaily(person, time.Now())
 	if err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
 
 	if err := s.daily.AddTask(person, path, req.Category, req.Text); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Add task")
+	s.syncMgr.TriggerPush("Add task")
 
 	writeSuccess(w, "Task added")
 }
@@ -80,13 +83,15 @@ func (s *Server) handleToggleTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
 	if err := s.daily.ToggleTask(person, req.Path, req.Line); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Toggle task")
+	s.syncMgr.TriggerPush("Toggle task")
 
 	writeSuccess(w, "Task toggled")
 }

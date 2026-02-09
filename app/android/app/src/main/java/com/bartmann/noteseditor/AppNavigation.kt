@@ -32,6 +32,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.delay
 
 sealed class Screen(val route: String, val label: String) {
     data object Daily : Screen("daily", "Daily")
@@ -122,6 +123,22 @@ fun NotesEditorApp() {
                 popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
                 launchSingleTop = true
             }
+        }
+    }
+
+    // App open: try to sync once (rate-limited server-side). Keeps views fresh across devices.
+    LaunchedEffect(person) {
+        if (person != null) {
+            AppSync.syncIfStale(timeoutMs = 2_000, maxAgeMs = 30_000)
+        }
+    }
+
+    // Poll sync status in the background for a small "synced/syncing/error" indicator.
+    LaunchedEffect(person) {
+        if (person == null) return@LaunchedEffect
+        while (true) {
+            AppSync.refreshStatus()
+            delay(5_000)
         }
     }
 

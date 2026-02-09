@@ -22,7 +22,11 @@ type SleepEntry struct {
 
 // handleGetSleepTimes returns recent sleep time entries.
 func (s *Server) handleGetSleepTimes(w http.ResponseWriter, r *http.Request) {
+	s.syncMgr.TriggerPullIfStale(30 * time.Second)
+
+	s.mu.RLock()
 	content, err := s.store.ReadRootFile(sleepTimesFile)
+	s.mu.RUnlock()
 	if err != nil {
 		// File doesn't exist yet - return empty list
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -121,13 +125,15 @@ func (s *Server) handleAppendSleepTime(w http.ResponseWriter, r *http.Request) {
 	date := time.Now().Format("2006-01-02")
 	entry := fmt.Sprintf("%s | %s | %s | %s\n", date, req.Child, req.Time, req.Status)
 
+	s.mu.Lock()
 	if err := s.store.AppendRootFile(sleepTimesFile, entry); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Add sleep entry")
+	s.syncMgr.TriggerPush("Add sleep entry")
 
 	writeSuccess(w, "Entry added")
 }
@@ -150,14 +156,17 @@ func (s *Server) handleDeleteSleepTime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
 	content, err := s.store.ReadRootFile(sleepTimesFile)
 	if err != nil {
+		s.mu.Unlock()
 		writeNotFound(w, "Sleep times file not found")
 		return
 	}
 
 	lines := strings.Split(content, "\n")
 	if req.Line > len(lines) {
+		s.mu.Unlock()
 		writeBadRequest(w, "Line number out of range")
 		return
 	}
@@ -168,12 +177,13 @@ func (s *Server) handleDeleteSleepTime(w http.ResponseWriter, r *http.Request) {
 	// Write back
 	newContent := strings.Join(lines, "\n")
 	if err := s.store.WriteRootFile(sleepTimesFile, newContent); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Delete sleep entry")
+	s.syncMgr.TriggerPush("Delete sleep entry")
 
 	writeSuccess(w, "Entry deleted")
 }

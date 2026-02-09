@@ -26,9 +26,12 @@ func TestDaily_GetOrCreateDaily_NewNote(t *testing.T) {
 	daily, _, _ := setupDailyTest(t)
 	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
 
-	content, path, err := daily.GetOrCreateDaily("sebastian", date)
+	content, path, created, err := daily.GetOrCreateDaily("sebastian", date)
 	if err != nil {
 		t.Fatalf("GetOrCreateDaily() error = %v", err)
+	}
+	if !created {
+		t.Fatalf("created = %v, want true", created)
 	}
 
 	if path != "daily/2024-01-15.md" {
@@ -57,9 +60,12 @@ func TestDaily_GetOrCreateDaily_ExistingNote(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	content, _, err := daily.GetOrCreateDaily("sebastian", date)
+	content, _, created, err := daily.GetOrCreateDaily("sebastian", date)
 	if err != nil {
 		t.Fatalf("GetOrCreateDaily() error = %v", err)
+	}
+	if created {
+		t.Fatalf("created = %v, want false", created)
 	}
 
 	if content != existingContent {
@@ -96,7 +102,7 @@ Some notes here.
 
 	// Create today's note
 	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
-	content, _, err := daily.GetOrCreateDaily("sebastian", date)
+	content, _, _, err := daily.GetOrCreateDaily("sebastian", date)
 	if err != nil {
 		t.Fatalf("GetOrCreateDaily() error = %v", err)
 	}
@@ -148,7 +154,7 @@ Another pinned entry.
 
 	// Create today's note
 	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
-	content, _, err := daily.GetOrCreateDaily("sebastian", date)
+	content, _, _, err := daily.GetOrCreateDaily("sebastian", date)
 	if err != nil {
 		t.Fatalf("GetOrCreateDaily() error = %v", err)
 	}
@@ -388,7 +394,7 @@ Some notes here.
 
 	// Create today's note
 	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
-	content, _, err := daily.GetOrCreateDaily("sebastian", date)
+	content, _, _, err := daily.GetOrCreateDaily("sebastian", date)
 	if err != nil {
 		t.Fatalf("GetOrCreateDaily() error = %v", err)
 	}
@@ -468,7 +474,7 @@ Meeting notes
 
 	// Create today's note
 	date := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
-	content, _, err := daily.GetOrCreateDaily("sebastian", date)
+	content, _, _, err := daily.GetOrCreateDaily("sebastian", date)
 	if err != nil {
 		t.Fatalf("GetOrCreateDaily() error = %v", err)
 	}

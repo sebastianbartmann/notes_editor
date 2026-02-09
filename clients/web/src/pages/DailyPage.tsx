@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { usePerson } from '../hooks/usePerson'
 import { fetchDaily, saveDaily, appendDaily } from '../api/daily'
+import { syncIfStale } from '../api/sync'
 import { toggleTodo } from '../api/todos'
 import { unpinEntry } from '../api/files'
 import NoteView from '../components/NoteView/NoteView'
@@ -27,6 +28,9 @@ export default function DailyPage() {
     setLoading(true)
     setError('')
     try {
+      // Pull at most once per interval to keep the daily view fresh without
+      // paying the git/network cost on every navigation.
+      await syncIfStale({ maxAgeMs: 30_000, timeoutMs: 2_000 })
       const data = await fetchDaily()
       setContent(data.content)
       setPath(data.path)

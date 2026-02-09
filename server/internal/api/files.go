@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"time"
 )
 
 // handleListFiles lists files in a directory.
@@ -13,12 +14,16 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.syncMgr.TriggerPullIfStale(30 * time.Second)
+
 	path := r.URL.Query().Get("path")
 	if path == "" {
 		path = "."
 	}
 
+	s.mu.RLock()
 	entries, err := s.store.ListDir(person, path)
+	s.mu.RUnlock()
 	if err != nil {
 		if os.IsNotExist(err) {
 			writeNotFound(w, "Directory not found")
@@ -40,13 +45,17 @@ func (s *Server) handleReadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.syncMgr.TriggerPullIfStale(30 * time.Second)
+
 	path := r.URL.Query().Get("path")
 	if path == "" {
 		writeBadRequest(w, "Path is required")
 		return
 	}
 
+	s.mu.RLock()
 	content, err := s.store.ReadFile(person, path)
+	s.mu.RUnlock()
 	if err != nil {
 		if os.IsNotExist(err) {
 			writeNotFound(w, "File not found")
@@ -85,25 +94,29 @@ func (s *Server) handleCreateFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
 	// Check if file already exists
 	exists, err := s.store.FileExists(person, req.Path)
 	if err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
 	if exists {
+		s.mu.Unlock()
 		writeBadRequest(w, "File already exists")
 		return
 	}
 
 	// Create empty file
 	if err := s.store.WriteFile(person, req.Path, ""); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Create file")
+	s.syncMgr.TriggerPush("Create file")
 
 	writeSuccess(w, "File created")
 }
@@ -132,13 +145,15 @@ func (s *Server) handleSaveFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
 	if err := s.store.WriteFile(person, req.Path, req.Content); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Save file")
+	s.syncMgr.TriggerPush("Save file")
 
 	writeSuccess(w, "File saved")
 }
@@ -166,13 +181,15 @@ func (s *Server) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
 	if err := s.store.DeleteFile(person, req.Path); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Delete file")
+	s.syncMgr.TriggerPush("Delete file")
 
 	writeSuccess(w, "File deleted")
 }
@@ -205,13 +222,15 @@ func (s *Server) handleUnpinEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
 	if err := s.daily.UnpinEntry(person, req.Path, req.Line); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Unpin entry")
+	s.syncMgr.TriggerPush("Unpin entry")
 
 	writeSuccess(w, "Entry unpinned")
 }

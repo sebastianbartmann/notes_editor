@@ -45,6 +45,7 @@ fun FilesScreen(modifier: Modifier) {
     fun loadEntries(path: String) {
         scope.launch {
             try {
+                AppSync.syncIfStale(timeoutMs = 2_000, maxAgeMs = 30_000)
                 val response = ApiClient.listFiles(path)
                 entriesByPath = entriesByPath.toMutableMap().apply { put(path, response.entries) }
                 message = "Loaded."

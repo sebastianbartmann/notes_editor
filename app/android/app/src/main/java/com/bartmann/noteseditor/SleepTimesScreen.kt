@@ -39,6 +39,7 @@ fun SleepTimesScreen(modifier: Modifier) {
     fun refresh() {
         scope.launch {
             try {
+                AppSync.syncIfStale(timeoutMs = 2_000, maxAgeMs = 30_000)
                 val response = ApiClient.fetchSleepTimes()
                 entries = response.entries
                 message = "Loaded."

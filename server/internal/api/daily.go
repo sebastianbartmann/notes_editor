@@ -13,19 +13,27 @@ func (s *Server) handleGetDaily(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pull latest changes before reading
-	if err := s.git.Pull(); err != nil {
-		// Log but don't fail - we can still read local files
+	// Keep the daily view fresh. We only block for sync when the last pull is stale,
+	// so repeated navigations stay fast.
+	st := s.syncMgr.Status()
+	if st.LastPullAt.IsZero() || time.Since(st.LastPullAt) >= 30*time.Second {
+		_ = s.syncMgr.SyncNow(true, 2*time.Second)
+	} else {
+		s.syncMgr.TriggerPullIfStale(30 * time.Second)
 	}
 
-	content, path, err := s.daily.GetOrCreateDaily(person, time.Now())
+	s.mu.Lock()
+	content, path, created, err := s.daily.GetOrCreateDaily(person, time.Now())
+	s.mu.Unlock()
 	if err != nil {
 		writeBadRequest(w, err.Error())
 		return
 	}
 
-	// Commit if a new file was created
-	_ = s.git.CommitAndPush("Daily note created")
+	// Commit only if a new file was created. (Avoid expensive git work on the read path.)
+	if created {
+		s.syncMgr.TriggerPush("Daily note created")
+	}
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"date":    time.Now().Format("2006-01-02"),
@@ -58,13 +66,16 @@ func (s *Server) handleSaveDaily(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
 	if err := s.store.WriteFile(person, req.Path, req.Content); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Save note")
+	// Commit/push in the background.
+	s.syncMgr.TriggerPush("Save note")
 
 	writeSuccess(w, "Saved")
 }
@@ -98,13 +109,15 @@ func (s *Server) handleAppendDaily(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
 	if err := s.daily.AppendEntry(person, req.Path, req.Text, req.Pinned); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Append entry")
+	s.syncMgr.TriggerPush("Append entry")
 
 	writeSuccess(w, "Appended")
 }
@@ -132,13 +145,15 @@ func (s *Server) handleClearPinned(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
 	if err := s.daily.ClearAllPinned(person, req.Path); err != nil {
+		s.mu.Unlock()
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.mu.Unlock()
 
-	// Commit changes
-	_ = s.git.CommitAndPush("Clear pinned")
+	s.syncMgr.TriggerPush("Clear pinned")
 
 	writeSuccess(w, "Cleared")
 }
