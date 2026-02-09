@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"notes-editor/internal/agent"
+	"notes-editor/internal/claude"
 )
 
 // StopRunRequest is the request body for stopping an active agent run.
@@ -23,6 +24,17 @@ type AgentActionRunRequest struct {
 	SessionID string `json:"session_id,omitempty"`
 	Message   string `json:"message,omitempty"`
 	Confirm   bool   `json:"confirm,omitempty"`
+}
+
+type AgentToolExecuteRequest struct {
+	Tool string         `json:"tool"`
+	Args map[string]any `json:"args"`
+}
+
+type AgentToolExecuteResponse struct {
+	OK      bool   `json:"ok"`
+	Content string `json:"content,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // handleAgentChat handles non-streaming agent chat requests.
@@ -257,6 +269,42 @@ func (s *Server) handleAgentActionsList(w http.ResponseWriter, r *http.Request) 
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"actions": actions,
+	})
+}
+
+// handleAgentToolExecute executes a canonical tool call in a person-scoped context.
+// Intended for the local gateway sidecar to delegate tool execution back to the Go server.
+func (s *Server) handleAgentToolExecute(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
+	var req AgentToolExecuteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeBadRequest(w, "Invalid request body")
+		return
+	}
+	if req.Tool == "" {
+		writeBadRequest(w, "tool is required")
+		return
+	}
+	if req.Args == nil {
+		req.Args = map[string]any{}
+	}
+
+	toolExec := claude.NewToolExecutor(s.store, s.getLinkedIn(), person)
+	content, err := toolExec.ExecuteTool(req.Tool, req.Args)
+	if err != nil {
+		writeJSON(w, http.StatusOK, AgentToolExecuteResponse{
+			OK:    false,
+			Error: err.Error(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, AgentToolExecuteResponse{
+		OK:      true,
+		Content: content,
 	})
 }
 

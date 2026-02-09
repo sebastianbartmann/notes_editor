@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,23 +26,16 @@ func TestPiGatewayRuntimeUnavailableWithoutURL(t *testing.T) {
 }
 
 func TestPiGatewayRuntimeExecutesToolCalls(t *testing.T) {
-	var postedResult piGatewayToolResult
-
 	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/chat-stream":
 			w.Header().Set("Content-Type", "application/x-ndjson")
 			_, _ = w.Write([]byte(`{"type":"start","run_id":"run-1","session_id":"runtime-session-1"}` + "\n"))
 			_, _ = w.Write([]byte(`{"type":"text","delta":"hello "}` + "\n"))
-			_, _ = w.Write([]byte(`{"type":"tool_call","id":"call-1","tool":"read_file","args":{"path":"notes/test.md"}}` + "\n"))
+			_, _ = w.Write([]byte(`{"type":"tool_call","tool":"read_file","args":{"path":"notes/test.md"}}` + "\n"))
+			_, _ = w.Write([]byte(`{"type":"tool_result","tool":"read_file","ok":true,"summary":"Tool read_file executed"}` + "\n"))
 			_, _ = w.Write([]byte(`{"type":"text","delta":"world"}` + "\n"))
 			_, _ = w.Write([]byte(`{"type":"done"}` + "\n"))
-		case r.Method == http.MethodPost && r.URL.Path == "/v1/runs/run-1/tool-result":
-			defer r.Body.Close()
-			if err := json.NewDecoder(r.Body).Decode(&postedResult); err != nil {
-				t.Fatalf("decode tool result: %v", err)
-			}
-			w.WriteHeader(http.StatusNoContent)
 		default:
 			http.NotFound(w, r)
 		}
@@ -95,14 +87,5 @@ func TestPiGatewayRuntimeExecutesToolCalls(t *testing.T) {
 	}
 	if text.String() != "hello world" {
 		t.Fatalf("unexpected text: %q", text.String())
-	}
-	if postedResult.ID != "call-1" {
-		t.Fatalf("unexpected tool result id: %q", postedResult.ID)
-	}
-	if !postedResult.OK {
-		t.Fatal("expected posted tool result OK=true")
-	}
-	if !strings.Contains(postedResult.Content, "vault content") {
-		t.Fatalf("expected posted result content to contain file content, got %q", postedResult.Content)
 	}
 }

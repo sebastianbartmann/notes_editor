@@ -10,9 +10,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"notes-editor/internal/claude"
 	"notes-editor/internal/linkedin"
@@ -26,23 +26,16 @@ type piGatewayStreamEvent struct {
 	Delta     string         `json:"delta,omitempty"`
 	Tool      string         `json:"tool,omitempty"`
 	Args      map[string]any `json:"args,omitempty"`
+	OK        bool           `json:"ok,omitempty"`
+	Summary   string         `json:"summary,omitempty"`
 	Message   string         `json:"message,omitempty"`
-	ID        string         `json:"id,omitempty"`
-}
-
-type piGatewayToolResult struct {
-	ID      string `json:"id"`
-	OK      bool   `json:"ok"`
-	Content string `json:"content,omitempty"`
-	Error   string `json:"error,omitempty"`
 }
 
 // PiGatewayRuntime bridges the Go server to the local Pi sidecar.
 type PiGatewayRuntime struct {
-	baseURL  string
-	client   *http.Client
-	store    *vault.Store
-	linkedin *linkedin.Service
+	baseURL string
+	client  *http.Client
+	store   *vault.Store
 
 	sessions                   *claude.SessionStore
 	mu                         sync.Mutex
@@ -54,17 +47,17 @@ func NewPiGatewayRuntime(baseURL string) *PiGatewayRuntime {
 	return &PiGatewayRuntime{
 		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		client: &http.Client{
-			Timeout: 60 * time.Second,
+			// Streaming requests must not have a global client timeout.
+			Timeout: 0,
 		},
 		sessions:                   claude.NewSessionStore(),
 		runtimeSessionByAppSession: make(map[string]string),
 	}
 }
 
-// WithDependencies injects vault/linkedin dependencies for tool execution.
-func (r *PiGatewayRuntime) WithDependencies(store *vault.Store, linkedinSvc *linkedin.Service) *PiGatewayRuntime {
+// WithDependencies injects vault dependencies for prompt/historical context.
+func (r *PiGatewayRuntime) WithDependencies(store *vault.Store, _ *linkedin.Service) *PiGatewayRuntime {
 	r.store = store
-	r.linkedin = linkedinSvc
 	return r
 }
 
@@ -120,11 +113,22 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 
 	runtimeSessionID := r.getRuntimeSessionID(person, appSession.ID)
 
+	systemPrompt := claude.SystemPrompt
+	if r.store != nil {
+		if prompt, err := r.store.ReadFile(person, "agents.md"); err == nil {
+			if strings.TrimSpace(prompt) != "" {
+				systemPrompt = prompt
+			}
+		} else if !os.IsNotExist(err) {
+			// Non-fatal: fall back to default system prompt.
+		}
+	}
+
 	payload := map[string]any{
-		"person":         person,
-		"session_id":     runtimeSessionID,
-		"message":        req.Message,
-		"max_tool_calls": req.MaxToolCalls,
+		"person":        person,
+		"session_id":    runtimeSessionID,
+		"message":       req.Message,
+		"system_prompt": systemPrompt,
 	}
 
 	body, err := json.Marshal(payload)
@@ -149,7 +153,6 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 	}
 
 	out := make(chan StreamEvent, 100)
-	toolExec := claude.NewToolExecutor(r.store, r.linkedin, person)
 
 	go func() {
 		defer close(out)
@@ -157,7 +160,6 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 
 		var fullResponse strings.Builder
 		finalSessionID := appSession.ID
-		runID := ""
 		sawDone := false
 
 		scanner := bufio.NewScanner(resp.Body)
@@ -177,9 +179,6 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 
 			switch event.Type {
 			case "start":
-				if event.RunID != "" {
-					runID = event.RunID
-				}
 				if event.SessionID != "" {
 					r.setRuntimeSessionID(person, appSession.ID, event.SessionID)
 				}
@@ -190,63 +189,18 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 					Delta: event.Delta,
 				}
 			case "tool_call":
-				out <- StreamEvent{
-					Type: "tool_call",
-					Tool: event.Tool,
-					Args: event.Args,
-				}
-
-				toolResult := piGatewayToolResult{ID: event.ID}
-				result, execErr := toolExec.ExecuteTool(event.Tool, event.Args)
-				if execErr != nil {
-					toolResult.OK = false
-					toolResult.Error = execErr.Error()
-					out <- StreamEvent{
-						Type:    "tool_result",
-						Tool:    event.Tool,
-						OK:      false,
-						Summary: execErr.Error(),
-					}
-				} else {
-					toolResult.OK = true
-					toolResult.Content = result
-					out <- StreamEvent{
-						Type:    "tool_result",
-						Tool:    event.Tool,
-						OK:      true,
-						Summary: "Tool " + event.Tool + " executed",
-					}
-				}
-
-				if event.ID != "" && runID != "" {
-					if err := r.postToolResult(ctx, runID, toolResult); err != nil {
-						out <- StreamEvent{
-							Type:    "error",
-							Message: err.Error(),
-						}
-						out <- StreamEvent{
-							Type:      "done",
-							SessionID: finalSessionID,
-						}
-						return
-					}
-				}
+				out <- StreamEvent{Type: "tool_call", Tool: event.Tool, Args: event.Args}
 			case "status":
-				out <- StreamEvent{
-					Type:    "status",
-					Message: event.Message,
-				}
+				out <- StreamEvent{Type: "status", Message: event.Message}
+			case "tool_result":
+				// The gateway now executes tools by delegating back to the Go server, so
+				// tool results are streamed directly from the sidecar.
+				out <- StreamEvent{Type: "tool_result", Tool: event.Tool, OK: event.OK, Summary: event.Summary}
 			case "error":
-				out <- StreamEvent{
-					Type:    "error",
-					Message: event.Message,
-				}
+				out <- StreamEvent{Type: "error", Message: event.Message}
 			case "done":
 				sawDone = true
-				out <- StreamEvent{
-					Type:      "done",
-					SessionID: finalSessionID,
-				}
+				out <- StreamEvent{Type: "done", SessionID: finalSessionID}
 			}
 		}
 
@@ -317,30 +271,6 @@ func (r *PiGatewayRuntime) setRuntimeSessionID(person, appSessionID, runtimeSess
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.runtimeSessionByAppSession[key] = runtimeSessionID
-}
-
-func (r *PiGatewayRuntime) postToolResult(ctx context.Context, runID string, result piGatewayToolResult) error {
-	data, err := json.Marshal(result)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.baseURL+"/v1/runs/"+runID+"/tool-result", bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return mapPiTransportError(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		return mapPiStatusError(resp.StatusCode, string(body))
-	}
-	return nil
 }
 
 func mapPiTransportError(err error) error {

@@ -110,6 +110,7 @@ func NewRouter(srv *Server) http.Handler {
 		r.Post("/agent/config", srv.handleAgentConfigSave)
 		r.Get("/agent/actions", srv.handleAgentActionsList)
 		r.Post("/agent/actions/{id}/run", srv.handleAgentActionRun)
+		r.Post("/agent/tools/execute", srv.handleAgentToolExecute)
 		r.Get("/agent/gateway/health", srv.handleAgentGatewayHealth)
 
 		// Settings routes

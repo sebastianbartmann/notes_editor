@@ -6,7 +6,6 @@ Local TypeScript sidecar for `runtime_mode=gateway_subscription`.
 
 - `GET /health`
 - `POST /v1/chat-stream` (NDJSON stream)
-- `POST /v1/runs/:run_id/tool-result`
 
 ## Run
 
@@ -17,22 +16,25 @@ npm run build
 PI_GATEWAY_PORT=4317 npm start
 ```
 
-Default mode is `claude_cli` (subscription/token-based via Claude CLI) with tool-bridge enabled.
+Default mode is `pi_rpc` (Pi coding-agent in RPC mode) with server-delegated tools.
 
-Before first use:
+Before first use (to authenticate your subscription provider):
 
 ```bash
-claude setup-token
+pi
+# inside Pi: /login
 ```
 
 Optional env vars:
 
-- `PI_GATEWAY_MODE=claude_cli|mock` (default `claude_cli`)
-- `PI_GATEWAY_CLAUDE_BIN=/path/to/claude`
-- `PI_GATEWAY_CLAUDE_MODEL=claude-sonnet-4-5`
-- `PI_GATEWAY_CLAUDE_DISABLE_TOOLS=true` (default true; gateway handles tool execution via Go)
-- `PI_GATEWAY_DEFAULT_MAX_TOOL_CALLS=20`
-- `PI_GATEWAY_TOOL_RESULT_TIMEOUT_MS=20000`
+- `PI_GATEWAY_MODE=pi_rpc|mock` (default `pi_rpc`)
+- `PI_GATEWAY_PI_PROVIDER=anthropic` (default `anthropic`)
+- `PI_GATEWAY_PI_MODEL=...` (optional; default model chosen by Pi)
+- `PI_GATEWAY_PI_SESSION_DIR=...` (default `~/.pi/notes-editor-sessions`)
+- `PI_GATEWAY_PI_TIMEOUT_MS=120000`
+- `PI_GATEWAY_PI_EXTENSION_PATH=...` (default `pi-gateway/src/pi-notes-editor-extension.ts`)
+- `NOTES_SERVER_URL=http://127.0.0.1:8080` (used by the Pi extension to call back into the Go server)
+- `NOTES_TOKEN=...` (used by the Pi extension; typically comes from `server/.env`)
 
 Server `.env` settings:
 
@@ -41,19 +43,10 @@ Server `.env` settings:
 - `AGENT_MAX_RUN_DURATION=2m`
 - `AGENT_MAX_TOOL_CALLS_PER_RUN=40`
 
-## Tool-bridge behavior (`claude_cli` mode)
+## Tool Execution
 
-The gateway asks Claude CLI for a structured next step on each loop:
-
-- `{"kind":"tool_call","tool":"...","args":{...}}`
-- `{"kind":"final","text":"..."}`
-
-On `tool_call`, gateway emits NDJSON `tool_call`, waits for Go to POST tool result, then continues with that tool output in context until final answer.
+Pi executes tools via a bundled extension (`src/pi-notes-editor-extension.ts`) that delegates each canonical tool call back to the Go server at `POST /api/agent/tools/execute` with the normal auth + person scoping.
 
 ## Mock mode quick trigger
 
-Send a message containing:
-
-`[[tool:read_file {"path":"notes/test.md"}]]`
-
-The gateway emits a `tool_call`, waits for Go to post `/v1/runs/:run_id/tool-result`, then continues the stream.
+Mock mode returns a single canned text response without invoking Pi.
