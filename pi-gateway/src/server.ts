@@ -2,6 +2,7 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 import { PiRpcClient } from './pi-rpc-client.js';
 
@@ -35,7 +36,8 @@ const SESSION_DIR = (process.env.PI_GATEWAY_PI_SESSION_DIR || path.join(process.
 const PI_TIMEOUT_MS = Number(process.env.PI_GATEWAY_PI_TIMEOUT_MS || '120000');
 
 // Our Pi extension registers tools and applies system prompt updates.
-const EXTENSION_PATH = (process.env.PI_GATEWAY_PI_EXTENSION_PATH || path.join(process.cwd(), 'src', 'pi-notes-editor-extension.ts')).trim();
+const SELF_DIR = path.dirname(fileURLToPath(import.meta.url));
+const EXTENSION_PATH = (process.env.PI_GATEWAY_PI_EXTENSION_PATH || path.join(SELF_DIR, 'pi-notes-editor-extension.ts')).trim();
 
 type PersonClient = {
   client: PiRpcClient;
@@ -91,6 +93,7 @@ async function getOrStartPersonClient(person: string): Promise<PersonClient> {
   // Run a single Pi process per person to avoid repeated startup overhead.
   // Tools and system prompt injection are handled by our extension.
   const rpc = new PiRpcClient({
+    nodeBin: process.execPath,
     cliPath: path.join(process.cwd(), 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'cli.js'),
     provider,
     model: model || undefined,
@@ -155,7 +158,16 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
 
   writeEvent(res, { type: 'start', session_id: runtimeSessionId, run_id: runId });
 
-  const pc = await getOrStartPersonClient(person);
+  let pc: PersonClient;
+  try {
+    pc = await getOrStartPersonClient(person);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'failed to start pi runtime';
+    writeEvent(res, { type: 'error', run_id: runId, message: msg });
+    writeEvent(res, { type: 'done', session_id: runtimeSessionId, run_id: runId });
+    res.end();
+    return;
+  }
 
   await runExclusive(pc, async () => {
     const sessionPath = ensureSessionPath(person, runtimeSessionId);
@@ -296,6 +308,20 @@ const server = createServer(async (req, res) => {
     sendJson(res, 404, { error: 'not_found' });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'internal_error';
+    if (res.headersSent) {
+      // Best-effort: we may already be streaming NDJSON.
+      try {
+        res.write(`${JSON.stringify({ type: 'error', message })}\n`);
+      } catch {
+        // ignore
+      }
+      try {
+        res.end();
+      } catch {
+        // ignore
+      }
+      return;
+    }
     sendJson(res, 500, { error: message });
   }
 });

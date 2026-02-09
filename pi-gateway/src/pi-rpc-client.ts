@@ -13,6 +13,8 @@ type RpcResponse = {
 };
 
 export type PiRpcClientOptions = {
+  // Node binary used to run pi in RPC mode. Default: current Node (process.execPath).
+  nodeBin?: string;
   cliPath: string;
   provider?: string;
   model?: string;
@@ -42,7 +44,8 @@ export class PiRpcClient {
     if (this.options.model) args.push('--model', this.options.model);
     if (this.options.args) args.push(...this.options.args);
 
-    this.proc = spawn('node', args, {
+    const nodeBin = this.options.nodeBin || process.execPath;
+    this.proc = spawn(nodeBin, args, {
       cwd: this.options.cwd,
       env: { ...process.env, ...this.options.env },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -173,4 +176,3 @@ export class PiRpcClient {
     }
   }
 }
-
