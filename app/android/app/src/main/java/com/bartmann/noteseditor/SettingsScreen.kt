@@ -136,7 +136,7 @@ fun SettingsScreen(modifier: Modifier) {
                     onSelect = { runtimeMode = "anthropic_api_key" }
                 )
                 RuntimeModeButton(
-                    label = "Gateway (Claude CLI)",
+                    label = "Gateway (Pi)",
                     value = "gateway_subscription",
                     runtimeMode = runtimeMode,
                     onSelect = { runtimeMode = "gateway_subscription" }

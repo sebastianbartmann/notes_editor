@@ -207,6 +207,11 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
       ? `${buildSystemPromptMarker(systemPrompt)}\n${userMessage}`
       : userMessage;
 
+    // Track whether we streamed any assistant text and capture runtime errors.
+    // These variables must be in the same scope as the event handler.
+    let sawAnyText = false;
+    let lastRunError = '';
+
     const unsubscribe = pc.client.onEvent((event: any) => {
       if (cancelled) return;
 
@@ -214,7 +219,16 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
         case 'message_update': {
           const ev = event.assistantMessageEvent;
           if (ev?.type === 'text_delta' && typeof ev.delta === 'string' && ev.delta.length > 0) {
+            sawAnyText = true;
             writeEvent(res, { type: 'text', run_id: runId, delta: ev.delta });
+          }
+          break;
+        }
+        case 'message_end': {
+          const msg = event?.message;
+          if (msg?.role === 'assistant' && typeof msg?.errorMessage === 'string' && msg.errorMessage.trim()) {
+            lastRunError = msg.errorMessage.trim();
+            writeEvent(res, { type: 'error', run_id: runId, message: lastRunError });
           }
           break;
         }
@@ -229,7 +243,8 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
           break;
         }
         case 'extension_error': {
-          writeEvent(res, { type: 'error', run_id: runId, message: String(event.error || 'extension error') });
+          lastRunError = String(event.error || 'extension error');
+          writeEvent(res, { type: 'error', run_id: runId, message: lastRunError });
           break;
         }
         case 'auto_retry_start': {
@@ -246,6 +261,12 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
     try {
       await pc.client.prompt(promptText);
       await pc.client.waitForIdle(PI_TIMEOUT_MS);
+
+      // If Pi ended with an error but didn't stream it (or we missed it), surface it.
+      if (!cancelled && !sawAnyText && lastRunError) {
+        writeEvent(res, { type: 'error', run_id: runId, message: lastRunError });
+      }
+
       writeEvent(res, { type: 'done', session_id: runtimeSessionId, run_id: runId });
       res.end();
     } catch (err) {

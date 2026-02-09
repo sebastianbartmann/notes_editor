@@ -170,7 +170,7 @@ export default function SettingsPage() {
               checked={runtimeMode === 'gateway_subscription'}
               onChange={() => setRuntimeMode('gateway_subscription')}
             />
-            Gateway Subscription (Claude CLI)
+            Gateway Subscription (Pi)
           </label>
         </div>
         <textarea
