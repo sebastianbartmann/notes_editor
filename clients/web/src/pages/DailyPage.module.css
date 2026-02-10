@@ -10,11 +10,30 @@
   justify-content: space-between;
 }
 
+.navRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .date {
   font-size: 14px;
   color: var(--muted);
   text-transform: none;
   letter-spacing: normal;
+}
+
+.todayLink {
+  background: transparent;
+  border: 0;
+  padding: 0 6px;
+  font-size: 14px;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.todayLink:hover {
+  text-decoration: underline;
 }
 
 .actions {

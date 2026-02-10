@@ -3,16 +3,37 @@ import { usePerson } from '../hooks/usePerson'
 import { fetchDaily, saveDaily, appendDaily } from '../api/daily'
 import { syncIfStale } from '../api/sync'
 import { toggleTodo } from '../api/todos'
-import { unpinEntry } from '../api/files'
+import { listFiles, readFile, unpinEntry } from '../api/files'
 import NoteView from '../components/NoteView/NoteView'
 import Editor from '../components/Editor/Editor'
 import styles from './DailyPage.module.css'
+
+function dateFromDailyPath(path: string): string {
+  const name = path.split('/').pop() || ''
+  const m = name.match(/^(\d{4}-\d{2}-\d{2})\.md$/)
+  return m?.[1] ?? ''
+}
+
+function buildDailyPaths(entries: { name: string; path: string; is_dir: boolean }[], todayDate: string): string[] {
+  const out: string[] = []
+  for (const e of entries) {
+    if (e.is_dir) continue
+    const m = e.name.match(/^(\d{4}-\d{2}-\d{2})\.md$/)
+    if (!m) continue
+    const d = m[1]
+    if (d > todayDate) continue
+    out.push(e.path)
+  }
+  return Array.from(new Set(out)).sort()
+}
 
 export default function DailyPage() {
   const { person } = usePerson()
   const [content, setContent] = useState('')
   const [path, setPath] = useState('')
   const [date, setDate] = useState('')
+  const [todayPath, setTodayPath] = useState('')
+  const [availableDailyPaths, setAvailableDailyPaths] = useState<string[]>([])
   const [isEditing, setIsEditing] = useState(false)
   const [appendText, setAppendText] = useState('')
   const [isPinned, setIsPinned] = useState(false)
@@ -21,10 +42,10 @@ export default function DailyPage() {
 
   useEffect(() => {
     if (!person) return
-    loadDaily()
+    loadToday()
   }, [person])
 
-  const loadDaily = async () => {
+  const loadToday = async () => {
     setLoading(true)
     setError('')
     try {
@@ -35,12 +56,52 @@ export default function DailyPage() {
       setContent(data.content)
       setPath(data.path)
       setDate(data.date)
+      setTodayPath(data.path)
+
+      try {
+        const listing = await listFiles('daily')
+        const fromFiles = buildDailyPaths(listing.entries, data.date)
+        setAvailableDailyPaths(Array.from(new Set([...fromFiles, data.path])).sort())
+      } catch {
+        setAvailableDailyPaths([data.path])
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load daily note')
     } finally {
       setLoading(false)
     }
   }
+
+  const loadPath = async (targetPath: string) => {
+    if (!targetPath) return
+    if (isEditing) {
+      const ok = window.confirm('Discard unsaved changes?')
+      if (!ok) return
+      setIsEditing(false)
+    }
+    setLoading(true)
+    setError('')
+    try {
+      await syncIfStale({ maxAgeMs: 30_000, timeoutMs: 2_000 })
+      const data = await readFile(targetPath)
+      setContent(data.content)
+      setPath(data.path)
+      setDate(dateFromDailyPath(data.path))
+      setAppendText('')
+      setIsPinned(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load note')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const currentIndex = availableDailyPaths.indexOf(path)
+  const prevPath = currentIndex > 0 ? availableDailyPaths[currentIndex - 1] : ''
+  const nextPath =
+    currentIndex !== -1 && currentIndex < availableDailyPaths.length - 1
+      ? availableDailyPaths[currentIndex + 1]
+      : ''
 
   const handleSave = async (newContent: string) => {
     try {
@@ -67,7 +128,11 @@ export default function DailyPage() {
   const handleTaskToggle = async (line: number) => {
     try {
       await toggleTodo({ path, line })
-      await loadDaily()
+      if (path === todayPath) {
+        await loadToday()
+      } else {
+        await loadPath(path)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to toggle task')
     }
@@ -76,7 +141,11 @@ export default function DailyPage() {
   const handleUnpin = async (line: number) => {
     try {
       await unpinEntry({ path, line })
-      await loadDaily()
+      if (path === todayPath) {
+        await loadToday()
+      } else {
+        await loadPath(path)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to unpin')
     }
@@ -97,12 +166,34 @@ export default function DailyPage() {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h2 className={styles.date}>{date}</h2>
+        <div className={styles.navRow}>
+          <button
+            onClick={() => loadPath(prevPath)}
+            className="ghost"
+            disabled={!prevPath}
+          >
+            prev
+          </button>
+          <button
+            onClick={() => loadPath(nextPath)}
+            className="ghost"
+            disabled={!nextPath}
+          >
+            next
+          </button>
+          {todayPath && path !== todayPath ? (
+            <button onClick={loadToday} className={styles.todayLink}>
+              {date}
+            </button>
+          ) : (
+            <h2 className={styles.date}>{date}</h2>
+          )}
+        </div>
         <div className={styles.actions}>
           {!isEditing && (
             <button onClick={() => setIsEditing(true)}>Edit</button>
           )}
-          <button onClick={loadDaily} className="ghost">
+          <button onClick={loadToday} className="ghost">
             Refresh
           </button>
         </div>
