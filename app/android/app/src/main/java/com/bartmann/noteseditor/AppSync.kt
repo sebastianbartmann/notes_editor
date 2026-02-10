@@ -7,15 +7,12 @@ import androidx.compose.runtime.setValue
 object AppSync {
     var status by mutableStateOf<SyncStatus?>(null)
         private set
-    var offline by mutableStateOf(false)
-        private set
 
     suspend fun refreshStatus() {
         try {
             status = ApiClient.fetchSyncStatus()
-            offline = false
         } catch (_: Exception) {
-            offline = true
+            // Best-effort: keep the last known status to avoid UI flicker.
         }
     }
 
@@ -41,4 +38,3 @@ object AppSync {
         refreshStatus()
     }
 }
-

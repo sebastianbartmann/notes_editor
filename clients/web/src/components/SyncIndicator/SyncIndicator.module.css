@@ -8,6 +8,10 @@
   border-radius: 999px;
   font-size: 12px;
   color: var(--muted);
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dot {
@@ -17,32 +21,17 @@
   background: var(--muted);
 }
 
-.ok {
+.synced {
   color: var(--text);
 }
-.ok .dot {
+.synced .dot {
   background: #2ecc71;
 }
 
-.busy {
+.notSynced {
   color: var(--text);
+  border-color: rgba(241, 196, 15, 0.45);
 }
-.busy .dot {
+.notSynced .dot {
   background: #f1c40f;
 }
-
-.err {
-  color: var(--text);
-  border-color: rgba(231, 76, 60, 0.5);
-}
-.err .dot {
-  background: #e74c3c;
-}
-
-.offline {
-  color: var(--muted);
-}
-.offline .dot {
-  background: var(--muted);
-}
-

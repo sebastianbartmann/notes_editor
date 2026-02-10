@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchSyncStatus, type SyncStatus, syncIfStale } from '../../api/sync'
+import { fetchSyncStatus, type SyncStatus } from '../../api/sync'
 import { usePerson } from '../../hooks/usePerson'
 import styles from './SyncIndicator.module.css'
 
@@ -13,7 +13,6 @@ function formatAge(ms: number): string {
 export default function SyncIndicator() {
   const { person } = usePerson()
   const [status, setStatus] = useState<SyncStatus | null>(null)
-  const [offline, setOffline] = useState(false)
 
   useEffect(() => {
     if (!person) return
@@ -26,19 +25,13 @@ export default function SyncIndicator() {
         const s = await fetchSyncStatus()
         if (cancelled) return
         setStatus(s)
-        setOffline(false)
       } catch {
-        if (cancelled) return
-        setOffline(true)
+        // Best-effort indicator: ignore transient failures so we don't flicker.
       }
     }
 
-    // App/page open: attempt a bounded sync if stale, then start polling.
-    ;(async () => {
-      await syncIfStale({ maxAgeMs: 30_000, timeoutMs: 2_000 })
-      await tick()
-      interval = window.setInterval(tick, 5_000)
-    })()
+    tick()
+    interval = window.setInterval(tick, 5_000)
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
@@ -56,38 +49,45 @@ export default function SyncIndicator() {
 
   const view = useMemo(() => {
     if (!person) {
-      return { cls: styles.offline, label: 'No person', title: 'Select a person in Settings.' }
+      return { cls: styles.notSynced, label: 'Not synced (no person)', title: 'Select a person in Settings.' }
     }
-    if (offline) {
-      return { cls: styles.offline, label: 'Offline', title: 'Cannot reach server.' }
-    }
+
+    // Two-state indicator:
+    // - Synced: recent successful pull + nothing pending/in-progress + no recent errors
+    // - Not synced: otherwise, with a reason hint
     if (!status) {
-      return { cls: styles.busy, label: 'Sync...', title: 'Loading sync status...' }
+      return { cls: styles.notSynced, label: 'Not synced (no status)', title: 'No sync status yet.' }
     }
 
-    if (status.last_error) {
-      return { cls: styles.err, label: 'Sync error', title: status.last_error }
-    }
+    const now = Date.now()
+    const lastPullMs = status.last_pull_at ? Date.parse(status.last_pull_at) : NaN
+    const lastPullAge = Number.isNaN(lastPullMs) ? Infinity : now - lastPullMs
+    const lastErrAtMs = status.last_error_at ? Date.parse(status.last_error_at) : NaN
+    const lastErrAge = Number.isNaN(lastErrAtMs) ? Infinity : now - lastErrAtMs
 
-    if (status.in_progress || status.pending_pull || status.pending_push) {
-      return { cls: styles.busy, label: 'Syncing', title: 'Git sync in progress.' }
-    }
+    const pending = status.in_progress || status.pending_pull || status.pending_push
+    const recentError = Boolean(status.last_error) && lastErrAge <= 10 * 60_000
+    const stale = lastPullAge > 2 * 60_000
 
-    const last = status.last_pull_at || status.last_push_at
-    if (last) {
-      const t = Date.parse(last)
-      if (!Number.isNaN(t)) {
-        const age = Date.now() - t
-        return {
-          cls: styles.ok,
-          label: `Synced ${formatAge(age)}`,
-          title: `Last sync activity: ${new Date(t).toLocaleString()}`,
-        }
+    const reasons: string[] = []
+    if (!status.last_pull_at) reasons.push('never pulled')
+    else if (stale) reasons.push(`stale ${formatAge(lastPullAge)}`)
+    if (pending) reasons.push('syncing')
+    if (recentError) reasons.push('recent error')
+
+    const isSynced = !pending && !recentError && !stale && Boolean(status.last_pull_at)
+    if (isSynced) {
+      return {
+        cls: styles.synced,
+        label: `Synced ${formatAge(lastPullAge)}`,
+        title: `Last pull: ${status.last_pull_at}`,
       }
     }
 
-    return { cls: styles.ok, label: 'Synced', title: 'No recent sync timestamp yet.' }
-  }, [offline, person, status])
+    const hint = reasons.length ? reasons.join(', ') : 'unknown'
+    const title = status.last_error ? `${hint}\n${status.last_error}` : hint
+    return { cls: styles.notSynced, label: `Not synced (${hint})`, title }
+  }, [person, status])
 
   return (
     <span className={`${styles.pill} ${view.cls}`} title={view.title}>
@@ -96,4 +96,3 @@ export default function SyncIndicator() {
     </span>
   )
 }
-

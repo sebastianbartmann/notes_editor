@@ -79,20 +79,36 @@ fun ScreenHeader(
 @Composable
 private fun SyncBadge() {
     val status = AppSync.status
-    val offline = AppSync.offline
 
-    val text = when {
-        offline -> "Offline"
-        status?.lastError != null -> "Sync error"
-        status?.inProgress == true || status?.pendingPull == true || status?.pendingPush == true -> "Syncing"
-        else -> "Synced"
+    val now = System.currentTimeMillis()
+    val lastPullAt = status?.lastPullAt
+    val lastPullMs = lastPullAt?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }
+    val lastPullAge = lastPullMs?.let { now - it } ?: Long.MAX_VALUE
+
+    val lastErrAt = status?.lastErrorAt
+    val lastErrMs = lastErrAt?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }
+    val lastErrAge = lastErrMs?.let { now - it } ?: Long.MAX_VALUE
+
+    val pending = status?.inProgress == true || status?.pendingPull == true || status?.pendingPush == true
+    val stale = lastPullAt == null || lastPullAge > 2 * 60_000
+    val recentError = status?.lastError != null && lastErrAge <= 10 * 60_000
+
+    val isSynced = status != null && !pending && !stale && !recentError
+    val reason = when {
+        status == null -> "no status"
+        pending -> "syncing"
+        recentError -> "recent error"
+        lastPullAt == null -> "never pulled"
+        stale -> "stale"
+        else -> "unknown"
     }
 
+    val text = if (isSynced) "Synced" else "Not synced"
+    val hint = if (isSynced) null else reason
+
     val color = when {
-        offline -> AppTheme.colors.muted
-        status?.lastError != null -> Color(0xFFE74C3C)
-        status?.inProgress == true || status?.pendingPull == true || status?.pendingPush == true -> Color(0xFFF1C40F)
-        else -> Color(0xFF2ECC71)
+        isSynced -> Color(0xFF2ECC71)
+        else -> Color(0xFFF1C40F)
     }
 
     Row(
@@ -109,6 +125,13 @@ private fun SyncBadge() {
             style = AppTheme.typography.label,
             color = AppTheme.colors.muted
         )
+        if (hint != null) {
+            AppText(
+                text = "($hint)",
+                style = AppTheme.typography.label,
+                color = AppTheme.colors.muted
+            )
+        }
     }
 }
 
