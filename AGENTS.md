@@ -107,3 +107,8 @@ Key features: daily notes with tasks and pinned entries, a file tree editor scop
 
 - The app expects `NOTES_TOKEN` to be set for auth; do not commit secrets.
 - The Android client uses a bearer token in `app/android/app/src/main/java/com/bartmann/noteseditor/AppConfig.kt`; update it locally and keep it out of commits when possible.
+
+## Agentic Engineering Notes
+
+- The LLM / Agent should use ./agent_notes.md for learnings and persist there anything that comes up during working on this project that might be of help in the future.
+- The ./agent_notes.md file should be read on session start!
