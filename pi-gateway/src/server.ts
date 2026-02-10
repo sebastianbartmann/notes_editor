@@ -257,8 +257,15 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
         case 'message_update': {
           const ev = event.assistantMessageEvent;
           if (ev?.type === 'text_delta' && typeof ev.delta === 'string' && ev.delta.length > 0) {
+            // Pi models sometimes start with a newline. Strip exactly one leading newline on the first text chunk
+            // so UIs don't render an empty first line.
+            let delta = ev.delta;
+            if (!sawAnyText) {
+              delta = delta.replace(/^\r?\n/, '');
+            }
+            if (!delta) break;
             sawAnyText = true;
-            writeEvent(res, { type: 'text', run_id: runId, delta: ev.delta });
+            writeEvent(res, { type: 'text', run_id: runId, delta });
           }
           break;
         }
