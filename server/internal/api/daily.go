@@ -16,7 +16,7 @@ func (s *Server) handleGetDaily(w http.ResponseWriter, r *http.Request) {
 	// Keep the daily view fresh. We only block for sync when the last pull is stale,
 	// so repeated navigations stay fast.
 	st := s.syncMgr.Status()
-	if st.LastPullAt.IsZero() || time.Since(st.LastPullAt) >= 30*time.Second {
+	if st.LastPullAt == nil || time.Since(*st.LastPullAt) >= 30*time.Second {
 		_ = s.syncMgr.SyncNow(true, 2*time.Second)
 	} else {
 		s.syncMgr.TriggerPullIfStale(30 * time.Second)

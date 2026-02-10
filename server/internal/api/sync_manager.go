@@ -8,13 +8,13 @@ import (
 )
 
 type SyncStatus struct {
-	InProgress  bool      `json:"in_progress"`
-	PendingPull bool      `json:"pending_pull"`
-	PendingPush bool      `json:"pending_push"`
-	LastPullAt  time.Time `json:"last_pull_at,omitempty"`
-	LastPushAt  time.Time `json:"last_push_at,omitempty"`
-	LastError   string    `json:"last_error,omitempty"`
-	LastErrorAt time.Time `json:"last_error_at,omitempty"`
+	InProgress  bool       `json:"in_progress"`
+	PendingPull bool       `json:"pending_pull"`
+	PendingPush bool       `json:"pending_push"`
+	LastPullAt  *time.Time `json:"last_pull_at,omitempty"`
+	LastPushAt  *time.Time `json:"last_push_at,omitempty"`
+	LastError   string     `json:"last_error,omitempty"`
+	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
 }
 
 // SyncManager serializes git operations and coalesces frequent triggers.
@@ -74,14 +74,31 @@ func (s *SyncManager) Stop() {
 func (s *SyncManager) Status() SyncStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	var lastPullAt *time.Time
+	if !s.lastPullAt.IsZero() {
+		t := s.lastPullAt
+		lastPullAt = &t
+	}
+	var lastPushAt *time.Time
+	if !s.lastPushAt.IsZero() {
+		t := s.lastPushAt
+		lastPushAt = &t
+	}
+	var lastErrorAt *time.Time
+	if !s.lastErrorAt.IsZero() {
+		t := s.lastErrorAt
+		lastErrorAt = &t
+	}
+
 	return SyncStatus{
 		InProgress:  s.inProgress,
 		PendingPull: s.pendingPull,
 		PendingPush: s.pendingPush,
-		LastPullAt:  s.lastPullAt,
-		LastPushAt:  s.lastPushAt,
+		LastPullAt:  lastPullAt,
+		LastPushAt:  lastPushAt,
 		LastError:   s.lastError,
-		LastErrorAt: s.lastErrorAt,
+		LastErrorAt: lastErrorAt,
 	}
 }
 
