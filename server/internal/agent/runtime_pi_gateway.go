@@ -115,11 +115,20 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 
 	systemPrompt := claude.SystemPrompt
 	if r.store != nil {
-		if prompt, err := r.store.ReadFile(person, "agents.md"); err == nil {
+		// Prefer person-scoped agent prompt under agent/ folder; fall back to legacy root prompt.
+		if prompt, err := r.store.ReadFile(person, "agent/agents.md"); err == nil {
 			if strings.TrimSpace(prompt) != "" {
 				systemPrompt = prompt
 			}
-		} else if !os.IsNotExist(err) {
+		} else if os.IsNotExist(err) {
+			if prompt, err := r.store.ReadFile(person, "agents.md"); err == nil {
+				if strings.TrimSpace(prompt) != "" {
+					systemPrompt = prompt
+				}
+			} else if !os.IsNotExist(err) {
+				// Non-fatal: fall back to default system prompt.
+			}
+		} else {
 			// Non-fatal: fall back to default system prompt.
 		}
 	}

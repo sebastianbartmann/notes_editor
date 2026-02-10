@@ -1,10 +1,46 @@
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { PiRpcClient } from './pi-rpc-client.js';
+
+function maybeLoadServerDotEnv(): void {
+  // In production, systemd injects env vars via EnvironmentFile.
+  // For local runs (e.g. `npm start`), load ../server/.env so tools can authenticate back to the Go server.
+  if ((process.env.NOTES_TOKEN || '').trim() && (process.env.NOTES_ROOT || '').trim()) return;
+
+  try {
+    const selfDir = path.dirname(fileURLToPath(import.meta.url));
+    const candidate = path.resolve(selfDir, '..', '..', 'server', '.env');
+    if (!existsSync(candidate)) return;
+
+    const raw = readFileSync(candidate, 'utf8');
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq <= 0) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let val = trimmed.slice(eq + 1).trim();
+      if (!key) continue;
+      if (val.startsWith('"') && val.endsWith('"') && val.length >= 2) {
+        val = val.slice(1, -1);
+      }
+      if (val.startsWith("'") && val.endsWith("'") && val.length >= 2) {
+        val = val.slice(1, -1);
+      }
+
+      // Do not overwrite explicit env vars.
+      if (process.env[key] === undefined) {
+        process.env[key] = val;
+      }
+    }
+  } catch {
+    // Best-effort only.
+  }
+}
 
 function requireNode20(): void {
   const major = Number((process.versions.node || '').split('.')[0] || '0');
@@ -18,6 +54,7 @@ function requireNode20(): void {
 }
 
 requireNode20();
+maybeLoadServerDotEnv();
 
 type ChatRequest = {
   person?: string;

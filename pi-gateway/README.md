@@ -18,6 +18,11 @@ PI_GATEWAY_PORT=4317 npm start
 
 Default mode is `pi_rpc` (Pi coding-agent in RPC mode) with server-delegated tools.
 
+Note: tool execution delegates back to the Go server and requires `NOTES_TOKEN` (and a valid `X-Notes-Person`).
+If you run the gateway manually (outside systemd), make sure the gateway process has the same env vars as the server,
+for example by exporting them or sourcing `../server/.env`. The gateway will also try to best-effort load `../server/.env`
+when `NOTES_TOKEN` is not set.
+
 Before first use (to authenticate your subscription provider):
 
 ```bash

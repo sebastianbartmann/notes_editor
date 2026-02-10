@@ -110,6 +110,8 @@ func (s *Service) Chat(person string, req ChatRequest) (*ChatResponse, error) {
 		return nil, fmt.Errorf("Claude API key not configured")
 	}
 
+	systemPrompt := s.loadSystemPrompt(person)
+
 	session := s.sessions.GetOrCreate(req.SessionID, person)
 	session.AddMessage("user", req.Message)
 
@@ -120,7 +122,7 @@ func (s *Service) Chat(person string, req ChatRequest) (*ChatResponse, error) {
 	toolExec := NewToolExecutor(s.store, s.linkedin, person)
 
 	// Call API with tool loop
-	response, err := s.callWithToolLoop(messages, toolExec)
+	response, err := s.callWithToolLoop(messages, toolExec, systemPrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -133,10 +135,28 @@ func (s *Service) Chat(person string, req ChatRequest) (*ChatResponse, error) {
 	}, nil
 }
 
+func (s *Service) loadSystemPrompt(person string) string {
+	// Prefer prompt file under agent/; fall back to legacy root prompt; finally default constant.
+	if s.store == nil {
+		return SystemPrompt
+	}
+	if prompt, err := s.store.ReadFile(person, "agent/agents.md"); err == nil {
+		if strings.TrimSpace(prompt) != "" {
+			return prompt
+		}
+	}
+	if prompt, err := s.store.ReadFile(person, "agents.md"); err == nil {
+		if strings.TrimSpace(prompt) != "" {
+			return prompt
+		}
+	}
+	return SystemPrompt
+}
+
 // callWithToolLoop calls the Anthropic API and handles tool use in a loop.
-func (s *Service) callWithToolLoop(messages []anthropicMsg, toolExec *ToolExecutor) (string, error) {
+func (s *Service) callWithToolLoop(messages []anthropicMsg, toolExec *ToolExecutor, systemPrompt string) (string, error) {
 	for {
-		resp, err := s.callAPI(messages, true)
+		resp, err := s.callAPI(messages, true, systemPrompt)
 		if err != nil {
 			return "", err
 		}
@@ -190,11 +210,11 @@ func (s *Service) callWithToolLoop(messages []anthropicMsg, toolExec *ToolExecut
 }
 
 // callAPI makes a single call to the Anthropic API.
-func (s *Service) callAPI(messages []anthropicMsg, includeTools bool) (*anthropicResponse, error) {
+func (s *Service) callAPI(messages []anthropicMsg, includeTools bool, systemPrompt string) (*anthropicResponse, error) {
 	reqBody := anthropicRequest{
 		Model:     defaultModel,
 		MaxTokens: maxTokens,
-		System:    SystemPrompt,
+		System:    systemPrompt,
 		Messages:  messages,
 	}
 
@@ -251,4 +271,3 @@ func buildAnthropicMessages(messages []ChatMessage) []anthropicMsg {
 	}
 	return result
 }
-

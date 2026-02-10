@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	defaultPromptPath  = "agents.md"
+	defaultPromptPath  = "agent/agents.md"
+	legacyPromptPath   = "agents.md"
 	internalConfigPath = "agent/config.json"
 	defaultRuntimeMode = RuntimeModeGatewaySubscription
 )
@@ -44,7 +45,15 @@ func (s *Service) getConfig(person string) (*Config, error) {
 		if !os.IsNotExist(err) {
 			return nil, err
 		}
-		prompt = claude.SystemPrompt
+
+		// Backward compat: older installs stored the prompt at vault root.
+		prompt, err = s.store.ReadFile(person, legacyPromptPath)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return nil, err
+			}
+			prompt = claude.SystemPrompt
+		}
 	}
 
 	return &Config{

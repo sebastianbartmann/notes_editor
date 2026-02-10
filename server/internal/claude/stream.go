@@ -28,6 +28,8 @@ func (s *Service) ChatStream(person string, req ChatRequest) (<-chan StreamEvent
 		return nil, fmt.Errorf("Claude API key not configured")
 	}
 
+	systemPrompt := s.loadSystemPrompt(person)
+
 	session := s.sessions.GetOrCreate(req.SessionID, person)
 	session.AddMessage("user", req.Message)
 
@@ -41,14 +43,14 @@ func (s *Service) ChatStream(person string, req ChatRequest) (<-chan StreamEvent
 
 	go func() {
 		defer close(events)
-		s.streamWithToolLoop(messages, toolExec, session, events)
+		s.streamWithToolLoop(messages, toolExec, session, events, systemPrompt)
 	}()
 
 	return events, nil
 }
 
 // streamWithToolLoop handles streaming with tool use in a loop.
-func (s *Service) streamWithToolLoop(messages []anthropicMsg, toolExec *ToolExecutor, session *Session, events chan<- StreamEvent) {
+func (s *Service) streamWithToolLoop(messages []anthropicMsg, toolExec *ToolExecutor, session *Session, events chan<- StreamEvent, systemPrompt string) {
 	// Set up ping timer
 	pingTicker := time.NewTicker(5 * time.Second)
 	defer pingTicker.Stop()
@@ -73,7 +75,7 @@ func (s *Service) streamWithToolLoop(messages []anthropicMsg, toolExec *ToolExec
 	var fullResponse strings.Builder
 
 	for {
-		resp, textDelta, err := s.streamAPI(messages, events)
+		resp, textDelta, err := s.streamAPI(messages, events, systemPrompt)
 		if err != nil {
 			events <- StreamEvent{Type: "error", Message: err.Error()}
 			return
@@ -141,7 +143,7 @@ func (s *Service) streamWithToolLoop(messages []anthropicMsg, toolExec *ToolExec
 }
 
 // streamAPI makes a streaming call to the Anthropic API.
-func (s *Service) streamAPI(messages []anthropicMsg, events chan<- StreamEvent) (*anthropicResponse, string, error) {
+func (s *Service) streamAPI(messages []anthropicMsg, events chan<- StreamEvent, systemPrompt string) (*anthropicResponse, string, error) {
 	reqBody := struct {
 		Model     string           `json:"model"`
 		MaxTokens int              `json:"max_tokens"`
@@ -152,7 +154,7 @@ func (s *Service) streamAPI(messages []anthropicMsg, events chan<- StreamEvent) 
 	}{
 		Model:     defaultModel,
 		MaxTokens: maxTokens,
-		System:    SystemPrompt,
+		System:    systemPrompt,
 		Messages:  messages,
 		Tools:     ToolDefinitions,
 		Stream:    true,

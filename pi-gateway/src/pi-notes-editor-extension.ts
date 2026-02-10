@@ -83,6 +83,7 @@ export default function (pi: ExtensionAPI) {
       'Notes Editor tools:',
       '- read: read a file from the person vault (path is vault-relative)',
       '- write: write a file in the person vault (path is vault-relative)',
+      '- ls: list files/directories in the person vault (path is vault-relative; use \'.\' for root)',
       '- grep: search text in the person vault (path optional, vault-relative)',
       '- glob: find files by glob pattern in the person vault (path optional, vault-relative)',
       '- webfetch: fetch a URL (server-side)',
@@ -93,6 +94,20 @@ export default function (pi: ExtensionAPI) {
 
   // Tool names intentionally match Claude Code's canonical tools (case-insensitive).
   // Pi's Anthropic OAuth flow relies on this.
+  pi.registerTool({
+    name: 'ls',
+    label: 'ls',
+    description: "List files and directories in the person vault (path is vault-relative; use '.' for root).",
+    parameters: Type.Object({
+      path: Type.Optional(Type.String({ description: "Vault-relative directory path (default: '.')" })),
+    }),
+    async execute(_toolCallId, params) {
+      const path = (params as any)?.path;
+      const content = await callTool('list_directory', { path: path || '.' } as Record<string, unknown>);
+      return { content: [{ type: 'text', text: content }], details: {} };
+    },
+  });
+
   pi.registerTool({
     name: 'read',
     label: 'read',
