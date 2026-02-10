@@ -1,15 +1,27 @@
 package claude
 
 import (
+	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"notes-editor/internal/linkedin"
 	"notes-editor/internal/vault"
+
+	"golang.org/x/net/html"
 )
 
 // Tool definitions for Claude's tool use capability.
@@ -490,17 +502,352 @@ func (te *ToolExecutor) webSearch(input map[string]any) (string, error) {
 }
 
 func (te *ToolExecutor) webFetch(input map[string]any) (string, error) {
-	url, ok := input["url"].(string)
+	rawURL, ok := input["url"].(string)
 	if !ok {
 		return "", fmt.Errorf("url is required")
 	}
-	// Basic URL validation
-	if !regexp.MustCompile(`^https?://`).MatchString(url) {
-		return "", fmt.Errorf("invalid URL: must start with http:// or https://")
+	trimmedURL := strings.TrimSpace(rawURL)
+	u, err := url.Parse(trimmedURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid url: %w", err)
 	}
-	// Web fetch would require HTTP client with proper handling
-	// For now, return a placeholder
-	return fmt.Sprintf("Web fetch for '%s' is not yet implemented. This would require proper HTTP client integration.", url), nil
+	if u.Scheme != "https" {
+		return "", fmt.Errorf("invalid url: only https:// is allowed")
+	}
+	if u.User != nil {
+		return "", fmt.Errorf("invalid url: credentials in url are not allowed")
+	}
+	host := strings.TrimSpace(u.Hostname())
+	if host == "" {
+		return "", fmt.Errorf("invalid url: missing host")
+	}
+	if err := validateWebFetchHostname(host); err != nil {
+		return "", err
+	}
+
+	// Convenience: rewrite GitHub "blob" URLs to raw content URLs.
+	// Users frequently paste https://github.com/<org>/<repo>/blob/<ref>/<path>.
+	// This avoids returning the HTML UI, keeps content smaller, and reduces token waste.
+	if strings.EqualFold(host, "github.com") {
+		if ru, ok := rewriteGitHubBlobToRaw(u); ok {
+			u = ru
+			host = strings.TrimSpace(u.Hostname())
+		}
+	}
+
+	const (
+		maxRedirects       = 5
+		timeout            = 10 * time.Second
+		maxDownloadBytes   = 256 * 1024
+		maxReturnedRunes   = 40000
+		userAgent          = "notes-editor-webfetch/1.0"
+		maxExtractedPrefix = 4 * 1024
+	)
+
+	transport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           webFetchDialContext(timeout),
+		DialTLSContext:        webFetchDialTLSContext(timeout),
+		TLSHandshakeTimeout:   timeout,
+		ResponseHeaderTimeout: timeout,
+	}
+
+	client := &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= maxRedirects {
+				return errors.New("stopped after too many redirects")
+			}
+			if req.URL.Scheme != "https" {
+				return errors.New("redirect to non-https url is not allowed")
+			}
+			if req.URL.User != nil {
+				return errors.New("redirect url contains credentials")
+			}
+			h := strings.TrimSpace(req.URL.Hostname())
+			if h == "" {
+				return errors.New("redirect url missing host")
+			}
+			return validateWebFetchHostname(h)
+		},
+	}
+
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "text/html,text/plain,application/json;q=0.9,*/*;q=0.1")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("web fetch failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	ct := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	if ct == "" {
+		// Best-effort sniffing when servers don't send Content-Type.
+		// We'll still keep strict size limits.
+		prefix, _ := io.ReadAll(io.LimitReader(resp.Body, maxExtractedPrefix))
+		if len(prefix) > 0 {
+			ct = http.DetectContentType(prefix)
+			resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(prefix), resp.Body))
+		}
+	}
+
+	limited := io.LimitReader(resp.Body, maxDownloadBytes+1)
+	body, readErr := io.ReadAll(limited)
+	if readErr != nil {
+		return "", fmt.Errorf("web fetch read failed: %w", readErr)
+	}
+	downloadTruncated := len(body) > maxDownloadBytes
+	if downloadTruncated {
+		body = body[:maxDownloadBytes]
+	}
+
+	// Only allow a narrow set of content types to avoid binary garbage.
+	ctLower := strings.ToLower(ct)
+	var extracted string
+	switch {
+	case strings.Contains(ctLower, "text/html"):
+		extracted = extractTextFromHTML(body)
+	case strings.HasPrefix(ctLower, "text/") || strings.Contains(ctLower, "application/json"):
+		extracted = string(body)
+	default:
+		return "", fmt.Errorf("unsupported content type: %s", ct)
+	}
+	extracted = normalizeWebFetchText(extracted)
+
+	extractTruncated := false
+	if utf8.RuneCountInString(extracted) > maxReturnedRunes {
+		extracted = truncateRunes(extracted, maxReturnedRunes)
+		extractTruncated = true
+	}
+
+	result := map[string]any{
+		"url":            rawURL,
+		"final_url":      resp.Request.URL.String(),
+		"status":         resp.StatusCode,
+		"content_type":   ct,
+		"truncated":      downloadTruncated || extractTruncated,
+		"returned_chars": len(extracted),
+		"unsafe_content": extracted,
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return "", err
+	}
+	// Wrap in an obvious container and keep the fetched content inside JSON only.
+	// This prevents the fetched content from "breaking out" of the wrapper.
+	return "<web_fetch_result_json>\n" + string(encoded) + "\n</web_fetch_result_json>", nil
+}
+
+func validateWebFetchHostname(host string) error {
+	hostLower := strings.ToLower(strings.TrimSpace(host))
+	if hostLower == "localhost" || hostLower == "localhost." {
+		return fmt.Errorf("host is not allowed")
+	}
+	if ip := net.ParseIP(hostLower); ip != nil {
+		if isBlockedWebFetchIP(ip) {
+			return fmt.Errorf("ip is not allowed")
+		}
+	}
+	return nil
+}
+
+func webFetchDialContext(timeout time.Duration) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	d := &net.Dialer{Timeout: timeout}
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		ip, err := resolveAllowedIP(ctx, host)
+		if err != nil {
+			return nil, err
+		}
+		return d.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+	}
+}
+
+func webFetchDialTLSContext(timeout time.Duration) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	d := &net.Dialer{Timeout: timeout}
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		ip, err := resolveAllowedIP(ctx, host)
+		if err != nil {
+			return nil, err
+		}
+		conn, err := d.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err != nil {
+			return nil, err
+		}
+		// Use SNI/cert validation for the original hostname.
+		cfg := &tls.Config{ServerName: host}
+		tlsConn := tls.Client(conn, cfg)
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+		return tlsConn, nil
+	}
+}
+
+func resolveAllowedIP(ctx context.Context, host string) (net.IP, error) {
+	h := strings.TrimSpace(host)
+	if err := validateWebFetchHostname(h); err != nil {
+		return nil, err
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		if isBlockedWebFetchIP(ip) {
+			return nil, fmt.Errorf("ip is not allowed")
+		}
+		return ip, nil
+	}
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", h)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		if isBlockedWebFetchIP(ip) {
+			continue
+		}
+		return ip, nil
+	}
+	return nil, fmt.Errorf("no allowed ip addresses for host")
+}
+
+func isBlockedWebFetchIP(ip net.IP) bool {
+	// Normalize IPv4-mapped IPv6.
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	if ip.IsPrivate() {
+		return true
+	}
+	// Carrier-grade NAT 100.64.0.0/10 (not covered by IsPrivate).
+	if ip4 := ip.To4(); ip4 != nil {
+		if ip4[0] == 100 && ip4[1]&0xC0 == 0x40 {
+			return true
+		}
+	}
+	// IPv6 unique local addresses fc00::/7.
+	if ip.To4() == nil && len(ip) == net.IPv6len {
+		if ip[0]&0xFE == 0xFC {
+			return true
+		}
+	}
+	return false
+}
+
+func extractTextFromHTML(body []byte) string {
+	root, err := html.Parse(strings.NewReader(string(body)))
+	if err != nil {
+		// Fallback: very naive strip if parsing fails.
+		return string(body)
+	}
+
+	var b strings.Builder
+	var walk func(n *html.Node, inScriptStyle bool)
+	walk = func(n *html.Node, inScriptStyle bool) {
+		if n.Type == html.ElementNode {
+			switch strings.ToLower(n.Data) {
+			case "script", "style", "noscript":
+				inScriptStyle = true
+			case "br", "p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6":
+				b.WriteByte('\n')
+			}
+		}
+		if n.Type == html.TextNode && !inScriptStyle {
+			b.WriteString(n.Data)
+			b.WriteByte('\n')
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c, inScriptStyle)
+		}
+	}
+	walk(root, false)
+	return b.String()
+}
+
+func normalizeWebFetchText(s string) string {
+	// Collapse CRLF and excessive whitespace. Keep it simple: we want readable text,
+	// not a perfect renderer.
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimSpace(lines[i])
+	}
+	// Drop runs of empty lines.
+	var out []string
+	empty := 0
+	for _, line := range lines {
+		if line == "" {
+			empty++
+			if empty > 1 {
+				continue
+			}
+			out = append(out, "")
+			continue
+		}
+		empty = 0
+		out = append(out, line)
+	}
+	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+func truncateRunes(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	count := 0
+	for _, r := range s {
+		b.WriteRune(r)
+		count++
+		if count >= max {
+			break
+		}
+	}
+	return b.String()
+}
+
+func rewriteGitHubBlobToRaw(u *url.URL) (*url.URL, bool) {
+	if u == nil {
+		return nil, false
+	}
+	// Expected: /<org>/<repo>/blob/<ref>/<path...>
+	parts := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
+	if len(parts) < 5 {
+		return nil, false
+	}
+	if parts[2] != "blob" {
+		return nil, false
+	}
+	org := parts[0]
+	repo := parts[1]
+	ref := parts[3]
+	path := strings.Join(parts[4:], "/")
+
+	ru := &url.URL{
+		Scheme: "https",
+		Host:   "raw.githubusercontent.com",
+		Path:   "/" + org + "/" + repo + "/" + ref + "/" + path,
+	}
+	return ru, true
 }
 
 func (te *ToolExecutor) linkedinPost(input map[string]any) (string, error) {
