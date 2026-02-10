@@ -12,8 +12,8 @@ EnvironmentFile=/home/dev/notes_editor/server/.env
 Environment=PI_GATEWAY_PORT=4317
 Environment=PI_GATEWAY_MODE=pi_rpc
 Environment=PI_GATEWAY_PI_PROVIDER=anthropic
-Environment=NOTES_SERVER_URL=http://127.0.0.1:8080
-ExecStart=/usr/bin/node /home/dev/notes_editor/pi-gateway/dist/server.js
+Environment=NOTES_SERVER_URL=http://127.0.0.1:80
+ExecStart=/home/dev/.local/node20/bin/node /home/dev/notes_editor/pi-gateway/dist/server.js
 Restart=always
 RestartSec=3
 StandardOutput=journal
