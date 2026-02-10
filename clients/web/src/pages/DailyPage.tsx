@@ -119,7 +119,11 @@ export default function DailyPage() {
       await appendDaily({ path, text: appendText, pinned: isPinned })
       setAppendText('')
       setIsPinned(false)
-      await loadDaily()
+      if (path === todayPath) {
+        await loadToday()
+      } else {
+        await loadPath(path)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to append')
     }
