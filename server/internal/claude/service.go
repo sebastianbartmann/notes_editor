@@ -140,17 +140,18 @@ func (s *Service) loadSystemPrompt(person string) string {
 	if s.store == nil {
 		return SystemPrompt
 	}
+	base := SystemPrompt
 	if prompt, err := s.store.ReadFile(person, "agent/agents.md"); err == nil {
 		if strings.TrimSpace(prompt) != "" {
-			return prompt
+			base = prompt
 		}
 	}
 	if prompt, err := s.store.ReadFile(person, "agents.md"); err == nil {
 		if strings.TrimSpace(prompt) != "" {
-			return prompt
+			base = prompt
 		}
 	}
-	return SystemPrompt
+	return base + BuildAvailableSkillsPromptAddon(s.store, person)
 }
 
 // callWithToolLoop calls the Anthropic API and handles tool use in a loop.

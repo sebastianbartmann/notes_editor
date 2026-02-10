@@ -131,6 +131,8 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 		} else {
 			// Non-fatal: fall back to default system prompt.
 		}
+
+		systemPrompt += claude.BuildAvailableSkillsPromptAddon(r.store, person)
 	}
 
 	payload := map[string]any{
