@@ -14,7 +14,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -23,6 +25,28 @@ import (
 
 	"golang.org/x/net/html"
 )
+
+const (
+	defaultBraveAPIKey        = "BSA4uayVZcDls43iE2p2exjSP6-VR_N"
+	defaultWebSearchEndpoint  = "https://api.search.brave.com/res/v1/web/search"
+	defaultWebSearchTimeout   = 8 * time.Second
+	defaultWebSearchCacheTTL  = 15 * time.Minute
+	defaultWebSearchMaxResult = 5
+	maxWebSearchResultCount   = 20
+	maxWebSearchDescChars     = 280
+)
+
+var (
+	webSearchEndpoint = defaultWebSearchEndpoint
+	webSearchClient   = &http.Client{Timeout: defaultWebSearchTimeout}
+	webSearchCacheMu  sync.Mutex
+	webSearchCache    = map[string]webSearchCacheEntry{}
+)
+
+type webSearchCacheEntry struct {
+	expiresAt time.Time
+	payload   string
+}
 
 // Tool definitions for Claude's tool use capability.
 var ToolDefinitions = []map[string]any{
@@ -496,9 +520,108 @@ func (te *ToolExecutor) webSearch(input map[string]any) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("query is required")
 	}
-	// Web search would require external API integration
-	// For now, return a placeholder indicating the feature isn't available
-	return fmt.Sprintf("Web search for '%s' is not yet implemented. This would require integration with a search API.", query), nil
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return "", fmt.Errorf("query is required")
+	}
+
+	apiKey := strings.TrimSpace(os.Getenv("BRAVE_API_KEY"))
+	if apiKey == "" {
+		apiKey = defaultBraveAPIKey
+	}
+
+	maxResults := parsePositiveIntEnv("WEB_SEARCH_MAX_RESULTS", defaultWebSearchMaxResult)
+	if maxResults > maxWebSearchResultCount {
+		maxResults = maxWebSearchResultCount
+	}
+	cacheTTL := parsePositiveDurationEnv("WEB_SEARCH_CACHE_TTL", defaultWebSearchCacheTTL)
+	timeout := parsePositiveDurationEnv("WEB_SEARCH_TIMEOUT", defaultWebSearchTimeout)
+
+	cacheKey := strings.ToLower(strings.Join(strings.Fields(query), " "))
+	if cached, ok := getWebSearchCache(cacheKey); ok {
+		return cached, nil
+	}
+
+	searchURL, err := url.Parse(webSearchEndpoint)
+	if err != nil {
+		return "", fmt.Errorf("web search endpoint invalid: %w", err)
+	}
+	params := searchURL.Query()
+	params.Set("q", query)
+	params.Set("count", strconv.Itoa(maxResults))
+	params.Set("safesearch", "moderate")
+	searchURL.RawQuery = params.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, searchURL.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("web search request creation failed: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("X-Subscription-Token", apiKey)
+	req.Header.Set("User-Agent", "notes-editor-websearch/1.0")
+
+	client := webSearchClient
+	if client == nil || client.Timeout != timeout {
+		client = &http.Client{Timeout: timeout}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("web search request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return "", fmt.Errorf("web search failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(errBody)))
+	}
+
+	var parsed struct {
+		Web struct {
+			Results []struct {
+				Title       string `json:"title"`
+				URL         string `json:"url"`
+				Description string `json:"description"`
+			} `json:"results"`
+		} `json:"web"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 512*1024)).Decode(&parsed); err != nil {
+		return "", fmt.Errorf("web search decode failed: %w", err)
+	}
+
+	results := make([]map[string]string, 0, maxResults)
+	for _, r := range parsed.Web.Results {
+		if len(results) >= maxResults {
+			break
+		}
+		title := strings.TrimSpace(r.Title)
+		link := strings.TrimSpace(r.URL)
+		desc := strings.TrimSpace(collapseSpaces(r.Description))
+		if desc != "" && len(desc) > maxWebSearchDescChars {
+			desc = desc[:maxWebSearchDescChars] + "..."
+		}
+		if title == "" && link == "" && desc == "" {
+			continue
+		}
+		results = append(results, map[string]string{
+			"title":       title,
+			"url":         link,
+			"description": desc,
+		})
+	}
+
+	payload := map[string]any{
+		"query":   query,
+		"count":   len(results),
+		"results": results,
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	wrapped := "<web_search_result_json>\n" + string(encoded) + "\n</web_search_result_json>"
+	setWebSearchCache(cacheKey, wrapped, cacheTTL)
+	return wrapped, nil
 }
 
 func (te *ToolExecutor) webFetch(input map[string]any) (string, error) {
@@ -848,6 +971,62 @@ func rewriteGitHubBlobToRaw(u *url.URL) (*url.URL, bool) {
 		Path:   "/" + org + "/" + repo + "/" + ref + "/" + path,
 	}
 	return ru, true
+}
+
+func parsePositiveIntEnv(key string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return fallback
+	}
+	return v
+}
+
+func parsePositiveDurationEnv(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	v, err := time.ParseDuration(raw)
+	if err != nil || v <= 0 {
+		return fallback
+	}
+	return v
+}
+
+func getWebSearchCache(key string) (string, bool) {
+	webSearchCacheMu.Lock()
+	defer webSearchCacheMu.Unlock()
+
+	entry, ok := webSearchCache[key]
+	if !ok {
+		return "", false
+	}
+	if time.Now().After(entry.expiresAt) {
+		delete(webSearchCache, key)
+		return "", false
+	}
+	return entry.payload, true
+}
+
+func setWebSearchCache(key, payload string, ttl time.Duration) {
+	webSearchCacheMu.Lock()
+	defer webSearchCacheMu.Unlock()
+
+	now := time.Now()
+	// Best-effort cleanup of expired entries to bound memory usage.
+	for k, v := range webSearchCache {
+		if now.After(v.expiresAt) {
+			delete(webSearchCache, k)
+		}
+	}
+	webSearchCache[key] = webSearchCacheEntry{
+		expiresAt: now.Add(ttl),
+		payload:   payload,
+	}
 }
 
 func (te *ToolExecutor) linkedinPost(input map[string]any) (string, error) {
