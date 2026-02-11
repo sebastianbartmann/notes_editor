@@ -164,6 +164,7 @@ object ApiClient {
     suspend fun gitPush(): GitActionResponse = postJson("/api/git/push", mapOf<String, String>())
     suspend fun gitPull(): GitActionResponse = postJson("/api/git/pull", mapOf<String, String>())
     suspend fun gitCommitPush(): GitActionResponse = postJson("/api/git/commit-push", mapOf<String, String>())
+    suspend fun gitResetClean(): GitActionResponse = postJson("/api/git/reset-clean", mapOf<String, String>())
 
     suspend fun fetchDaily(): DailyNote = getJson("/api/daily")
 

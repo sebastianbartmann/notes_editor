@@ -146,3 +146,27 @@ func (s *Server) handleGitCommitPush(w http.ResponseWriter, r *http.Request) {
 		Output:  statusOut,
 	})
 }
+
+func (s *Server) handleGitResetClean(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requirePerson(w, r); !ok {
+		return
+	}
+
+	s.mu.Lock()
+	err := s.git.ResetHardClean()
+	statusOut, statusErr := s.git.StatusShort()
+	s.mu.Unlock()
+	if err != nil {
+		writeBadRequest(w, err.Error())
+		return
+	}
+	if statusErr != nil {
+		statusOut = ""
+	}
+
+	writeJSON(w, http.StatusOK, GitActionResponse{
+		Success: true,
+		Message: "Reset/clean complete. Local changes discarded.",
+		Output:  statusOut,
+	})
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchGitStatus, gitCommit, gitCommitPush, gitPull, gitPush } from '../api/git'
+import { fetchGitStatus, gitCommit, gitCommitPush, gitPull, gitPush, gitResetClean } from '../api/git'
 import styles from './SyncPage.module.css'
 
 export default function SyncPage() {
@@ -61,6 +61,16 @@ export default function SyncPage() {
         </button>
         <button onClick={() => runAction('Pull', gitPull)} disabled={busy}>
           Pull
+        </button>
+        <button
+          onClick={() => {
+            const ok = window.confirm('Discard all local changes and untracked files? This cannot be undone.')
+            if (!ok) return
+            void runAction('Reset/Clean', gitResetClean)
+          }}
+          disabled={busy}
+        >
+          Reset/Clean
         </button>
         <button
           onClick={() => runAction('Refresh', async () => {

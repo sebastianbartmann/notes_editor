@@ -30,3 +30,6 @@ export async function gitCommitPush(): Promise<GitActionResponse> {
   return apiRequest<GitActionResponse>('/api/git/commit-push', { method: 'POST', body: {} })
 }
 
+export async function gitResetClean(): Promise<GitActionResponse> {
+  return apiRequest<GitActionResponse>('/api/git/reset-clean', { method: 'POST', body: {} })
+}

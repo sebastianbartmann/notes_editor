@@ -93,6 +93,7 @@ func NewRouter(srv *Server) http.Handler {
 		r.Post("/git/push", srv.handleGitPush)
 		r.Post("/git/pull", srv.handleGitPull)
 		r.Post("/git/commit-push", srv.handleGitCommitPush)
+		r.Post("/git/reset-clean", srv.handleGitResetClean)
 
 		// Todo routes
 		r.Post("/todos/add", srv.handleAddTodo)

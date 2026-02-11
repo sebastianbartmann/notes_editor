@@ -12,6 +12,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import kotlinx.coroutines.launch
 
 @Composable
@@ -20,6 +22,7 @@ fun SyncScreen(modifier: Modifier) {
     var message by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var showResetConfirm by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     fun refreshStatus() {
@@ -83,6 +86,14 @@ fun SyncScreen(modifier: Modifier) {
                 CompactTextButton(text = "Pull", modifier = Modifier.weight(1f)) {
                     if (!busy) runAction("Pull") { ApiClient.gitPull() }
                 }
+                CompactTextButton(text = "Reset/Clean", modifier = Modifier.weight(1f)) {
+                    if (!busy) showResetConfirm = true
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm)
+            ) {
                 CompactTextButton(text = "Refresh", modifier = Modifier.weight(1f)) {
                     if (!busy) {
                         error = ""
@@ -116,6 +127,33 @@ fun SyncScreen(modifier: Modifier) {
                 text = output.ifBlank { "(empty)" },
                 style = AppTheme.typography.body,
                 color = AppTheme.colors.text
+            )
+        }
+
+        if (showResetConfirm) {
+            AlertDialog(
+                onDismissRequest = { showResetConfirm = false },
+                title = { AppText("Discard local changes?", AppTheme.typography.title, AppTheme.colors.text) },
+                text = {
+                    AppText(
+                        "Reset/Clean will discard all local changes and remove untracked files.",
+                        AppTheme.typography.bodySmall,
+                        AppTheme.colors.muted
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showResetConfirm = false
+                        if (!busy) runAction("Reset/Clean") { ApiClient.gitResetClean() }
+                    }) {
+                        AppText("Discard", AppTheme.typography.label, AppTheme.colors.danger)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResetConfirm = false }) {
+                        AppText("Cancel", AppTheme.typography.label, AppTheme.colors.muted)
+                    }
+                }
             )
         }
     }

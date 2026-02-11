@@ -150,6 +150,17 @@ func (g *Git) Push() error {
 	return err
 }
 
+// ResetHardClean discards all local tracked changes and removes untracked files/dirs.
+func (g *Git) ResetHardClean() error {
+	if _, err := g.runGit("reset", "--hard"); err != nil {
+		return err
+	}
+	if _, err := g.runGit("clean", "-fd"); err != nil {
+		return err
+	}
+	return nil
+}
+
 // pushWithRetry attempts to push, pulling and retrying once if the push fails.
 func (g *Git) pushWithRetry() error {
 	// First push attempt
