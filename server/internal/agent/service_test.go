@@ -202,3 +202,44 @@ func TestChatStreamStopsWhenToolCallLimitExceeded(t *testing.T) {
 		t.Fatal("expected max tool calls error event")
 	}
 }
+
+func TestChatStreamRegistersNewSessionFromStreamEvent(t *testing.T) {
+	upstream := make(chan StreamEvent, 3)
+	upstream <- StreamEvent{Type: "start", SessionID: "new-session-1"}
+	upstream <- StreamEvent{Type: "text", Delta: "hello"}
+	upstream <- StreamEvent{Type: "done", SessionID: "new-session-1"}
+	close(upstream)
+
+	runtime := &stubRuntime{
+		mode:      RuntimeModeAnthropicAPIKey,
+		available: true,
+		streamResp: &RuntimeStream{
+			Events: upstream,
+		},
+	}
+
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey:     runtime,
+		RuntimeModeGatewaySubscription: &stubRuntime{mode: RuntimeModeGatewaySubscription, available: false},
+	})
+
+	run, err := svc.ChatStream(context.Background(), "sebastian", ChatRequest{
+		Message: "first message from android",
+	})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+	for range run.Events {
+	}
+
+	sessions, err := svc.ListSessions("sebastian")
+	if err != nil {
+		t.Fatalf("list sessions failed: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].SessionID != "new-session-1" {
+		t.Fatalf("expected session_id new-session-1, got %q", sessions[0].SessionID)
+	}
+}

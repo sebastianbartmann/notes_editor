@@ -235,7 +235,9 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 		defer close(out)
 		defer s.unregisterRun(runID)
 		defer s.endSessionRun(person, req.SessionID, runID)
-		defer s.touchSession(person, finalSessionID, req.Message, usedRuntime.Mode())
+		defer func() {
+			s.touchSession(person, finalSessionID, req.Message, usedRuntime.Mode())
+		}()
 
 		out <- StreamEvent{
 			Type:      "start",
