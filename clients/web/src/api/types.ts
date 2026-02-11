@@ -198,3 +198,7 @@ export interface AgentGatewayHealth {
   last_checked?: string
   last_error?: string
 }
+
+export interface AgentHistoryResponse {
+  messages: ChatMessage[]
+}

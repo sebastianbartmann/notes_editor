@@ -7,6 +7,7 @@ import type {
   AgentConfig,
   AgentConfigUpdate,
   AgentGatewayHealth,
+  AgentHistoryResponse,
   AgentStreamEvent,
   SaveResponse,
 } from './types'
@@ -64,6 +65,10 @@ export async function clearAgentSession(sessionId: string): Promise<SaveResponse
     method: 'POST',
     body: { session_id: sessionId },
   })
+}
+
+export async function getAgentSessionHistory(sessionId: string): Promise<AgentHistoryResponse> {
+  return apiRequest<AgentHistoryResponse>(`/api/agent/session/history?session_id=${sessionId}`)
 }
 
 export async function getAgentConfig(): Promise<AgentConfig> {

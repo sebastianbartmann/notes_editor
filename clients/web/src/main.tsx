@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { AgentSessionProvider } from './context/AgentSessionContext'
 import { PersonProvider } from './context/PersonContext'
 import { ThemeProvider } from './context/ThemeContext'
 import App from './App'
@@ -12,9 +13,11 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <PersonProvider>
-          <ThemeProvider>
-            <App />
-          </ThemeProvider>
+          <AgentSessionProvider>
+            <ThemeProvider>
+              <App />
+            </ThemeProvider>
+          </AgentSessionProvider>
         </PersonProvider>
       </AuthProvider>
     </BrowserRouter>

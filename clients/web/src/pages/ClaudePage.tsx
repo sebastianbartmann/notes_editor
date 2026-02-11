@@ -1,21 +1,25 @@
 import { useState, useRef, useEffect } from 'react'
 import { usePerson } from '../hooks/usePerson'
-import { agentChatStream, clearAgentSession, listAgentActions } from '../api/agent'
+import { agentChatStream, clearAgentSession, getAgentSessionHistory, listAgentActions } from '../api/agent'
+import { useAgentSession } from '../context/AgentSessionContext'
 import type { AgentAction, AgentChatRequest, AgentStreamEvent, ChatMessage } from '../api/types'
 import styles from './ClaudePage.module.css'
 
 export default function ClaudePage() {
   const { person } = usePerson()
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const { getSession, setSessionId, setMessages, appendMessage, clearSession } = useAgentSession()
   const [input, setInput] = useState('')
-  const [sessionId, setSessionId] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingText, setStreamingText] = useState('')
   const [toolStatus, setToolStatus] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [actions, setActions] = useState<AgentAction[]>([])
   const [actionsError, setActionsError] = useState('')
+  const [historyHydratedKey, setHistoryHydratedKey] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const session = person ? getSession(person) : { sessionId: null, messages: [] as ChatMessage[] }
+  const sessionId = session.sessionId
+  const messages = session.messages
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -28,6 +32,26 @@ export default function ClaudePage() {
       .catch(err => setActionsError(err instanceof Error ? err.message : 'Failed to load actions'))
   }, [person])
 
+  useEffect(() => {
+    if (!person || !sessionId || messages.length > 0) return
+    const hydrateKey = `${person}:${sessionId}`
+    if (historyHydratedKey === hydrateKey) return
+    setHistoryHydratedKey(hydrateKey)
+    let cancelled = false
+    getAgentSessionHistory(sessionId)
+      .then((resp) => {
+        if (!cancelled) {
+          setMessages(person, resp.messages || [])
+        }
+      })
+      .catch(() => {
+        // Ignore history load errors (e.g. server restart or unknown session)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [person, sessionId, messages.length, historyHydratedKey, setMessages])
+
   const handleSend = async () => {
     if (!input.trim() || isStreaming) return
     const userMessage = input.trim()
@@ -39,10 +63,10 @@ export default function ClaudePage() {
   }
 
   const runStream = async (request: AgentChatRequest, userBubble?: string) => {
-    if (isStreaming) return
+    if (isStreaming || !person) return
 
     if (userBubble) {
-      setMessages(prev => [...prev, { role: 'user', content: userBubble }])
+      appendMessage(person, { role: 'user', content: userBubble })
     }
     setIsStreaming(true)
     setStreamingText('')
@@ -59,7 +83,7 @@ export default function ClaudePage() {
       }
 
       if (fullResponse) {
-        setMessages(prev => [...prev, { role: 'assistant', content: fullResponse }])
+        appendMessage(person, { role: 'assistant', content: fullResponse })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message')
@@ -91,10 +115,11 @@ export default function ClaudePage() {
     event: AgentStreamEvent,
     onText: (text: string) => void
   ) => {
+    if (!person) return
     switch (event.type) {
       case 'start':
         if (event.session_id) {
-          setSessionId(event.session_id)
+          setSessionId(person, event.session_id)
         }
         break
       case 'text':
@@ -127,6 +152,7 @@ export default function ClaudePage() {
   }
 
   const handleClear = async () => {
+    if (!person) return
     if (sessionId) {
       try {
         await clearAgentSession(sessionId)
@@ -134,8 +160,8 @@ export default function ClaudePage() {
         // Ignore clear errors
       }
     }
-    setMessages([])
-    setSessionId(null)
+    clearSession(person)
+    setHistoryHydratedKey(null)
     setStreamingText('')
     setError('')
   }
