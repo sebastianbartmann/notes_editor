@@ -17,62 +17,36 @@ interface AgentSessionContextType {
 }
 
 const STORAGE_KEY = 'notes_agent_sessions'
-const MAX_MESSAGES_PER_PERSON = 200
 
 const EMPTY_SESSION: AgentSessionState = { sessionId: null, messages: [] }
 
 type SessionMap = Record<Person, AgentSessionState>
 
-function normalizeMessages(value: unknown): ChatMessage[] {
-  if (!Array.isArray(value)) return []
-  const out: ChatMessage[] = []
-  for (const item of value) {
-    if (!item || typeof item !== 'object') continue
-    const role = (item as Record<string, unknown>).role
-    const content = (item as Record<string, unknown>).content
-    if ((role === 'user' || role === 'assistant') && typeof content === 'string') {
-      out.push({ role, content })
-    }
-  }
-  return out.slice(-MAX_MESSAGES_PER_PERSON)
-}
-
-function parseStoredSessions(): Partial<SessionMap> {
+function parseStoredSessionIds(): Partial<Record<Person, string>> {
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) return {}
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>
-    const out: Partial<SessionMap> = {}
-
-    // Backward compatibility: older format stored only session IDs as strings.
-    if (typeof parsed.sebastian === 'string' || typeof parsed.petra === 'string') {
-      if (typeof parsed.sebastian === 'string' && parsed.sebastian.trim()) {
-        out.sebastian = { sessionId: parsed.sebastian, messages: [] }
-      }
-      if (typeof parsed.petra === 'string' && parsed.petra.trim()) {
-        out.petra = { sessionId: parsed.petra, messages: [] }
-      }
-      return out
+    const out: Partial<Record<Person, string>> = {}
+    if (typeof parsed.sebastian === 'string' && parsed.sebastian.trim()) {
+      out.sebastian = parsed.sebastian
+    }
+    if (typeof parsed.petra === 'string' && parsed.petra.trim()) {
+      out.petra = parsed.petra
     }
 
-    const sebastian = parsed.sebastian
-    if (sebastian && typeof sebastian === 'object') {
-      const personState = sebastian as Record<string, unknown>
-      const sessionId = typeof personState.sessionId === 'string' && personState.sessionId.trim()
-        ? personState.sessionId
-        : null
-      const messages = normalizeMessages(personState.messages)
-      out.sebastian = { sessionId, messages }
+    // Backward compatibility with session object format.
+    if (!out.sebastian && parsed.sebastian && typeof parsed.sebastian === 'object') {
+      const personState = parsed.sebastian as Record<string, unknown>
+      if (typeof personState.sessionId === 'string' && personState.sessionId.trim()) {
+        out.sebastian = personState.sessionId
+      }
     }
-
-    const petra = parsed.petra
-    if (petra && typeof petra === 'object') {
-      const personState = petra as Record<string, unknown>
-      const sessionId = typeof personState.sessionId === 'string' && personState.sessionId.trim()
-        ? personState.sessionId
-        : null
-      const messages = normalizeMessages(personState.messages)
-      out.petra = { sessionId, messages }
+    if (!out.petra && parsed.petra && typeof parsed.petra === 'object') {
+      const personState = parsed.petra as Record<string, unknown>
+      if (typeof personState.sessionId === 'string' && personState.sessionId.trim()) {
+        out.petra = personState.sessionId
+      }
     }
     return out
   } catch {
@@ -84,26 +58,20 @@ const AgentSessionContext = createContext<AgentSessionContextType | null>(null)
 
 export function AgentSessionProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<SessionMap>(() => {
-    const stored = parseStoredSessions()
+    const ids = parseStoredSessionIds()
     return {
-      sebastian: stored.sebastian || { sessionId: null, messages: [] },
-      petra: stored.petra || { sessionId: null, messages: [] },
+      sebastian: { sessionId: ids.sebastian || null, messages: [] },
+      petra: { sessionId: ids.petra || null, messages: [] },
     }
   })
 
   useEffect(() => {
     const payload = {
-      sebastian: {
-        sessionId: sessions.sebastian.sessionId || null,
-        messages: sessions.sebastian.messages.slice(-MAX_MESSAGES_PER_PERSON),
-      },
-      petra: {
-        sessionId: sessions.petra.sessionId || null,
-        messages: sessions.petra.messages.slice(-MAX_MESSAGES_PER_PERSON),
-      },
+      sebastian: sessions.sebastian.sessionId || null,
+      petra: sessions.petra.sessionId || null,
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-  }, [sessions.sebastian.sessionId, sessions.sebastian.messages, sessions.petra.sessionId, sessions.petra.messages])
+  }, [sessions.sebastian.sessionId, sessions.petra.sessionId])
 
   const getSession = useCallback((person: Person) => sessions[person] || EMPTY_SESSION, [sessions])
 
@@ -126,7 +94,7 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
       ...prev,
       [person]: {
         ...prev[person],
-        messages: [...prev[person].messages, message].slice(-MAX_MESSAGES_PER_PERSON),
+        messages: [...prev[person].messages, message],
       },
     }))
   }, [])
