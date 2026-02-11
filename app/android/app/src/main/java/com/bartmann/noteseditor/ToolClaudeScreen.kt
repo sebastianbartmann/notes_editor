@@ -20,7 +20,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -258,6 +262,27 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
     }
 
+    fun deleteSession(targetSessionId: String) {
+        if (isLoading || person == null || sessionsBusy) return
+        scope.launch {
+            sessionsBusy = true
+            sessionsError = ""
+            try {
+                ApiClient.clearAgentSession(targetSessionId)
+                sessions = sessions.filter { it.sessionId != targetSessionId }
+                if (ClaudeSessionStore.sessionId == targetSessionId) {
+                    ClaudeSessionStore.clear()
+                    statusMessage = ""
+                    pendingConfirmation = null
+                }
+            } catch (exc: Exception) {
+                sessionsError = "Failed to delete session: ${exc.message}"
+            } finally {
+                sessionsBusy = false
+            }
+        }
+    }
+
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
@@ -418,7 +443,8 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             SessionRow(
                                 session = session,
                                 active = session.sessionId == ClaudeSessionStore.sessionId,
-                                onClick = { continueSession(session.sessionId) }
+                                onClick = { continueSession(session.sessionId) },
+                                onDelete = { deleteSession(session.sessionId) }
                             )
                         }
                     }
@@ -487,27 +513,43 @@ private fun ChatBubble(message: ChatMessage) {
 private fun SessionRow(
     session: AgentSessionSummary,
     active: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
     val border = if (active) AppTheme.colors.accent else AppTheme.colors.panelBorder
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .background(AppTheme.colors.input)
-            .clickable(onClick = onClick)
-            .padding(10.dp)
             .border(width = 1.dp, color = border, shape = RoundedCornerShape(6.dp)),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        AppText(session.name, AppTheme.typography.body, AppTheme.colors.text)
-        AppText(
-            "${session.messageCount} msgs - ${formatSessionTimestamp(session.lastUsedAt)}",
-            AppTheme.typography.label,
-            AppTheme.colors.muted
-        )
-        if (!session.lastPreview.isNullOrBlank()) {
-            AppText(session.lastPreview, AppTheme.typography.bodySmall, AppTheme.colors.muted)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onClick)
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            AppText(session.name, AppTheme.typography.body, AppTheme.colors.text)
+            AppText(
+                "${session.messageCount} msgs - ${formatSessionTimestamp(session.lastUsedAt)}",
+                AppTheme.typography.label,
+                AppTheme.colors.muted
+            )
+            if (!session.lastPreview.isNullOrBlank()) {
+                AppText(session.lastPreview, AppTheme.typography.bodySmall, AppTheme.colors.muted)
+            }
+        }
+
+        IconButton(onClick = onDelete) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Delete session",
+                tint = AppTheme.colors.danger
+            )
         }
     }
 }

@@ -150,6 +150,13 @@
   gap: var(--space-1);
 }
 
+.sessionRowWrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1);
+  align-items: stretch;
+}
+
 .sessionRow {
   display: flex;
   flex-direction: column;
@@ -166,6 +173,17 @@
 
 .sessionRowActive {
   border-color: var(--accent);
+}
+
+.sessionDelete {
+  border: 1px solid var(--panel-border);
+  background: var(--button);
+  color: var(--danger);
+  border-radius: 6px;
+  width: 38px;
+  min-width: 38px;
+  font-size: 16px;
+  line-height: 1;
 }
 
 .sessionName {

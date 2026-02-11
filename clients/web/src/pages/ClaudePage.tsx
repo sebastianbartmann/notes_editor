@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { usePerson } from '../hooks/usePerson'
-import { agentChatStream, clearAllAgentSessions, getAgentSessionHistory, listAgentActions, listAgentSessions } from '../api/agent'
+import { agentChatStream, clearAgentSession, clearAllAgentSessions, getAgentSessionHistory, listAgentActions, listAgentSessions } from '../api/agent'
 import { useAgentSession } from '../context/AgentSessionContext'
 import type { AgentAction, AgentChatRequest, AgentSessionSummary, AgentStreamEvent, ChatMessage } from '../api/types'
 import styles from './ClaudePage.module.css'
@@ -96,6 +96,27 @@ export default function ClaudePage() {
       setError('')
     } catch (err) {
       setSessionsError(err instanceof Error ? err.message : 'Failed to delete sessions')
+    } finally {
+      setSessionsBusy(false)
+    }
+  }
+
+  const handleDeleteSession = async (targetSessionId: string) => {
+    if (!person || isStreaming || sessionsBusy) return
+    const ok = window.confirm('Delete this session?')
+    if (!ok) return
+    setSessionsBusy(true)
+    setSessionsError('')
+    try {
+      await clearAgentSession(targetSessionId)
+      setSessions(prev => prev.filter(item => item.session_id !== targetSessionId))
+      if (sessionId === targetSessionId) {
+        clearSession(person)
+        setStreamingText('')
+        setError('')
+      }
+    } catch (err) {
+      setSessionsError(err instanceof Error ? err.message : 'Failed to delete session')
     } finally {
       setSessionsBusy(false)
     }
@@ -320,16 +341,26 @@ export default function ClaudePage() {
             {!sessionsLoading && sessions.length > 0 && (
               <div className={styles.sessionList}>
                 {sessions.map((item) => (
-                  <button
-                    key={item.session_id}
-                    className={`${styles.sessionRow} ${item.session_id === sessionId ? styles.sessionRowActive : ''}`}
-                    onClick={() => handleSelectSession(item.session_id)}
-                    disabled={sessionsBusy || isStreaming}
-                  >
-                    <span className={styles.sessionName}>{item.name}</span>
-                    <span className={styles.sessionMeta}>{formatSessionMeta(item)}</span>
-                    {item.last_preview && <span className={styles.sessionPreview}>{item.last_preview}</span>}
-                  </button>
+                  <div key={item.session_id} className={styles.sessionRowWrap}>
+                    <button
+                      className={`${styles.sessionRow} ${item.session_id === sessionId ? styles.sessionRowActive : ''}`}
+                      onClick={() => handleSelectSession(item.session_id)}
+                      disabled={sessionsBusy || isStreaming}
+                    >
+                      <span className={styles.sessionName}>{item.name}</span>
+                      <span className={styles.sessionMeta}>{formatSessionMeta(item)}</span>
+                      {item.last_preview && <span className={styles.sessionPreview}>{item.last_preview}</span>}
+                    </button>
+                    <button
+                      className={styles.sessionDelete}
+                      onClick={() => handleDeleteSession(item.session_id)}
+                      disabled={sessionsBusy || isStreaming}
+                      title="Delete session"
+                      aria-label="Delete session"
+                    >
+                      🗑
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
