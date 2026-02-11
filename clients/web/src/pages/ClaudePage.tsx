@@ -146,7 +146,9 @@ export default function ClaudePage() {
         setError(event.message || 'Stream error')
         break
       case 'done':
-        // Ignore
+        if (event.session_id) {
+          setSessionId(person, event.session_id)
+        }
         break
     }
   }
