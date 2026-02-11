@@ -2,6 +2,7 @@ package claude
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -557,7 +558,6 @@ func (te *ToolExecutor) webSearch(input map[string]any) (string, error) {
 		return "", fmt.Errorf("web search request creation failed: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-Encoding", "gzip")
 	req.Header.Set("X-Subscription-Token", apiKey)
 	req.Header.Set("User-Agent", "notes-editor-websearch/1.0")
 
@@ -576,6 +576,16 @@ func (te *ToolExecutor) webSearch(input map[string]any) (string, error) {
 		return "", fmt.Errorf("web search failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(errBody)))
 	}
 
+	reader := io.Reader(resp.Body)
+	if strings.EqualFold(strings.TrimSpace(resp.Header.Get("Content-Encoding")), "gzip") {
+		gz, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("web search gzip decode failed: %w", err)
+		}
+		defer gz.Close()
+		reader = gz
+	}
+
 	var parsed struct {
 		Web struct {
 			Results []struct {
@@ -585,7 +595,7 @@ func (te *ToolExecutor) webSearch(input map[string]any) (string, error) {
 			} `json:"results"`
 		} `json:"web"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 512*1024)).Decode(&parsed); err != nil {
+	if err := json.NewDecoder(io.LimitReader(reader, 512*1024)).Decode(&parsed); err != nil {
 		return "", fmt.Errorf("web search decode failed: %w", err)
 	}
 
