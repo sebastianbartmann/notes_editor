@@ -1,7 +1,9 @@
 [Unit]
 Description=Daily Notes Editor (Go Server)
 After=network.target
+After=notes-qmd.service
 After=notes-pi-gateway.service
+Requires=notes-qmd.service
 Requires=notes-pi-gateway.service
 
 [Service]

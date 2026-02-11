@@ -1,0 +1,18 @@
+[Unit]
+Description=Notes QMD MCP Sidecar
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=dev
+Group=dev
+WorkingDirectory=/home/dev/notes_editor
+ExecStart=/home/dev/.bun/bin/qmd mcp --http --port 8181
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

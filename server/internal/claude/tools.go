@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -35,6 +36,9 @@ const (
 	defaultWebSearchMaxResult = 5
 	maxWebSearchResultCount   = 20
 	maxWebSearchDescChars     = 280
+	defaultQMDMCPEndpoint     = "http://prod.local:8181/mcp"
+	defaultQMDMCPTimeout      = 90 * time.Second
+	defaultQMDMCPSessionHdr   = "Mcp-Session-Id"
 )
 
 var (
@@ -42,6 +46,11 @@ var (
 	webSearchClient   = &http.Client{Timeout: defaultWebSearchTimeout}
 	webSearchCacheMu  sync.Mutex
 	webSearchCache    = map[string]webSearchCacheEntry{}
+	qmdMCPEndpoint    = defaultQMDMCPEndpoint
+	qmdMCPClient      = &http.Client{Timeout: defaultQMDMCPTimeout}
+	qmdMCPNextID      atomic.Int64
+	qmdMCPSessionMu   sync.RWMutex
+	qmdMCPSessionID   string
 )
 
 type webSearchCacheEntry struct {
@@ -443,70 +452,56 @@ func compileVaultGlob(pattern string) (*regexp.Regexp, error) {
 
 func (te *ToolExecutor) searchFiles(input map[string]any) (string, error) {
 	pattern, ok := input["pattern"].(string)
-	if !ok {
+	if !ok || strings.TrimSpace(pattern) == "" {
 		return "", fmt.Errorf("pattern is required")
 	}
+	pattern = strings.TrimSpace(pattern)
 	searchPath, ok := input["path"].(string)
-	if !ok {
+	if !ok || strings.TrimSpace(searchPath) == "" {
 		searchPath = "."
 	}
+	searchPath = filepath.ToSlash(filepath.Clean(searchPath))
 
-	// Build the full path to search
+	// Validate the search path early so path traversal is rejected consistently.
 	fullPath, err := vault.ResolvePath(te.store.RootPath(), te.person, searchPath)
+	if err != nil {
+		return "", err
+	}
+	pathInfo, err := os.Stat(fullPath)
+	if err != nil {
+		return "", err
+	}
+
+	// NOTE: qmd collections are expected to exist per person (collection name = person).
+	qmdResults, err := qmdDeepSearch(pattern, te.person, 50)
 	if err != nil {
 		return "", err
 	}
 
 	var results []map[string]any
-	patternLower := strings.ToLower(pattern)
-
-	err = filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Skip files we can't read
+	for _, row := range qmdResults {
+		relPath := normalizeQMDResultPath(te.person, row.File)
+		if relPath == "" {
+			continue
 		}
-		if info.IsDir() {
-			if strings.HasPrefix(info.Name(), ".") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if strings.HasPrefix(info.Name(), ".") {
-			return nil
+		if !matchesSearchPath(relPath, searchPath, pathInfo.IsDir()) {
+			continue
 		}
 
-		// Read file and search for pattern
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return nil
+		snippet := row.Snippet
+		matches := parseQMDLineMatches(snippet)
+		if len(matches) == 0 {
+			continue
 		}
 
-		contentLower := strings.ToLower(string(content))
-		if strings.Contains(contentLower, patternLower) {
-			// Get relative path from vault root
-			relPath, _ := filepath.Rel(filepath.Join(te.store.RootPath(), te.person), path)
-
-			// Find matching lines
-			lines := strings.Split(string(content), "\n")
-			var matches []map[string]any
-			for i, line := range lines {
-				if strings.Contains(strings.ToLower(line), patternLower) {
-					matches = append(matches, map[string]any{
-						"line_number": i + 1,
-						"content":     line,
-					})
-				}
-			}
-
-			results = append(results, map[string]any{
-				"file":    relPath,
-				"matches": matches,
-			})
-		}
-		return nil
-	})
-
-	if err != nil {
-		return "", err
+		results = append(results, map[string]any{
+			"file":    relPath,
+			"matches": matches,
+			"score":   row.Score,
+			"title":   row.Title,
+			"context": row.Context,
+			"docid":   strings.TrimPrefix(row.DocID, "#"),
+		})
 	}
 
 	result, err := json.Marshal(results)
@@ -514,6 +509,216 @@ func (te *ToolExecutor) searchFiles(input map[string]any) (string, error) {
 		return "", err
 	}
 	return string(result), nil
+}
+
+var qmdSnippetLineRE = regexp.MustCompile(`^\s*(\d+):\s?(.*)$`)
+
+type qmdMCPRPCResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      any             `json:"id,omitempty"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *struct {
+		Code    int             `json:"code"`
+		Message string          `json:"message"`
+		Data    json.RawMessage `json:"data,omitempty"`
+	} `json:"error,omitempty"`
+}
+
+type qmdSearchResult struct {
+	DocID   string  `json:"docid"`
+	File    string  `json:"file"`
+	Title   string  `json:"title"`
+	Score   float64 `json:"score"`
+	Context string  `json:"context"`
+	Snippet string  `json:"snippet"`
+}
+
+func qmdDeepSearch(query, collection string, limit int) ([]qmdSearchResult, error) {
+	if strings.TrimSpace(qmdMCPEndpoint) == "" {
+		return nil, fmt.Errorf("qmd mcp endpoint is empty")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+
+	if err := qmdEnsureInitialized(); err != nil {
+		return nil, err
+	}
+
+	params := map[string]any{
+		"name": "deep_search",
+		"arguments": map[string]any{
+			"query":      query,
+			"limit":      limit,
+			"collection": collection,
+		},
+	}
+	resp, err := qmdCallRPC("tools/call", params)
+	if err != nil {
+		return nil, err
+	}
+
+	var toolResult struct {
+		IsError           bool `json:"isError"`
+		StructuredContent struct {
+			Results []qmdSearchResult `json:"results"`
+		} `json:"structuredContent"`
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(resp.Result, &toolResult); err != nil {
+		return nil, fmt.Errorf("qmd mcp invalid tool result: %w", err)
+	}
+	if toolResult.IsError {
+		msg := "qmd mcp tool returned error"
+		if len(toolResult.Content) > 0 && strings.TrimSpace(toolResult.Content[0].Text) != "" {
+			msg = toolResult.Content[0].Text
+		}
+		return nil, fmt.Errorf(msg)
+	}
+	if toolResult.StructuredContent.Results == nil {
+		return []qmdSearchResult{}, nil
+	}
+	return toolResult.StructuredContent.Results, nil
+}
+
+func qmdEnsureInitialized() error {
+	if qmdGetSessionID() != "" {
+		return nil
+	}
+
+	initParams := map[string]any{
+		"protocolVersion": "2025-06-18",
+		"clientInfo": map[string]any{
+			"name":    "notes-editor",
+			"version": "1.0.0",
+		},
+		"capabilities": map[string]any{},
+	}
+	resp, err := qmdCallRPC("initialize", initParams)
+	if err != nil {
+		return fmt.Errorf("qmd mcp initialize failed: %w", err)
+	}
+	if len(resp.Result) == 0 {
+		return fmt.Errorf("qmd mcp initialize returned empty result")
+	}
+	return nil
+}
+
+func qmdCallRPC(method string, params map[string]any) (*qmdMCPRPCResponse, error) {
+	reqID := qmdMCPNextID.Add(1)
+	payload := map[string]any{
+		"jsonrpc": "2.0",
+		"id":      reqID,
+		"method":  method,
+		"params":  params,
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultQMDMCPTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, qmdMCPEndpoint, bytes.NewReader(encoded))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if sessionID := qmdGetSessionID(); sessionID != "" {
+		req.Header.Set(defaultQMDMCPSessionHdr, sessionID)
+	}
+
+	resp, err := qmdMCPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("qmd mcp request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if sid := strings.TrimSpace(resp.Header.Get(defaultQMDMCPSessionHdr)); sid != "" {
+		qmdSetSessionID(sid)
+	}
+
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	if err != nil {
+		return nil, fmt.Errorf("qmd mcp read failed: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("qmd mcp status %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+	}
+
+	var decoded qmdMCPRPCResponse
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil, fmt.Errorf("qmd mcp invalid JSON: %w", err)
+	}
+	if decoded.Error != nil {
+		return nil, fmt.Errorf("qmd mcp rpc error %d: %s", decoded.Error.Code, decoded.Error.Message)
+	}
+	return &decoded, nil
+}
+
+func qmdGetSessionID() string {
+	qmdMCPSessionMu.RLock()
+	defer qmdMCPSessionMu.RUnlock()
+	return qmdMCPSessionID
+}
+
+func qmdSetSessionID(id string) {
+	qmdMCPSessionMu.Lock()
+	defer qmdMCPSessionMu.Unlock()
+	qmdMCPSessionID = strings.TrimSpace(id)
+}
+
+func parseQMDLineMatches(snippet string) []map[string]any {
+	lines := strings.Split(snippet, "\n")
+	matches := make([]map[string]any, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := qmdSnippetLineRE.FindStringSubmatch(line)
+		if len(parts) != 3 {
+			continue
+		}
+		lineNum, err := strconv.Atoi(parts[1])
+		if err != nil || lineNum <= 0 {
+			continue
+		}
+		matches = append(matches, map[string]any{
+			"line_number": lineNum,
+			"content":     parts[2],
+		})
+	}
+	return matches
+}
+
+func normalizeQMDResultPath(person, file string) string {
+	path := strings.TrimSpace(file)
+	path = strings.TrimPrefix(path, "qmd://")
+	path = filepath.ToSlash(filepath.Clean(path))
+	path = strings.TrimPrefix(path, "./")
+	if path == "." || path == "/" || path == "" {
+		return ""
+	}
+	if strings.HasPrefix(path, person+"/") {
+		path = strings.TrimPrefix(path, person+"/")
+	}
+	return strings.TrimPrefix(path, "/")
+}
+
+func matchesSearchPath(relPath, searchPath string, searchIsDir bool) bool {
+	relPath = filepath.ToSlash(filepath.Clean(relPath))
+	searchPath = filepath.ToSlash(filepath.Clean(searchPath))
+	if searchPath == "." {
+		return true
+	}
+	if searchIsDir {
+		return relPath == searchPath || strings.HasPrefix(relPath, searchPath+"/")
+	}
+	return relPath == searchPath
 }
 
 func (te *ToolExecutor) webSearch(input map[string]any) (string, error) {

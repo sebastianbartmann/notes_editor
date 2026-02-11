@@ -2,6 +2,7 @@ package claude
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,181 @@ import (
 
 	"notes-editor/internal/vault"
 )
+
+func TestToolExecutor_SearchFiles_UsesQMD(t *testing.T) {
+	root := t.TempDir()
+	person := "sebastian"
+	if err := os.MkdirAll(filepath.Join(root, person, "notes"), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, person, "notes", "today.md"), []byte("hello"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	origEndpoint := qmdMCPEndpoint
+	origClient := qmdMCPClient
+	origSession := qmdGetSessionID()
+	qmdSetSessionID("")
+	t.Cleanup(func() {
+		qmdMCPEndpoint = origEndpoint
+		qmdMCPClient = origClient
+		qmdSetSessionID(origSession)
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/mcp" {
+			http.NotFound(w, r)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			ID     any            `json:"id"`
+			Method string         `json:"method"`
+			Params map[string]any `json:"params"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("invalid request JSON: %v", err)
+		}
+
+		switch req.Method {
+		case "initialize":
+			w.Header().Set(defaultQMDMCPSessionHdr, "session-1")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      req.ID,
+				"result": map[string]any{
+					"protocolVersion": "2025-06-18",
+				},
+			})
+		case "tools/call":
+			if got := req.Params["name"]; got != "deep_search" {
+				t.Fatalf("tools/call name=%v want deep_search", got)
+			}
+			args, _ := req.Params["arguments"].(map[string]any)
+			if got := args["collection"]; got != person {
+				t.Fatalf("collection=%v want %q", got, person)
+			}
+			if got := args["query"]; got != "match" {
+				t.Fatalf("query=%v want %q", got, "match")
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      req.ID,
+				"result": map[string]any{
+					"structuredContent": map[string]any{
+						"results": []map[string]any{
+							{
+								"docid":   "#abc123",
+								"score":   0.87,
+								"file":    "notes/today.md",
+								"title":   "Today",
+								"context": "Journal",
+								"snippet": "12: first match\n25: second match",
+							},
+						},
+					},
+				},
+			})
+		default:
+			t.Fatalf("unexpected method: %s", req.Method)
+		}
+	}))
+	defer srv.Close()
+	qmdMCPEndpoint = srv.URL + "/mcp"
+	qmdMCPClient = srv.Client()
+
+	store := vault.NewStore(root)
+	te := NewToolExecutor(store, nil, person)
+	out, err := te.ExecuteTool("search_files", map[string]any{
+		"pattern": "match",
+		"path":    "notes",
+	})
+	if err != nil {
+		t.Fatalf("ExecuteTool(search_files): %v", err)
+	}
+
+	var payload []struct {
+		File    string `json:"file"`
+		Matches []struct {
+			LineNumber int    `json:"line_number"`
+			Content    string `json:"content"`
+		} `json:"matches"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("unmarshal response: %v; out=%s", err, out)
+	}
+	if len(payload) != 1 {
+		t.Fatalf("result count=%d want 1; out=%s", len(payload), out)
+	}
+	if payload[0].File != "notes/today.md" {
+		t.Fatalf("file=%q want %q", payload[0].File, "notes/today.md")
+	}
+	if len(payload[0].Matches) != 2 {
+		t.Fatalf("matches count=%d want 2", len(payload[0].Matches))
+	}
+	if payload[0].Matches[0].LineNumber != 12 || payload[0].Matches[1].LineNumber != 25 {
+		t.Fatalf("unexpected line numbers: %+v", payload[0].Matches)
+	}
+}
+
+func TestToolExecutor_SearchFiles_QMDErrorBubblesUp(t *testing.T) {
+	root := t.TempDir()
+	person := "sebastian"
+	if err := os.MkdirAll(filepath.Join(root, person), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	origEndpoint := qmdMCPEndpoint
+	origClient := qmdMCPClient
+	origSession := qmdGetSessionID()
+	qmdSetSessionID("")
+	t.Cleanup(func() {
+		qmdMCPEndpoint = origEndpoint
+		qmdMCPClient = origClient
+		qmdSetSessionID(origSession)
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			ID     any    `json:"id"`
+			Method string `json:"method"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("invalid request JSON: %v", err)
+		}
+		if req.Method == "initialize" {
+			w.Header().Set(defaultQMDMCPSessionHdr, "session-1")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      req.ID,
+				"result":  map[string]any{"protocolVersion": "2025-06-18"},
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"error": map[string]any{
+				"code":    -32000,
+				"message": "qmd exploded",
+			},
+		})
+	}))
+	defer srv.Close()
+	qmdMCPEndpoint = srv.URL + "/mcp"
+	qmdMCPClient = srv.Client()
+
+	store := vault.NewStore(root)
+	te := NewToolExecutor(store, nil, person)
+	_, err := te.ExecuteTool("search_files", map[string]any{"pattern": "abc"})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(err.Error(), "qmd exploded") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
 
 func TestToolExecutor_GlobFiles(t *testing.T) {
 	root := t.TempDir()

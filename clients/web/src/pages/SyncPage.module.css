@@ -10,6 +10,25 @@
   gap: var(--space-1);
 }
 
+.indexStatus {
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: var(--space-2);
+}
+
+.indexStatus h3 {
+  margin: 0 0 var(--space-1) 0;
+  font-size: 13px;
+}
+
+.indexList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .statusBox {
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
@@ -34,4 +53,3 @@
   font-size: 12px;
   color: var(--danger);
 }
-

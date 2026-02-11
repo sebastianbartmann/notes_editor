@@ -38,6 +38,9 @@ type SyncManager struct {
 	lastError   string
 	lastErrorAt time.Time
 
+	onPullSuccess func()
+	onPushSuccess func()
+
 	// Tunables (hardcoded for now; can be promoted to config/env later).
 	debounce time.Duration
 	minPull  time.Duration
@@ -139,28 +142,48 @@ func (s *SyncManager) TriggerPush(message string) {
 	s.cond.Signal()
 }
 
-// RecordManualPull updates sync status after a manual pull endpoint call.
-func (s *SyncManager) RecordManualPull(err error) {
+// SetHooks registers optional callbacks fired after successful pull/push runs.
+func (s *SyncManager) SetHooks(onPullSuccess, onPushSuccess func()) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.onPullSuccess = onPullSuccess
+	s.onPushSuccess = onPushSuccess
+}
+
+// RecordManualPull updates sync status after a manual pull endpoint call.
+func (s *SyncManager) RecordManualPull(err error) {
+	var onSuccess func()
+	s.mu.Lock()
 	if err != nil {
 		s.lastError = err.Error()
 		s.lastErrorAt = time.Now()
+		s.mu.Unlock()
 		return
 	}
 	s.lastPullAt = time.Now()
+	onSuccess = s.onPullSuccess
+	s.mu.Unlock()
+	if onSuccess != nil {
+		onSuccess()
+	}
 }
 
 // RecordManualPush updates sync status after a manual push endpoint call.
 func (s *SyncManager) RecordManualPush(err error) {
+	var onSuccess func()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err != nil {
 		s.lastError = err.Error()
 		s.lastErrorAt = time.Now()
+		s.mu.Unlock()
 		return
 	}
 	s.lastPushAt = time.Now()
+	onSuccess = s.onPushSuccess
+	s.mu.Unlock()
+	if onSuccess != nil {
+		onSuccess()
+	}
 }
 
 // SyncNow triggers a pull and optionally waits for completion (up to timeout).
@@ -246,6 +269,8 @@ func (s *SyncManager) loop() {
 		s.mu.Unlock()
 
 		// Serialize git work vs. file operations.
+		pullSucceeded := false
+		pushSucceeded := false
 		s.vaultMu.Lock()
 		var err error
 		if doPull {
@@ -255,6 +280,7 @@ func (s *SyncManager) loop() {
 				s.mu.Lock()
 				s.lastPullAt = time.Now()
 				s.mu.Unlock()
+				pullSucceeded = true
 			}
 		}
 		if doPush {
@@ -267,9 +293,22 @@ func (s *SyncManager) loop() {
 				s.mu.Lock()
 				s.lastPushAt = time.Now()
 				s.mu.Unlock()
+				pushSucceeded = true
 			}
 		}
 		s.vaultMu.Unlock()
+
+		var onPullSuccess, onPushSuccess func()
+		s.mu.Lock()
+		onPullSuccess = s.onPullSuccess
+		onPushSuccess = s.onPushSuccess
+		s.mu.Unlock()
+		if pullSucceeded && onPullSuccess != nil {
+			onPullSuccess()
+		}
+		if pushSucceeded && onPushSuccess != nil {
+			onPushSuccess()
+		}
 
 		// Update status and notify waiters.
 		s.mu.Lock()

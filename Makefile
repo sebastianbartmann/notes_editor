@@ -1,4 +1,4 @@
-.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd install-pi-gateway-systemd status-pi-gateway-systemd restart-services build-android install-android deploy-android debug-android build build-server build-web lint clean build-pi-gateway run-pi-gateway android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-settings android-test-nav
+.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd install-pi-gateway-systemd status-pi-gateway-systemd install-qmd-systemd status-qmd-systemd restart-services build-android install-android deploy-android debug-android build build-server build-web lint clean build-pi-gateway run-pi-gateway android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-settings android-test-nav
 
 .DEFAULT_GOAL := help
 
@@ -32,7 +32,9 @@ help:
 	@echo "    status-systemd  Show systemd service status"
 	@echo "    install-pi-gateway-systemd Install/update gateway sidecar service"
 	@echo "    status-pi-gateway-systemd  Show gateway sidecar service status"
-	@echo "    restart-services Restart gateway + server services"
+	@echo "    install-qmd-systemd Install/update qmd sidecar service"
+	@echo "    status-qmd-systemd  Show qmd sidecar service status"
+	@echo "    restart-services Restart qmd + gateway + server services"
 	@echo ""
 	@echo "  Android:"
 	@echo "    build-android   Build the Android debug APK"
@@ -120,8 +122,18 @@ install-pi-gateway-systemd:
 status-pi-gateway-systemd:
 	sudo systemctl status notes-pi-gateway
 
+install-qmd-systemd:
+	sudo cp notes-qmd.service /etc/systemd/system/
+	sudo systemctl daemon-reload
+	sudo systemctl enable notes-qmd
+	sudo systemctl restart notes-qmd
+
+status-qmd-systemd:
+	sudo systemctl status notes-qmd
+
 restart-services:
 	sudo systemctl daemon-reload
+	sudo systemctl restart notes-qmd
 	sudo systemctl restart notes-pi-gateway
 	sudo systemctl restart notes-editor
 

@@ -26,6 +26,7 @@ type Server struct {
 	daily    *vault.Daily
 	git      *vault.Git
 	syncMgr  *SyncManager
+	indexMgr *IndexManager
 	claude   *claude.Service
 	agent    *agent.Service
 	linkedin *linkedin.Service
@@ -54,7 +55,13 @@ func NewServer(cfg *config.Config) *Server {
 	// Background git sync (pull/push) for the vault. This avoids doing networked git
 	// operations in read handlers while still keeping clients reasonably up to date.
 	srv.syncMgr = NewSyncManager(&srv.mu, git)
+	srv.indexMgr = NewIndexManager()
+	srv.syncMgr.SetHooks(
+		func() { srv.indexMgr.TriggerReindex("sync pull success") },
+		func() { srv.indexMgr.TriggerReindex("sync push success") },
+	)
 	srv.syncMgr.Start()
+	srv.indexMgr.Start()
 
 	return srv
 }
@@ -88,6 +95,7 @@ func NewRouter(srv *Server) http.Handler {
 		// Git sync routes
 		r.Post("/sync", srv.handleSync)
 		r.Get("/sync/status", srv.handleSyncStatus)
+		r.Get("/sync/index-status", srv.handleIndexStatus)
 		r.Get("/git/status", srv.handleGitStatus)
 		r.Post("/git/commit", srv.handleGitCommit)
 		r.Post("/git/push", srv.handleGitPush)

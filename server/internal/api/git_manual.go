@@ -163,6 +163,9 @@ func (s *Server) handleGitResetClean(w http.ResponseWriter, r *http.Request) {
 	if statusErr != nil {
 		statusOut = ""
 	}
+	if s.indexMgr != nil {
+		s.indexMgr.TriggerReindex("manual reset-clean")
+	}
 
 	writeJSON(w, http.StatusOK, GitActionResponse{
 		Success: true,
