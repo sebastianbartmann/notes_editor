@@ -8,6 +8,7 @@ import ClaudePage from './pages/ClaudePage'
 import NoisePage from './pages/NoisePage'
 import SettingsPage from './pages/SettingsPage'
 import LoginPage from './pages/LoginPage'
+import SyncPage from './pages/SyncPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -34,6 +35,7 @@ function App() {
                 <Route path="/sleep" element={<SleepPage />} />
                 <Route path="/claude" element={<ClaudePage />} />
                 <Route path="/noise" element={<NoisePage />} />
+                <Route path="/sync" element={<SyncPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Routes>
             </Layout>

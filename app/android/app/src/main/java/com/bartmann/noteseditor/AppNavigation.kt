@@ -38,6 +38,7 @@ sealed class Screen(val route: String, val label: String) {
     data object Daily : Screen("daily", "Daily")
     data object Files : Screen("files", "Files")
     data object Sleep : Screen("sleep", "Sleep")
+    data object Sync : Screen("sync", "Sync")
     data object Tools : Screen("tools", "More")
     data object Settings : Screen("settings", "Settings")
     data object ToolClaude : Screen("tool-agent", "Agent")
@@ -116,6 +117,7 @@ fun NotesEditorApp() {
             }
         }
     }
+    AppNav.openSync = { navigateByRoute(Screen.Sync.route) }
 
     LaunchedEffect(person) {
         if (person != null && currentRoute == Screen.Settings.route) {
@@ -170,6 +172,9 @@ fun NotesEditorApp() {
                 }
                 composable(Screen.Sleep.route) {
                     SleepTimesScreen(Modifier)
+                }
+                composable(Screen.Sync.route) {
+                    SyncScreen(Modifier)
                 }
                 composable(Screen.Tools.route) {
                     ToolsScreen(

@@ -113,7 +113,10 @@ private fun SyncBadge() {
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.clickable(enabled = AppNav.openSync != null) {
+            AppNav.openSync?.invoke()
+        }
     ) {
         Box(
             modifier = Modifier

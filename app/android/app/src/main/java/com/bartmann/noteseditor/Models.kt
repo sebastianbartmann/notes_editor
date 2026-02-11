@@ -70,6 +70,18 @@ data class SyncStatus(
 )
 
 @Serializable
+data class GitStatusResponse(
+    val output: String = ""
+)
+
+@Serializable
+data class GitActionResponse(
+    val success: Boolean = false,
+    val message: String = "",
+    val output: String? = null
+)
+
+@Serializable
 data class EnvResponse(
     val success: Boolean,
     val content: String = "",

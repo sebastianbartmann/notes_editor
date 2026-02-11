@@ -139,6 +139,30 @@ func (s *SyncManager) TriggerPush(message string) {
 	s.cond.Signal()
 }
 
+// RecordManualPull updates sync status after a manual pull endpoint call.
+func (s *SyncManager) RecordManualPull(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err != nil {
+		s.lastError = err.Error()
+		s.lastErrorAt = time.Now()
+		return
+	}
+	s.lastPullAt = time.Now()
+}
+
+// RecordManualPush updates sync status after a manual push endpoint call.
+func (s *SyncManager) RecordManualPush(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err != nil {
+		s.lastError = err.Error()
+		s.lastErrorAt = time.Now()
+		return
+	}
+	s.lastPushAt = time.Now()
+}
+
 // SyncNow triggers a pull and optionally waits for completion (up to timeout).
 func (s *SyncManager) SyncNow(wait bool, timeout time.Duration) SyncStatus {
 	if wait {

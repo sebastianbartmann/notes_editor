@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchSyncStatus, type SyncStatus } from '../../api/sync'
 import { usePerson } from '../../hooks/usePerson'
+import { useNavigate } from 'react-router-dom'
 import styles from './SyncIndicator.module.css'
 
 function formatAge(ms: number): string {
@@ -12,6 +13,7 @@ function formatAge(ms: number): string {
 
 export default function SyncIndicator() {
   const { person } = usePerson()
+  const navigate = useNavigate()
   const [status, setStatus] = useState<SyncStatus | null>(null)
 
   useEffect(() => {
@@ -90,9 +92,14 @@ export default function SyncIndicator() {
   }, [person, status])
 
   return (
-    <span className={`${styles.pill} ${view.cls}`} title={view.title}>
+    <button
+      type="button"
+      className={`${styles.pill} ${view.cls}`}
+      title={`${view.title}\nOpen Sync view`}
+      onClick={() => navigate('/sync')}
+    >
       <span className={styles.dot} />
       {view.label}
-    </span>
+    </button>
   )
 }

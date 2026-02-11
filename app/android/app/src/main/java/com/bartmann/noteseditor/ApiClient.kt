@@ -159,6 +159,11 @@ object ApiClient {
         postJson("/api/sync", SyncRequest(wait = wait, timeoutMs = timeoutMs))
 
     suspend fun fetchSyncStatus(): SyncStatus = getJson("/api/sync/status")
+    suspend fun fetchGitStatus(): GitStatusResponse = getJson("/api/git/status")
+    suspend fun gitCommit(): GitActionResponse = postJson("/api/git/commit", mapOf<String, String>())
+    suspend fun gitPush(): GitActionResponse = postJson("/api/git/push", mapOf<String, String>())
+    suspend fun gitPull(): GitActionResponse = postJson("/api/git/pull", mapOf<String, String>())
+    suspend fun gitCommitPush(): GitActionResponse = postJson("/api/git/commit-push", mapOf<String, String>())
 
     suspend fun fetchDaily(): DailyNote = getJson("/api/daily")
 

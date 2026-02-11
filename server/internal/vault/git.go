@@ -34,9 +34,20 @@ func (g *Git) runGit(args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+// StatusShort returns a concise status suitable for UI display.
+func (g *Git) StatusShort() (string, error) {
+	return g.runGit("status", "--short", "--branch")
+}
+
 // getCurrentBranch returns the current git branch name.
 func (g *Git) getCurrentBranch() (string, error) {
 	return g.runGit("rev-parse", "--abbrev-ref", "HEAD")
+}
+
+// PullFFOnly pulls only when a fast-forward is possible.
+func (g *Git) PullFFOnly() error {
+	_, err := g.runGit("pull", "--ff-only")
+	return err
 }
 
 // Pull pulls changes from the remote repository.
@@ -111,6 +122,34 @@ func (g *Git) CommitAndPush(message string) error {
 	return nil
 }
 
+// Commit stages all changes and creates a commit with the given message.
+// committed is false when there was nothing to commit.
+func (g *Git) Commit(message string) (committed bool, err error) {
+	if _, err := g.runGit("add", "."); err != nil {
+		return false, fmt.Errorf("git add failed: %w", err)
+	}
+
+	status, err := g.runGit("status", "--porcelain")
+	if err != nil {
+		return false, fmt.Errorf("git status failed: %w", err)
+	}
+	if status == "" {
+		return false, nil
+	}
+
+	if _, err := g.runGit("commit", "-m", message); err != nil {
+		return false, fmt.Errorf("git commit failed: %w", err)
+	}
+
+	return true, nil
+}
+
+// Push pushes local commits to the configured remote.
+func (g *Git) Push() error {
+	_, err := g.runGit("push")
+	return err
+}
+
 // pushWithRetry attempts to push, pulling and retrying once if the push fails.
 func (g *Git) pushWithRetry() error {
 	// First push attempt
@@ -128,4 +167,3 @@ func (g *Git) pushWithRetry() error {
 	_, err = g.runGit("push")
 	return err
 }
-

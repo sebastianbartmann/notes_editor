@@ -88,6 +88,11 @@ func NewRouter(srv *Server) http.Handler {
 		// Git sync routes
 		r.Post("/sync", srv.handleSync)
 		r.Get("/sync/status", srv.handleSyncStatus)
+		r.Get("/git/status", srv.handleGitStatus)
+		r.Post("/git/commit", srv.handleGitCommit)
+		r.Post("/git/push", srv.handleGitPush)
+		r.Post("/git/pull", srv.handleGitPull)
+		r.Post("/git/commit-push", srv.handleGitCommitPush)
 
 		// Todo routes
 		r.Post("/todos/add", srv.handleAddTodo)
