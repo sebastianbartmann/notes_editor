@@ -71,10 +71,12 @@ type Service struct {
 	maxToolCalls    int
 	allowPiFallback bool
 
-	mu               sync.Mutex
-	activeRuns       map[string]*runControl
-	activeSessionRun map[string]string
-	runtimes         map[string]Runtime
+	mu                      sync.Mutex
+	activeRuns              map[string]*runControl
+	activeSessionRun        map[string]string
+	sessionRecordsByPerson  map[string]map[string]*sessionRecord
+	sessionSequenceByPerson map[string]int
+	runtimes                map[string]Runtime
 }
 
 // NewService creates an agent service.
@@ -116,13 +118,15 @@ func NewServiceWithRuntimesAndOptions(store *vault.Store, runtimes map[string]Ru
 	}
 
 	return &Service{
-		store:            store,
-		maxRunDuration:   maxDuration,
-		maxToolCalls:     maxToolCalls,
-		allowPiFallback:  allowFallback,
-		activeRuns:       make(map[string]*runControl),
-		activeSessionRun: make(map[string]string),
-		runtimes:         runtimes,
+		store:                   store,
+		maxRunDuration:          maxDuration,
+		maxToolCalls:            maxToolCalls,
+		allowPiFallback:         allowFallback,
+		activeRuns:              make(map[string]*runControl),
+		activeSessionRun:        make(map[string]string),
+		sessionRecordsByPerson:  make(map[string]map[string]*sessionRecord),
+		sessionSequenceByPerson: make(map[string]int),
+		runtimes:                runtimes,
 	}
 }
 
@@ -143,6 +147,7 @@ func (s *Service) Chat(person string, req ChatRequest) (*ChatResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	usedRuntime := runtime
 
 	runID := uuid.New().String()
 	if err := s.tryBeginSessionRun(person, req.SessionID, runID); err != nil {
@@ -168,7 +173,9 @@ func (s *Service) Chat(person string, req ChatRequest) (*ChatResponse, error) {
 		if err != nil {
 			return nil, err
 		}
+		usedRuntime = fallbackRuntime
 	}
+	s.touchSession(person, resp.SessionID, req.Message, usedRuntime.Mode())
 
 	return &ChatResponse{
 		Response:  resp.Response,
@@ -189,6 +196,7 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 	if err != nil {
 		return nil, err
 	}
+	usedRuntime := runtime
 
 	runID := uuid.New().String()
 	if err := s.tryBeginSessionRun(person, req.SessionID, runID); err != nil {
@@ -209,6 +217,7 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 				MaxToolCalls: toolLimit,
 			})
 			if err == nil {
+				usedRuntime = anthropic
 				fallbackMessage = piFallbackStatus
 			}
 		}
@@ -222,9 +231,11 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 	out := make(chan StreamEvent, 100)
 
 	go func() {
+		finalSessionID := req.SessionID
 		defer close(out)
 		defer s.unregisterRun(runID)
 		defer s.endSessionRun(person, req.SessionID, runID)
+		defer s.touchSession(person, finalSessionID, req.Message, usedRuntime.Mode())
 
 		out <- StreamEvent{
 			Type:      "start",
@@ -249,7 +260,6 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 		timer := time.NewTimer(s.maxRunDuration)
 		defer timer.Stop()
 
-		finalSessionID := req.SessionID
 		sawDone := false
 		toolCallsSeen := 0
 
@@ -355,21 +365,40 @@ func (s *Service) resolveMessage(person string, req ChatRequest) (*resolvedMessa
 }
 
 // ClearSession clears app-level session state for the selected runtime mode.
-func (s *Service) ClearSession(sessionID string) error {
-	runtime, err := s.selectSessionRuntime()
+func (s *Service) ClearSession(person, sessionID string) error {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return fmt.Errorf("session_id is required")
+	}
+
+	runtime, err := s.runtimeForSession(person, sessionID)
 	if err != nil {
 		return err
 	}
-	return runtime.ClearSession(sessionID)
+	if err := runtime.ClearSession(sessionID); err != nil {
+		return err
+	}
+	s.removeSessionRecord(person, sessionID)
+	return nil
 }
 
 // GetHistory returns app-level session history for the selected runtime mode.
-func (s *Service) GetHistory(sessionID string) ([]claude.ChatMessage, error) {
-	runtime, err := s.selectSessionRuntime()
+func (s *Service) GetHistory(person, sessionID string) ([]claude.ChatMessage, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, fmt.Errorf("session_id is required")
+	}
+
+	runtime, err := s.runtimeForSession(person, sessionID)
 	if err != nil {
 		return nil, err
 	}
-	return runtime.GetHistory(sessionID)
+	history, err := runtime.GetHistory(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	s.touchSession(person, sessionID, "", runtime.Mode())
+	return history, nil
 }
 
 // StopRun stops a currently active streaming run.
@@ -487,19 +516,23 @@ func (s *Service) selectRuntimeForMode(mode string) (Runtime, string, error) {
 	}
 }
 
-func (s *Service) selectSessionRuntime() (Runtime, error) {
-	anthropic := s.runtimes[RuntimeModeAnthropicAPIKey]
-	if anthropic != nil && anthropic.Available() {
-		return anthropic, nil
+func (s *Service) runtimeForSession(person, sessionID string) (Runtime, error) {
+	if mode, ok := s.runtimeModeForSession(person, sessionID); ok {
+		runtime := s.runtimes[mode]
+		if runtime != nil && runtime.Available() {
+			return runtime, nil
+		}
+		return nil, &RuntimeUnavailableError{
+			Mode:   mode,
+			Reason: "session runtime unavailable",
+		}
 	}
-	pi := s.runtimes[RuntimeModeGatewaySubscription]
-	if pi != nil && pi.Available() {
-		return pi, nil
+
+	runtime, _, _, err := s.selectRuntime(person)
+	if err != nil {
+		return nil, err
 	}
-	return nil, &RuntimeUnavailableError{
-		Mode:   "session_store",
-		Reason: "no runtime backend is available",
-	}
+	return runtime, nil
 }
 
 func (s *Service) shouldAttemptPiFallback(selectedMode string, err error) bool {

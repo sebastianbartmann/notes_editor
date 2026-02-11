@@ -274,6 +274,15 @@ object ApiClient {
     suspend fun clearAgentSession(sessionId: String): ApiMessage =
         postJson("/api/agent/session/clear", ClaudeClearRequest(sessionId = sessionId))
 
+    suspend fun fetchAgentSessionHistory(sessionId: String): List<ChatMessage> =
+        getJson<AgentSessionHistoryResponse>("/api/agent/session/history?session_id=${URLEncoder.encode(sessionId, "UTF-8")}").messages
+
+    suspend fun fetchAgentSessions(): List<AgentSessionSummary> =
+        getJson<AgentSessionsResponse>("/api/agent/sessions").sessions
+
+    suspend fun clearAllAgentSessions(): ApiMessage =
+        postJson("/api/agent/sessions/clear", mapOf<String, String>())
+
     suspend fun fetchAgentConfig(): AgentConfig = getJson("/api/agent/config")
 
     suspend fun saveAgentConfig(runtimeMode: String, prompt: String): AgentConfig =

@@ -202,3 +202,16 @@ export interface AgentGatewayHealth {
 export interface AgentHistoryResponse {
   messages: ChatMessage[]
 }
+
+export interface AgentSessionSummary {
+  session_id: string
+  name: string
+  created_at: string
+  last_used_at: string
+  message_count: number
+  last_preview?: string
+}
+
+export interface AgentSessionsResponse {
+  sessions: AgentSessionSummary[]
+}

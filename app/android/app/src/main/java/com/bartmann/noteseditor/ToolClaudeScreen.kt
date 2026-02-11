@@ -1,6 +1,8 @@
 package com.bartmann.noteseditor
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,16 +12,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,6 +38,9 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun ToolClaudeScreen(modifier: Modifier) {
@@ -45,6 +50,12 @@ fun ToolClaudeScreen(modifier: Modifier) {
     var actions by remember { mutableStateOf<List<AgentAction>>(emptyList()) }
     var actionsError by remember { mutableStateOf("") }
     var pendingConfirmation by remember { mutableStateOf<AgentAction?>(null) }
+    var showSessionsDialog by remember { mutableStateOf(false) }
+    var sessions by remember { mutableStateOf<List<AgentSessionSummary>>(emptyList()) }
+    var sessionsError by remember { mutableStateOf("") }
+    var sessionsLoading by remember { mutableStateOf(false) }
+    var sessionsBusy by remember { mutableStateOf(false) }
+    var lastPerson by remember { mutableStateOf<String?>(null) }
     val messages = ClaudeSessionStore.messages
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -179,15 +190,71 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
     }
 
-    fun clearChat() {
+    fun startNewSession() {
+        if (isLoading) return
+        ClaudeSessionStore.clear()
+        pendingConfirmation = null
+        statusMessage = ""
+    }
+
+    fun loadSessions() {
+        if (person == null) return
         scope.launch {
-            val currentSessionId = ClaudeSessionStore.sessionId
-            if (currentSessionId != null) {
-                ApiClient.clearAgentSession(currentSessionId)
+            sessionsLoading = true
+            sessionsError = ""
+            try {
+                sessions = ApiClient.fetchAgentSessions()
+            } catch (exc: Exception) {
+                sessions = emptyList()
+                sessionsError = "Failed to load sessions: ${exc.message}"
+            } finally {
+                sessionsLoading = false
             }
-            ClaudeSessionStore.clear()
-            pendingConfirmation = null
-            statusMessage = ""
+        }
+    }
+
+    fun openSessions() {
+        if (isLoading || person == null) return
+        showSessionsDialog = true
+        loadSessions()
+    }
+
+    fun continueSession(targetSessionId: String) {
+        if (isLoading || person == null || sessionsBusy) return
+        scope.launch {
+            sessionsBusy = true
+            sessionsError = ""
+            try {
+                val history = ApiClient.fetchAgentSessionHistory(targetSessionId)
+                ClaudeSessionStore.loadSession(targetSessionId, history)
+                statusMessage = ""
+                pendingConfirmation = null
+                showSessionsDialog = false
+            } catch (exc: Exception) {
+                sessionsError = "Failed to open session: ${exc.message}"
+            } finally {
+                sessionsBusy = false
+            }
+        }
+    }
+
+    fun deleteAllSessions() {
+        if (isLoading || person == null || sessionsBusy) return
+        scope.launch {
+            sessionsBusy = true
+            sessionsError = ""
+            try {
+                ApiClient.clearAllAgentSessions()
+                ClaudeSessionStore.clear()
+                sessions = emptyList()
+                showSessionsDialog = false
+                statusMessage = ""
+                pendingConfirmation = null
+            } catch (exc: Exception) {
+                sessionsError = "Failed to delete sessions: ${exc.message}"
+            } finally {
+                sessionsBusy = false
+            }
         }
     }
 
@@ -198,6 +265,12 @@ fun ToolClaudeScreen(modifier: Modifier) {
     }
 
     LaunchedEffect(person) {
+        if (lastPerson != null && person != lastPerson) {
+            ClaudeSessionStore.clear()
+            pendingConfirmation = null
+            statusMessage = ""
+        }
+        lastPerson = person
         if (person == null) return@LaunchedEffect
         try {
             actions = ApiClient.listAgentActions()
@@ -212,12 +285,13 @@ fun ToolClaudeScreen(modifier: Modifier) {
         ScreenHeader(
             title = "Agent",
             actionButton = {
-                IconButton(onClick = ::clearChat) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Clear",
-                        tint = AppTheme.colors.danger
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CompactTextButton(text = "Sessions") {
+                        openSessions()
+                    }
+                    CompactTextButton(text = "New") {
+                        startNewSession()
+                    }
                 }
             }
         )
@@ -314,6 +388,65 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 StatusMessage(text = statusMessage)
             }
         }
+
+        if (showSessionsDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!sessionsBusy) {
+                        showSessionsDialog = false
+                    }
+                },
+                title = {
+                    AppText("Sessions", AppTheme.typography.title, AppTheme.colors.text)
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.verticalScroll(rememberScrollState())
+                    ) {
+                        if (sessionsLoading) {
+                            AppText("Loading sessions...", AppTheme.typography.bodySmall, AppTheme.colors.muted)
+                        } else if (sessions.isEmpty() && sessionsError.isBlank()) {
+                            AppText("No sessions yet.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
+                        }
+
+                        if (sessionsError.isNotBlank()) {
+                            AppText(sessionsError, AppTheme.typography.bodySmall, AppTheme.colors.danger)
+                        }
+
+                        sessions.forEach { session ->
+                            SessionRow(
+                                session = session,
+                                active = session.sessionId == ClaudeSessionStore.sessionId,
+                                onClick = { continueSession(session.sessionId) }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (!sessionsBusy) {
+                            showSessionsDialog = false
+                        }
+                    }) {
+                        AppText("Close", AppTheme.typography.label, AppTheme.colors.muted)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        if (!sessionsBusy) {
+                            deleteAllSessions()
+                        }
+                    }) {
+                        AppText(
+                            if (sessionsBusy) "Deleting..." else "Delete all",
+                            AppTheme.typography.label,
+                            AppTheme.colors.danger
+                        )
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -347,5 +480,45 @@ private fun ChatBubble(message: ChatMessage) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SessionRow(
+    session: AgentSessionSummary,
+    active: Boolean,
+    onClick: () -> Unit
+) {
+    val border = if (active) AppTheme.colors.accent else AppTheme.colors.panelBorder
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .background(AppTheme.colors.input)
+            .clickable(onClick = onClick)
+            .padding(10.dp)
+            .border(width = 1.dp, color = border, shape = RoundedCornerShape(6.dp)),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        AppText(session.name, AppTheme.typography.body, AppTheme.colors.text)
+        AppText(
+            "${session.messageCount} msgs - ${formatSessionTimestamp(session.lastUsedAt)}",
+            AppTheme.typography.label,
+            AppTheme.colors.muted
+        )
+        if (!session.lastPreview.isNullOrBlank()) {
+            AppText(session.lastPreview, AppTheme.typography.bodySmall, AppTheme.colors.muted)
+        }
+    }
+}
+
+private fun formatSessionTimestamp(raw: String): String {
+    return try {
+        val instant = Instant.parse(raw)
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+            .withZone(ZoneId.systemDefault())
+            .format(instant)
+    } catch (_: Exception) {
+        raw
     }
 }

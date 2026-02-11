@@ -12,6 +12,11 @@
   margin-bottom: var(--space-2);
 }
 
+.headerActions {
+  display: flex;
+  gap: var(--space-1);
+}
+
 .actionsRow {
   display: flex;
   flex-wrap: wrap;
@@ -106,4 +111,81 @@
   color: var(--muted);
   text-align: center;
   padding: var(--space-4);
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  width: min(640px, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.sessionList {
+  overflow-y: auto;
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sessionRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: var(--input);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+}
+
+.sessionRowActive {
+  border-color: var(--accent);
+}
+
+.sessionName {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.sessionMeta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.sessionPreview {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.modalFooter {
+  border-top: 1px solid var(--panel-border);
+  padding: var(--space-2);
+  display: flex;
+  justify-content: flex-end;
 }

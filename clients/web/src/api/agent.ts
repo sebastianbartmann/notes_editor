@@ -8,6 +8,8 @@ import type {
   AgentConfigUpdate,
   AgentGatewayHealth,
   AgentHistoryResponse,
+  AgentSessionSummary,
+  AgentSessionsResponse,
   AgentStreamEvent,
   SaveResponse,
 } from './types'
@@ -69,6 +71,18 @@ export async function clearAgentSession(sessionId: string): Promise<SaveResponse
 
 export async function getAgentSessionHistory(sessionId: string): Promise<AgentHistoryResponse> {
   return apiRequest<AgentHistoryResponse>(`/api/agent/session/history?session_id=${sessionId}`)
+}
+
+export async function listAgentSessions(): Promise<AgentSessionSummary[]> {
+  const resp = await apiRequest<AgentSessionsResponse>('/api/agent/sessions')
+  return resp.sessions || []
+}
+
+export async function clearAllAgentSessions(): Promise<SaveResponse> {
+  return apiRequest<SaveResponse>('/api/agent/sessions/clear', {
+    method: 'POST',
+    body: {},
+  })
 }
 
 export async function getAgentConfig(): Promise<AgentConfig> {

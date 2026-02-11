@@ -112,6 +112,11 @@ type ClearSessionRequest struct {
 
 // handleClaudeClear clears a chat session.
 func (s *Server) handleClaudeClear(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
 	agentSvc := s.getAgent()
 	if agentSvc == nil {
 		writeBadRequest(w, "Claude service not configured")
@@ -129,7 +134,7 @@ func (s *Server) handleClaudeClear(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := agentSvc.ClearSession(req.SessionID); err != nil {
+	if err := agentSvc.ClearSession(person, req.SessionID); err != nil {
 		writeBadRequest(w, err.Error())
 		return
 	}
@@ -138,6 +143,11 @@ func (s *Server) handleClaudeClear(w http.ResponseWriter, r *http.Request) {
 
 // handleClaudeHistory returns the message history for a session.
 func (s *Server) handleClaudeHistory(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
 	agentSvc := s.getAgent()
 	if agentSvc == nil {
 		writeBadRequest(w, "Claude service not configured")
@@ -150,7 +160,7 @@ func (s *Server) handleClaudeHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	history, err := agentSvc.GetHistory(sessionID)
+	history, err := agentSvc.GetHistory(person, sessionID)
 	if err != nil {
 		writeBadRequest(w, err.Error())
 		return

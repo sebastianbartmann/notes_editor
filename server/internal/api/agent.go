@@ -130,6 +130,11 @@ func (s *Server) handleAgentChatStream(w http.ResponseWriter, r *http.Request) {
 
 // handleAgentSessionClear clears a chat session.
 func (s *Server) handleAgentSessionClear(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
 	agentSvc := s.getAgent()
 	if agentSvc == nil {
 		writeBadRequest(w, "Agent service not configured")
@@ -146,7 +151,7 @@ func (s *Server) handleAgentSessionClear(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := agentSvc.ClearSession(req.SessionID); err != nil {
+	if err := agentSvc.ClearSession(person, req.SessionID); err != nil {
 		writeBadRequest(w, err.Error())
 		return
 	}
@@ -155,6 +160,11 @@ func (s *Server) handleAgentSessionClear(w http.ResponseWriter, r *http.Request)
 
 // handleAgentSessionHistory returns session history.
 func (s *Server) handleAgentSessionHistory(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
 	agentSvc := s.getAgent()
 	if agentSvc == nil {
 		writeBadRequest(w, "Agent service not configured")
@@ -167,7 +177,7 @@ func (s *Server) handleAgentSessionHistory(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	history, err := agentSvc.GetHistory(sessionID)
+	history, err := agentSvc.GetHistory(person, sessionID)
 	if err != nil {
 		writeBadRequest(w, err.Error())
 		return
@@ -176,6 +186,50 @@ func (s *Server) handleAgentSessionHistory(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{
 		"messages": history,
 	})
+}
+
+// handleAgentSessionsList returns person-scoped session summaries.
+func (s *Server) handleAgentSessionsList(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	sessions, err := agentSvc.ListSessions(person)
+	if err != nil {
+		writeBadRequest(w, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"sessions": sessions,
+	})
+}
+
+// handleAgentSessionsClearAll clears all person-scoped session state.
+func (s *Server) handleAgentSessionsClearAll(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	if err := agentSvc.ClearAllSessions(person); err != nil {
+		writeBadRequest(w, err.Error())
+		return
+	}
+	writeSuccess(w, "All sessions cleared")
 }
 
 // handleAgentStopRun stops an active streaming run.

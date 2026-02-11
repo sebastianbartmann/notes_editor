@@ -162,6 +162,31 @@ data class AgentActionsResponse(
     val actions: List<AgentAction> = emptyList()
 )
 
+@Serializable
+data class AgentSessionSummary(
+    @SerialName("session_id")
+    val sessionId: String,
+    val name: String,
+    @SerialName("created_at")
+    val createdAt: String,
+    @SerialName("last_used_at")
+    val lastUsedAt: String,
+    @SerialName("message_count")
+    val messageCount: Int = 0,
+    @SerialName("last_preview")
+    val lastPreview: String? = null
+)
+
+@Serializable
+data class AgentSessionsResponse(
+    val sessions: List<AgentSessionSummary> = emptyList()
+)
+
+@Serializable
+data class AgentSessionHistoryResponse(
+    val messages: List<ChatMessage> = emptyList()
+)
+
 // Request models for JSON serialization
 
 @Serializable

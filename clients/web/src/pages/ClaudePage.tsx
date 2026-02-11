@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { usePerson } from '../hooks/usePerson'
-import { agentChatStream, clearAgentSession, getAgentSessionHistory, listAgentActions } from '../api/agent'
+import { agentChatStream, clearAllAgentSessions, getAgentSessionHistory, listAgentActions, listAgentSessions } from '../api/agent'
 import { useAgentSession } from '../context/AgentSessionContext'
-import type { AgentAction, AgentChatRequest, AgentStreamEvent, ChatMessage } from '../api/types'
+import type { AgentAction, AgentChatRequest, AgentSessionSummary, AgentStreamEvent, ChatMessage } from '../api/types'
 import styles from './ClaudePage.module.css'
 
 export default function ClaudePage() {
@@ -15,6 +15,11 @@ export default function ClaudePage() {
   const [error, setError] = useState('')
   const [actions, setActions] = useState<AgentAction[]>([])
   const [actionsError, setActionsError] = useState('')
+  const [sessionsOpen, setSessionsOpen] = useState(false)
+  const [sessions, setSessions] = useState<AgentSessionSummary[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [sessionsError, setSessionsError] = useState('')
+  const [sessionsBusy, setSessionsBusy] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const session = person ? getSession(person) : { sessionId: null, messages: [] as ChatMessage[] }
   const sessionId = session.sessionId
@@ -47,6 +52,54 @@ export default function ClaudePage() {
       cancelled = true
     }
   }, [person, sessionId, setMessages])
+
+  const loadSessions = async () => {
+    if (!person) return
+    setSessionsLoading(true)
+    setSessionsError('')
+    try {
+      const items = await listAgentSessions()
+      setSessions(items)
+    } catch (err) {
+      setSessionsError(err instanceof Error ? err.message : 'Failed to load sessions')
+    } finally {
+      setSessionsLoading(false)
+    }
+  }
+
+  const handleOpenSessions = async () => {
+    if (isStreaming || !person) return
+    setSessionsOpen(true)
+    await loadSessions()
+  }
+
+  const handleSelectSession = (selectedSessionId: string) => {
+    if (!person || isStreaming) return
+    setSessionId(person, selectedSessionId)
+    setSessionsOpen(false)
+    setSessionsError('')
+    setError('')
+    setStreamingText('')
+  }
+
+  const handleDeleteAllSessions = async () => {
+    if (!person || isStreaming || sessionsBusy) return
+    const ok = window.confirm('Delete all sessions for this person? This cannot be undone.')
+    if (!ok) return
+    setSessionsBusy(true)
+    try {
+      await clearAllAgentSessions()
+      clearSession(person)
+      setSessions([])
+      setSessionsOpen(false)
+      setStreamingText('')
+      setError('')
+    } catch (err) {
+      setSessionsError(err instanceof Error ? err.message : 'Failed to delete sessions')
+    } finally {
+      setSessionsBusy(false)
+    }
+  }
 
   const handleSend = async () => {
     if (!input.trim() || isStreaming) return
@@ -149,18 +202,17 @@ export default function ClaudePage() {
     }
   }
 
-  const handleClear = async () => {
+  const handleNewSession = () => {
     if (!person) return
-    if (sessionId) {
-      try {
-        await clearAgentSession(sessionId)
-      } catch {
-        // Ignore clear errors
-      }
-    }
+    if (isStreaming) return
     clearSession(person)
     setStreamingText('')
     setError('')
+  }
+
+  const formatSessionMeta = (session: AgentSessionSummary) => {
+    const when = new Date(session.last_used_at).toLocaleString()
+    return `${session.message_count} msgs • ${when}`
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -182,9 +234,14 @@ export default function ClaudePage() {
     <div className={styles.page}>
       <div className={styles.header}>
         <h2>Claude</h2>
-        <button onClick={handleClear} className="ghost" disabled={isStreaming}>
-          Clear
-        </button>
+        <div className={styles.headerActions}>
+          <button onClick={handleOpenSessions} className="ghost" disabled={isStreaming}>
+            Sessions
+          </button>
+          <button onClick={handleNewSession} className="ghost" disabled={isStreaming}>
+            New
+          </button>
+        </div>
       </div>
 
       <div className={styles.actionsRow}>
@@ -245,6 +302,49 @@ export default function ClaudePage() {
           </button>
         </div>
       </div>
+
+      {sessionsOpen && (
+        <div className={styles.modalBackdrop} onClick={() => setSessionsOpen(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Sessions</h3>
+              <button className="ghost" onClick={() => setSessionsOpen(false)} disabled={sessionsBusy}>
+                Close
+              </button>
+            </div>
+            {sessionsLoading && <div className={styles.message}>Loading sessions...</div>}
+            {!sessionsLoading && sessions.length === 0 && !sessionsError && (
+              <div className={styles.message}>No sessions yet.</div>
+            )}
+            {sessionsError && <div className={styles.error}>{sessionsError}</div>}
+            {!sessionsLoading && sessions.length > 0 && (
+              <div className={styles.sessionList}>
+                {sessions.map((item) => (
+                  <button
+                    key={item.session_id}
+                    className={`${styles.sessionRow} ${item.session_id === sessionId ? styles.sessionRowActive : ''}`}
+                    onClick={() => handleSelectSession(item.session_id)}
+                    disabled={sessionsBusy || isStreaming}
+                  >
+                    <span className={styles.sessionName}>{item.name}</span>
+                    <span className={styles.sessionMeta}>{formatSessionMeta(item)}</span>
+                    {item.last_preview && <span className={styles.sessionPreview}>{item.last_preview}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className={styles.modalFooter}>
+              <button
+                className="danger"
+                onClick={handleDeleteAllSessions}
+                disabled={sessionsBusy || isStreaming}
+              >
+                {sessionsBusy ? 'Deleting...' : 'Delete all sessions'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

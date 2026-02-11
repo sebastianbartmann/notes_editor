@@ -9,6 +9,12 @@ object ClaudeSessionStore {
     var sessionId by mutableStateOf<String?>(null)
     val messages = mutableStateListOf<ChatMessage>()
 
+    fun loadSession(newSessionId: String?, history: List<ChatMessage>) {
+        sessionId = newSessionId
+        messages.clear()
+        messages.addAll(history)
+    }
+
     fun clear() {
         sessionId = null
         messages.clear()
