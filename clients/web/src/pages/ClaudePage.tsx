@@ -15,7 +15,6 @@ export default function ClaudePage() {
   const [error, setError] = useState('')
   const [actions, setActions] = useState<AgentAction[]>([])
   const [actionsError, setActionsError] = useState('')
-  const [historyHydratedKey, setHistoryHydratedKey] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const session = person ? getSession(person) : { sessionId: null, messages: [] as ChatMessage[] }
   const sessionId = session.sessionId
@@ -33,10 +32,7 @@ export default function ClaudePage() {
   }, [person])
 
   useEffect(() => {
-    if (!person || !sessionId || messages.length > 0) return
-    const hydrateKey = `${person}:${sessionId}`
-    if (historyHydratedKey === hydrateKey) return
-    setHistoryHydratedKey(hydrateKey)
+    if (!person || !sessionId) return
     let cancelled = false
     getAgentSessionHistory(sessionId)
       .then((resp) => {
@@ -50,7 +46,7 @@ export default function ClaudePage() {
     return () => {
       cancelled = true
     }
-  }, [person, sessionId, messages.length, historyHydratedKey, setMessages])
+  }, [person, sessionId, setMessages])
 
   const handleSend = async () => {
     if (!input.trim() || isStreaming) return
@@ -163,7 +159,6 @@ export default function ClaudePage() {
       }
     }
     clearSession(person)
-    setHistoryHydratedKey(null)
     setStreamingText('')
     setError('')
   }
