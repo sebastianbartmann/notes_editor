@@ -123,6 +123,70 @@ func TestToolExecutor_SearchFiles_QMDErrorBubblesUp(t *testing.T) {
 	}
 }
 
+func TestDecodeQMDQueryResults_HandlesEmptyAndRegexErrors(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       string
+		wantLen   int
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name:    "empty output is empty results",
+			raw:     "",
+			wantLen: 0,
+		},
+		{
+			name:    "count zero map is empty results",
+			raw:     `{"count":0}`,
+			wantLen: 0,
+		},
+		{
+			name:    "plain no results text is empty results",
+			raw:     "No results found.",
+			wantLen: 0,
+		},
+		{
+			name:      "plain regex parse error",
+			raw:       "regex parse error: missing closing ]",
+			wantErr:   true,
+			errSubstr: "invalid regex pattern",
+		},
+		{
+			name:      "json regex parse error",
+			raw:       `{"error":"regexp: missing closing ]: ` + "`[`" + `"}`,
+			wantErr:   true,
+			errSubstr: "invalid regex pattern",
+		},
+		{
+			name:    "results wrapper",
+			raw:     `{"results":[{"docid":"#abc","file":"notes/today.md","title":"T","score":0.5,"context":"x","snippet":"1: hit"}]}`,
+			wantLen: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := decodeQMDQueryResults([]byte(tc.raw))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+				if tc.errSubstr != "" && !strings.Contains(err.Error(), tc.errSubstr) {
+					t.Fatalf("error=%q, want substring %q", err.Error(), tc.errSubstr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(got) != tc.wantLen {
+				t.Fatalf("len=%d want=%d", len(got), tc.wantLen)
+			}
+		})
+	}
+}
+
 func TestToolExecutor_GlobFiles(t *testing.T) {
 	root := t.TempDir()
 	person := "sebastian"

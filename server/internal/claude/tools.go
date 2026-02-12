@@ -567,6 +567,14 @@ func decodeQMDQueryResults(raw []byte) ([]qmdSearchResult, error) {
 	if len(trimmed) == 0 {
 		return []qmdSearchResult{}, nil
 	}
+	trimmedText := strings.TrimSpace(string(trimmed))
+	lowerText := strings.ToLower(trimmedText)
+	if strings.Contains(lowerText, "no results") || strings.Contains(lowerText, "0 results") {
+		return []qmdSearchResult{}, nil
+	}
+	if looksLikeRegexError(lowerText) {
+		return nil, fmt.Errorf("invalid regex pattern")
+	}
 
 	var direct []qmdSearchResult
 	if err := json.Unmarshal(trimmed, &direct); err == nil {
@@ -580,6 +588,45 @@ func decodeQMDQueryResults(raw []byte) ([]qmdSearchResult, error) {
 		return wrapped.Results, nil
 	}
 
+	var generic map[string]any
+	if err := json.Unmarshal(trimmed, &generic); err == nil {
+		if rawErr, ok := generic["error"].(string); ok && strings.TrimSpace(rawErr) != "" {
+			if looksLikeRegexError(strings.ToLower(rawErr)) {
+				return nil, fmt.Errorf("invalid regex pattern")
+			}
+			return nil, fmt.Errorf(strings.TrimSpace(rawErr))
+		}
+		if rawMsg, ok := generic["message"].(string); ok && strings.TrimSpace(rawMsg) != "" {
+			if looksLikeRegexError(strings.ToLower(rawMsg)) {
+				return nil, fmt.Errorf("invalid regex pattern")
+			}
+			return nil, fmt.Errorf(strings.TrimSpace(rawMsg))
+		}
+		if rawCount, ok := generic["count"].(float64); ok && rawCount == 0 {
+			return []qmdSearchResult{}, nil
+		}
+		if rawResults, ok := generic["results"]; ok {
+			if rawResults == nil {
+				return []qmdSearchResult{}, nil
+			}
+			if arr, ok := rawResults.([]any); ok {
+				out := make([]qmdSearchResult, 0, len(arr))
+				for _, item := range arr {
+					encoded, err := json.Marshal(item)
+					if err != nil {
+						continue
+					}
+					var row qmdSearchResult
+					if err := json.Unmarshal(encoded, &row); err != nil {
+						continue
+					}
+					out = append(out, row)
+				}
+				return out, nil
+			}
+		}
+	}
+
 	var mcpEnvelope struct {
 		StructuredContent struct {
 			Results []qmdSearchResult `json:"results"`
@@ -590,6 +637,14 @@ func decodeQMDQueryResults(raw []byte) ([]qmdSearchResult, error) {
 	}
 
 	return nil, fmt.Errorf("unsupported qmd result format")
+}
+
+func looksLikeRegexError(lowerText string) bool {
+	return strings.Contains(lowerText, "regex parse error") ||
+		strings.Contains(lowerText, "regexp:") ||
+		strings.Contains(lowerText, "invalid regex") ||
+		strings.Contains(lowerText, "missing closing") ||
+		strings.Contains(lowerText, "invalid repetition")
 }
 
 func parseQMDLineMatches(snippet string) []map[string]any {
