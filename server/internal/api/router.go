@@ -55,13 +55,14 @@ func NewServer(cfg *config.Config) *Server {
 	// Background git sync (pull/push) for the vault. This avoids doing networked git
 	// operations in read handlers while still keeping clients reasonably up to date.
 	srv.syncMgr = NewSyncManager(&srv.mu, git)
-	srv.indexMgr = NewIndexManager()
+	srv.indexMgr = NewIndexManager(cfg.NotesRoot, cfg.ValidPersons)
 	srv.syncMgr.SetHooks(
 		func() { srv.indexMgr.TriggerReindex("sync pull success") },
 		func() { srv.indexMgr.TriggerReindex("sync push success") },
 	)
 	srv.syncMgr.Start()
 	srv.indexMgr.Start()
+	srv.indexMgr.TriggerReindex("startup")
 
 	return srv
 }

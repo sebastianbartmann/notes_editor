@@ -3,8 +3,12 @@ package api
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -44,12 +48,30 @@ type IndexManager struct {
 
 	debounce time.Duration
 	command  string
+	rootPath string
+	persons  []string
 }
 
-func NewIndexManager() *IndexManager {
+func NewIndexManager(rootPath string, persons []string) *IndexManager {
+	uniq := make(map[string]struct{}, len(persons))
+	filtered := make([]string, 0, len(persons))
+	for _, p := range persons {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, ok := uniq[p]; ok {
+			continue
+		}
+		uniq[p] = struct{}{}
+		filtered = append(filtered, p)
+	}
+
 	im := &IndexManager{
 		debounce: 2 * time.Second,
 		command:  defaultQMDIndexCommand,
+		rootPath: rootPath,
+		persons:  filtered,
 	}
 	im.cond = sync.NewCond(&im.mu)
 	return im
@@ -165,6 +187,10 @@ func (m *IndexManager) loop() {
 }
 
 func (m *IndexManager) runIndex() error {
+	if err := m.ensureCollections(); err != nil {
+		return err
+	}
+
 	// Update collection metadata/file set first, then compute embeddings.
 	if err := m.runQMD("update", 15*time.Minute); err != nil {
 		return err
@@ -175,13 +201,103 @@ func (m *IndexManager) runIndex() error {
 	return nil
 }
 
-func (m *IndexManager) runQMD(subcommand string, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func (m *IndexManager) ensureCollections() error {
+	if strings.TrimSpace(m.rootPath) == "" {
+		return fmt.Errorf("notes root path is empty")
+	}
+
+	existing, err := m.listCollections()
+	if err != nil {
+		return err
+	}
+	target, err := m.targetPersons()
+	if err != nil {
+		return err
+	}
+
+	for _, person := range target {
+		if _, ok := existing[person]; ok {
+			continue
+		}
+		personPath := filepath.Join(m.rootPath, person)
+		log.Printf("qmd index: creating collection for person=%s path=%s", person, personPath)
+		if err := m.runQMDWithArgs(20*time.Minute, "collection", "add", personPath, "--name", person); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *IndexManager) targetPersons() ([]string, error) {
+	if len(m.persons) > 0 {
+		return append([]string(nil), m.persons...), nil
+	}
+
+	entries, err := os.ReadDir(m.rootPath)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := strings.TrimSpace(entry.Name())
+		if name == "" || strings.HasPrefix(name, ".") || !entry.IsDir() {
+			continue
+		}
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func (m *IndexManager) listCollections() (map[string]struct{}, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, m.command, subcommand)
+
+	cmd := exec.CommandContext(ctx, m.command, "collection", "list")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		errText := strings.TrimSpace(stderr.String())
+		if errText == "" {
+			errText = strings.TrimSpace(stdout.String())
+		}
+		return nil, fmt.Errorf("qmd collection list failed: %w: %s", err, errText)
+	}
+
+	collections := map[string]struct{}{}
+	for _, line := range strings.Split(stdout.String(), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, "(qmd://") {
+			continue
+		}
+		name := strings.SplitN(line, " ", 2)[0]
+		name = strings.TrimSpace(name)
+		if name != "" {
+			collections[name] = struct{}{}
+		}
+	}
+	return collections, nil
+}
+
+func (m *IndexManager) runQMD(subcommand string, timeout time.Duration) error {
+	return m.runQMDWithArgs(timeout, subcommand)
+}
+
+func (m *IndexManager) runQMDWithArgs(timeout time.Duration, args ...string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("no qmd args provided")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, m.command, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	subcommand := args[0]
 	if err := cmd.Run(); err != nil {
 		errText := strings.TrimSpace(stderr.String())
 		outText := strings.TrimSpace(stdout.String())
