@@ -14,3 +14,7 @@
 - qmd MCP HTTP mode (`qmd mcp --http`) currently fails for repeated requests with `Stateless transport cannot be reused across requests` (500 from qmd Bun server). For reliability, `search_files` now uses direct CLI execution (`qmd query --json --line-numbers -c <person> -n 50`) from Go instead of MCP.
 - qmd collection bootstrap detail: `qmd collection add <path> --name <person>` defaults to recursive `**/*.md` and works; manually forcing masks like `"*.md,*.txt"` caused empty collections in our vault layout. Index manager should ensure per-person collections exist before running `qmd update/embed`.
 - For fast grep behavior, `search_files` now shells out to `qmd search --json --line-numbers` (not `qmd query`), because `query` can trigger heavyweight local model boot/download on first run.
+
+## 2026-02-12
+
+- Agent/Claude streaming now normalizes assistant output by dropping only leading blank lines (not all leading spaces) at the server runtime layer. Implemented via shared `internal/textnorm.LeadingBlankLineTrimmer`, wired into both Anthropic (`internal/claude/processStream`) and Pi gateway (`internal/agent/runtime_pi_gateway`) so web and Android clients receive consistent deltas and session history does not start with stray empty lines.

@@ -16,6 +16,7 @@ import (
 
 	"notes-editor/internal/claude"
 	"notes-editor/internal/linkedin"
+	"notes-editor/internal/textnorm"
 	"notes-editor/internal/vault"
 )
 
@@ -172,6 +173,7 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 		var fullResponse strings.Builder
 		finalSessionID := appSession.ID
 		sawDone := false
+		var trimmer textnorm.LeadingBlankLineTrimmer
 
 		scanner := bufio.NewScanner(resp.Body)
 		buffer := make([]byte, 0, 64*1024)
@@ -194,10 +196,14 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 					r.setRuntimeSessionID(person, appSession.ID, event.SessionID)
 				}
 			case "text":
-				fullResponse.WriteString(event.Delta)
+				normalized := trimmer.Push(event.Delta)
+				if normalized == "" {
+					continue
+				}
+				fullResponse.WriteString(normalized)
 				out <- StreamEvent{
 					Type:  "text",
-					Delta: event.Delta,
+					Delta: normalized,
 				}
 			case "tool_call":
 				out <- StreamEvent{Type: "tool_call", Tool: event.Tool, Args: event.Args}

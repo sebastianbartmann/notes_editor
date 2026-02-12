@@ -89,3 +89,42 @@ func TestPiGatewayRuntimeExecutesToolCalls(t *testing.T) {
 		t.Fatalf("unexpected text: %q", text.String())
 	}
 }
+
+func TestPiGatewayRuntimeTrimsLeadingBlankLinesInTextStream(t *testing.T) {
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/chat-stream":
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = w.Write([]byte(`{"type":"start","session_id":"runtime-session-1"}` + "\n"))
+			_, _ = w.Write([]byte(`{"type":"text","delta":"\n"}` + "\n"))
+			_, _ = w.Write([]byte(`{"type":"text","delta":"Hello"}` + "\n"))
+			_, _ = w.Write([]byte(`{"type":"done"}` + "\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer gateway.Close()
+
+	root := t.TempDir()
+	person := "sebastian"
+	if err := os.MkdirAll(filepath.Join(root, person), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	runtime := NewPiGatewayRuntime(gateway.URL).WithDependencies(vault.NewStore(root), nil)
+	stream, err := runtime.ChatStream(context.Background(), person, RuntimeChatRequest{Message: "hello"})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+
+	var deltas []string
+	for event := range stream.Events {
+		if event.Type == "text" {
+			deltas = append(deltas, event.Delta)
+		}
+	}
+
+	if len(deltas) != 1 || deltas[0] != "Hello" {
+		t.Fatalf("unexpected deltas: %#v", deltas)
+	}
+}

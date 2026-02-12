@@ -2,6 +2,7 @@ package claude
 
 import (
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
 )
@@ -391,4 +392,82 @@ func TestStreamEvent_ErrorMessageFormat(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProcessStreamTrimsLeadingBlankLineDeltas(t *testing.T) {
+	svc := &Service{}
+	events := make(chan StreamEvent, 10)
+	payload := strings.Join([]string{
+		`data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"\n"}}`,
+		`data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello"}}`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}`,
+		`data: {"type":"message_stop"}`,
+	}, "\n")
+
+	resp, text, err := svc.processStream(strings.NewReader(payload), events)
+	if err != nil {
+		t.Fatalf("processStream failed: %v", err)
+	}
+	if text != "Hello" {
+		t.Fatalf("unexpected text: %q", text)
+	}
+	if resp.StopReason != "end_turn" {
+		t.Fatalf("unexpected stop_reason: %q", resp.StopReason)
+	}
+	if len(resp.Content) != 1 || resp.Content[0].Type != "text" || resp.Content[0].Text != "Hello" {
+		t.Fatalf("unexpected response content: %#v", resp.Content)
+	}
+
+	close(events)
+	var deltas []string
+	for event := range events {
+		if event.Type == "text" {
+			deltas = append(deltas, event.Delta)
+		}
+	}
+	if len(deltas) != 1 || deltas[0] != "Hello" {
+		t.Fatalf("unexpected emitted deltas: %#v", deltas)
+	}
+}
+
+func TestProcessStreamSkipsWhitespaceOnlyText(t *testing.T) {
+	svc := &Service{}
+	events := make(chan StreamEvent, 10)
+	payload := strings.Join([]string{
+		`data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"\n"}}`,
+		`data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"\t "}}`,
+		`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}`,
+		`data: {"type":"message_stop"}`,
+	}, "\n")
+
+	resp, text, err := svc.processStream(strings.NewReader(payload), events)
+	if err != nil {
+		t.Fatalf("processStream failed: %v", err)
+	}
+	if text != "" {
+		t.Fatalf("expected empty text, got %q", text)
+	}
+	if len(resp.Content) != 0 {
+		t.Fatalf("expected no content blocks, got %#v", resp.Content)
+	}
+
+	close(events)
+	for event := range events {
+		t.Fatalf("expected no emitted events, got %#v", event)
+	}
+}
+
+func TestProcessStreamReturnsScannerError(t *testing.T) {
+	svc := &Service{}
+	events := make(chan StreamEvent, 1)
+	_, _, err := svc.processStream(errReader{}, events)
+	if err == nil {
+		t.Fatal("expected stream read error")
+	}
+}
+
+type errReader struct{}
+
+func (errReader) Read(_ []byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
 }

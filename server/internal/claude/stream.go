@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"notes-editor/internal/textnorm"
 )
 
 // StreamEvent represents an event in the NDJSON stream.
@@ -194,6 +196,7 @@ func (s *Service) processStream(body io.Reader, events chan<- StreamEvent) (*ant
 	scanner := bufio.NewScanner(body)
 	var textBuilder strings.Builder
 	var finalResponse anthropicResponse
+	var trimmer textnorm.LeadingBlankLineTrimmer
 
 	// Track content blocks for tool use
 	var contentBlocks []contentBlock
@@ -249,8 +252,12 @@ func (s *Service) processStream(body io.Reader, events chan<- StreamEvent) (*ant
 			switch deltaType {
 			case "text_delta":
 				text, _ := delta["text"].(string)
-				textBuilder.WriteString(text)
-				events <- StreamEvent{Type: "text", Delta: text}
+				normalized := trimmer.Push(text)
+				if normalized == "" {
+					continue
+				}
+				textBuilder.WriteString(normalized)
+				events <- StreamEvent{Type: "text", Delta: normalized}
 
 			case "input_json_delta":
 				partial, _ := delta["partial_json"].(string)

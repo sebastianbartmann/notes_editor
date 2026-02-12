@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"notes-editor/internal/linkedin"
+	"notes-editor/internal/textnorm"
 	"notes-editor/internal/vault"
 )
 
@@ -88,12 +89,12 @@ type anthropicMsg struct {
 
 // anthropicResponse is the response format from the Anthropic API.
 type anthropicResponse struct {
-	ID           string `json:"id"`
-	Type         string `json:"type"`
-	Role         string `json:"role"`
+	ID           string         `json:"id"`
+	Type         string         `json:"type"`
+	Role         string         `json:"role"`
 	Content      []contentBlock `json:"content"`
-	StopReason   string `json:"stop_reason"`
-	StopSequence string `json:"stop_sequence"`
+	StopReason   string         `json:"stop_reason"`
+	StopSequence string         `json:"stop_sequence"`
 }
 
 type contentBlock struct {
@@ -206,7 +207,7 @@ func (s *Service) callWithToolLoop(messages []anthropicMsg, toolExec *ToolExecut
 			}
 		}
 
-		return strings.Join(textParts, "\n"), nil
+		return textnorm.TrimLeadingBlankLines(strings.Join(textParts, "\n")), nil
 	}
 }
 
