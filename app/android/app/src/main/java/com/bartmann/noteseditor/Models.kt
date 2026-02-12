@@ -70,6 +70,23 @@ data class SyncStatus(
 )
 
 @Serializable
+data class IndexStatus(
+    @SerialName("in_progress")
+    val inProgress: Boolean = false,
+    val pending: Boolean = false,
+    @SerialName("last_reason")
+    val lastReason: String? = null,
+    @SerialName("last_started_at")
+    val lastStartedAt: String? = null,
+    @SerialName("last_success_at")
+    val lastSuccessAt: String? = null,
+    @SerialName("last_error")
+    val lastError: String? = null,
+    @SerialName("last_error_at")
+    val lastErrorAt: String? = null
+)
+
+@Serializable
 data class GitStatusResponse(
     val output: String = ""
 )

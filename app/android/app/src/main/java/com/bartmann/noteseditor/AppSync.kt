@@ -8,9 +8,18 @@ object AppSync {
     var status by mutableStateOf<SyncStatus?>(null)
         private set
 
+    var indexStatus by mutableStateOf<IndexStatus?>(null)
+        private set
+
     suspend fun refreshStatus() {
         try {
             status = ApiClient.fetchSyncStatus()
+        } catch (_: Exception) {
+            // Best-effort: keep the last known status to avoid UI flicker.
+        }
+
+        try {
+            indexStatus = ApiClient.fetchIndexStatus()
         } catch (_: Exception) {
             // Best-effort: keep the last known status to avoid UI flicker.
         }

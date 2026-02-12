@@ -333,15 +333,11 @@ fun ToolClaudeScreen(modifier: Modifier) {
                     )
                 }
             }
-            StatusMessage(
-                text = "Actions: ${actions.size}  Person: ${person ?: "-"}  Server: ${ApiClient.lastSuccessfulBaseUrl ?: "-"}",
-                showDivider = false
-            )
         } else if (actionsError.isNotBlank()) {
             StatusMessage(text = actionsError, showDivider = false)
         } else if (person != null) {
             StatusMessage(
-                text = "No actions for person: $person (server: ${ApiClient.lastSuccessfulBaseUrl ?: "-"})",
+                text = "No actions for this person.",
                 showDivider = false
             )
         }

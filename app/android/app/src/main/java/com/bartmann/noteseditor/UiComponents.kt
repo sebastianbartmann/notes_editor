@@ -69,6 +69,7 @@ fun ScreenHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             SyncBadge()
+            IndexBadge()
             if (actionButton != null) {
                 actionButton()
             }
@@ -109,6 +110,69 @@ private fun SyncBadge() {
     val color = when {
         isSynced -> Color(0xFF2ECC71)
         else -> Color(0xFFF1C40F)
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.clickable(enabled = AppNav.openSync != null) {
+            AppNav.openSync?.invoke()
+        }
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(color, RoundedCornerShape(99.dp))
+        )
+        AppText(
+            text = text,
+            style = AppTheme.typography.label,
+            color = AppTheme.colors.muted
+        )
+        if (hint != null) {
+            AppText(
+                text = "($hint)",
+                style = AppTheme.typography.label,
+                color = AppTheme.colors.muted
+            )
+        }
+    }
+}
+
+@Composable
+private fun IndexBadge() {
+    val status = AppSync.indexStatus
+
+    val text: String
+    val hint: String?
+    val color: Color
+
+    when {
+        status == null -> {
+            text = "Index"
+            hint = "no status"
+            color = Color(0xFF95A5A6)
+        }
+        status.inProgress || status.pending -> {
+            text = "Indexing"
+            hint = status.lastReason ?: "working"
+            color = Color(0xFFF1C40F)
+        }
+        !status.lastError.isNullOrBlank() -> {
+            text = "Index err"
+            hint = null
+            color = Color(0xFFE74C3C)
+        }
+        !status.lastSuccessAt.isNullOrBlank() -> {
+            text = "Indexed"
+            hint = null
+            color = Color(0xFF2ECC71)
+        }
+        else -> {
+            text = "Index idle"
+            hint = null
+            color = Color(0xFF95A5A6)
+        }
     }
 
     Row(
