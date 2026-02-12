@@ -36,7 +36,7 @@ const (
 	defaultWebSearchMaxResult = 5
 	maxWebSearchResultCount   = 20
 	maxWebSearchDescChars     = 280
-	defaultQMDMCPEndpoint     = "http://prod.local:8181/mcp"
+	defaultQMDMCPEndpoint     = "http://127.0.0.1:8181/mcp"
 	defaultQMDMCPTimeout      = 90 * time.Second
 	defaultQMDMCPSessionHdr   = "Mcp-Session-Id"
 )
