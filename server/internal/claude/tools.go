@@ -627,6 +627,8 @@ func qmdCallRPC(method string, params map[string]any) (*qmdMCPRPCResponse, error
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("MCP-Protocol-Version", "2025-06-18")
 	if sessionID := qmdGetSessionID(); sessionID != "" {
 		req.Header.Set(defaultQMDMCPSessionHdr, sessionID)
 	}
