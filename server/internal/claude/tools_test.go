@@ -79,7 +79,7 @@ func TestToolExecutor_SearchFiles_UsesQMD(t *testing.T) {
 		t.Fatalf("read args: %v", err)
 	}
 	args := strings.Split(strings.TrimSpace(string(argsRaw)), "\n")
-	want := []string{"query", "match", "--json", "--line-numbers", "-c", person, "-n", "50"}
+	want := []string{"search", "match", "--json", "--line-numbers", "-c", person, "-n", "50"}
 	if len(args) != len(want) {
 		t.Fatalf("arg count=%d want %d args=%v", len(args), len(want), args)
 	}

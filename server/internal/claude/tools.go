@@ -526,7 +526,7 @@ func qmdDeepSearch(query, collection string, limit int) ([]qmdSearchResult, erro
 	}
 
 	args := []string{
-		"query",
+		"search",
 		query,
 		"--json",
 		"--line-numbers",
