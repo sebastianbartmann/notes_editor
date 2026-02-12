@@ -26,12 +26,9 @@ func TestToolExecutor_SearchFiles_UsesQMD(t *testing.T) {
 
 	origEndpoint := qmdMCPEndpoint
 	origClient := qmdMCPClient
-	origSession := qmdGetSessionID()
-	qmdSetSessionID("")
 	t.Cleanup(func() {
 		qmdMCPEndpoint = origEndpoint
 		qmdMCPClient = origClient
-		qmdSetSessionID(origSession)
 	})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +48,6 @@ func TestToolExecutor_SearchFiles_UsesQMD(t *testing.T) {
 
 		switch req.Method {
 		case "initialize":
-			w.Header().Set(defaultQMDMCPSessionHdr, "session-1")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      req.ID,
@@ -139,12 +135,9 @@ func TestToolExecutor_SearchFiles_QMDErrorBubblesUp(t *testing.T) {
 
 	origEndpoint := qmdMCPEndpoint
 	origClient := qmdMCPClient
-	origSession := qmdGetSessionID()
-	qmdSetSessionID("")
 	t.Cleanup(func() {
 		qmdMCPEndpoint = origEndpoint
 		qmdMCPClient = origClient
-		qmdSetSessionID(origSession)
 	})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +150,6 @@ func TestToolExecutor_SearchFiles_QMDErrorBubblesUp(t *testing.T) {
 			t.Fatalf("invalid request JSON: %v", err)
 		}
 		if req.Method == "initialize" {
-			w.Header().Set(defaultQMDMCPSessionHdr, "session-1")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      req.ID,

@@ -38,7 +38,6 @@ const (
 	maxWebSearchDescChars     = 280
 	defaultQMDMCPEndpoint     = "http://127.0.0.1:8181/mcp"
 	defaultQMDMCPTimeout      = 90 * time.Second
-	defaultQMDMCPSessionHdr   = "Mcp-Session-Id"
 )
 
 var (
@@ -49,8 +48,6 @@ var (
 	qmdMCPEndpoint    = defaultQMDMCPEndpoint
 	qmdMCPClient      = &http.Client{Timeout: defaultQMDMCPTimeout}
 	qmdMCPNextID      atomic.Int64
-	qmdMCPSessionMu   sync.RWMutex
-	qmdMCPSessionID   string
 )
 
 type webSearchCacheEntry struct {
@@ -585,12 +582,8 @@ func qmdDeepSearch(query, collection string, limit int) ([]qmdSearchResult, erro
 }
 
 func qmdEnsureInitialized() error {
-	if qmdGetSessionID() != "" {
-		return nil
-	}
-
 	initParams := map[string]any{
-		"protocolVersion": "2025-06-18",
+		"protocolVersion": "2025-03-26",
 		"clientInfo": map[string]any{
 			"name":    "notes-editor",
 			"version": "1.0.0",
@@ -628,20 +621,13 @@ func qmdCallRPC(method string, params map[string]any) (*qmdMCPRPCResponse, error
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("MCP-Protocol-Version", "2025-06-18")
-	if sessionID := qmdGetSessionID(); sessionID != "" {
-		req.Header.Set(defaultQMDMCPSessionHdr, sessionID)
-	}
+	req.Header.Set("MCP-Protocol-Version", "2025-03-26")
 
 	resp, err := qmdMCPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("qmd mcp request failed: %w", err)
 	}
 	defer resp.Body.Close()
-
-	if sid := strings.TrimSpace(resp.Header.Get(defaultQMDMCPSessionHdr)); sid != "" {
-		qmdSetSessionID(sid)
-	}
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
 	if err != nil {
@@ -659,18 +645,6 @@ func qmdCallRPC(method string, params map[string]any) (*qmdMCPRPCResponse, error
 		return nil, fmt.Errorf("qmd mcp rpc error %d: %s", decoded.Error.Code, decoded.Error.Message)
 	}
 	return &decoded, nil
-}
-
-func qmdGetSessionID() string {
-	qmdMCPSessionMu.RLock()
-	defer qmdMCPSessionMu.RUnlock()
-	return qmdMCPSessionID
-}
-
-func qmdSetSessionID(id string) {
-	qmdMCPSessionMu.Lock()
-	defer qmdMCPSessionMu.Unlock()
-	qmdMCPSessionID = strings.TrimSpace(id)
 }
 
 func parseQMDLineMatches(snippet string) []map[string]any {
