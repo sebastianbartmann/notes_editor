@@ -39,6 +39,33 @@
 .actions {
   display: flex;
   gap: var(--space-1);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.taskInlineForm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+}
+
+.taskInput {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  background: var(--input);
+  color: var(--text);
+}
+
+.taskInput:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .message {

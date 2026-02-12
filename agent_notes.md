@@ -21,3 +21,4 @@
 - Android header now mirrors web by showing both sync and index badges (`AppSync.status` + `AppSync.indexStatus`), both refreshed through `AppSync.refreshStatus()` polling.
 - Removed agent action debug/server diagnostics text from Android Agent screen; keep only actionable user-facing status/error messaging.
 - Added subscription-mode Bash bridge: Pi extension now exposes Claude Code-compatible `bash` and maps it to server canonical tool `run_bash` via `/api/agent/tools/execute`. Server executes `bash -lc` in person vault root only, with timeout (default 10s, max 60s), capped stdout/stderr buffers (64KiB each), and JSON-wrapped result payload (`<bash_result_json>...`).
+- Web Daily view now matches Android quick task flow: `Work task` / `Priv task` buttons open inline task input with save/cancel and submit to `/api/todos/add`.

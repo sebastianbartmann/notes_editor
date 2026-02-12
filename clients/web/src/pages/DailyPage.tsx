@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { KeyboardEvent, useEffect, useState } from 'react'
 import { usePerson } from '../hooks/usePerson'
 import { fetchDaily, saveDaily, appendDaily } from '../api/daily'
 import { syncIfStale } from '../api/sync'
-import { toggleTodo } from '../api/todos'
+import { addTodo, toggleTodo } from '../api/todos'
 import { listFiles, readFile, unpinEntry } from '../api/files'
 import NoteView from '../components/NoteView/NoteView'
 import Editor from '../components/Editor/Editor'
@@ -27,6 +27,8 @@ function buildDailyPaths(entries: { name: string; path: string; is_dir: boolean 
   return Array.from(new Set(out)).sort()
 }
 
+type TaskCategory = 'work' | 'priv'
+
 export default function DailyPage() {
   const { person } = usePerson()
   const [content, setContent] = useState('')
@@ -35,6 +37,8 @@ export default function DailyPage() {
   const [todayPath, setTodayPath] = useState('')
   const [availableDailyPaths, setAvailableDailyPaths] = useState<string[]>([])
   const [isEditing, setIsEditing] = useState(false)
+  const [taskInputMode, setTaskInputMode] = useState<TaskCategory | null>(null)
+  const [taskInputText, setTaskInputText] = useState('')
   const [appendText, setAppendText] = useState('')
   const [isPinned, setIsPinned] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -96,6 +100,14 @@ export default function DailyPage() {
     }
   }
 
+  const reloadCurrentNote = async () => {
+    if (path === todayPath) {
+      await loadToday()
+    } else {
+      await loadPath(path)
+    }
+  }
+
   const currentIndex = availableDailyPaths.indexOf(path)
   const prevPath = currentIndex > 0 ? availableDailyPaths[currentIndex - 1] : ''
   const nextPath =
@@ -113,17 +125,32 @@ export default function DailyPage() {
     }
   }
 
+  const handleSubmitTask = async () => {
+    if (!taskInputMode) return
+    try {
+      await addTodo({ category: taskInputMode, text: taskInputText })
+      setTaskInputMode(null)
+      setTaskInputText('')
+      await reloadCurrentNote()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add task')
+    }
+  }
+
+  const handleTaskInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      void handleSubmitTask()
+    }
+  }
+
   const handleAppend = async () => {
     if (!appendText.trim()) return
     try {
       await appendDaily({ path, text: appendText, pinned: isPinned })
       setAppendText('')
       setIsPinned(false)
-      if (path === todayPath) {
-        await loadToday()
-      } else {
-        await loadPath(path)
-      }
+      await reloadCurrentNote()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to append')
     }
@@ -132,11 +159,7 @@ export default function DailyPage() {
   const handleTaskToggle = async (line: number) => {
     try {
       await toggleTodo({ path, line })
-      if (path === todayPath) {
-        await loadToday()
-      } else {
-        await loadPath(path)
-      }
+      await reloadCurrentNote()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to toggle task')
     }
@@ -145,11 +168,7 @@ export default function DailyPage() {
   const handleUnpin = async (line: number) => {
     try {
       await unpinEntry({ path, line })
-      if (path === todayPath) {
-        await loadToday()
-      } else {
-        await loadPath(path)
-      }
+      await reloadCurrentNote()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to unpin')
     }
@@ -194,14 +213,44 @@ export default function DailyPage() {
           )}
         </div>
         <div className={styles.actions}>
-          {!isEditing && (
-            <button onClick={() => setIsEditing(true)}>Edit</button>
+          {!isEditing && taskInputMode === null && (
+            <>
+              <button onClick={() => setTaskInputMode('work')} className="ghost">Work task</button>
+              <button onClick={() => setTaskInputMode('priv')} className="ghost">Priv task</button>
+              <button onClick={() => setIsEditing(true)}>Edit</button>
+            </>
           )}
           <button onClick={loadToday} className="ghost">
             Refresh
           </button>
         </div>
       </div>
+
+      {taskInputMode && !isEditing && (
+        <div className={styles.taskInlineForm}>
+          <input
+            type="text"
+            value={taskInputText}
+            onChange={e => setTaskInputText(e.target.value)}
+            onKeyDown={handleTaskInputKeyDown}
+            placeholder="Task description"
+            className={styles.taskInput}
+            autoFocus
+          />
+          <button onClick={() => void handleSubmitTask()}>
+            Save
+          </button>
+          <button
+            onClick={() => {
+              setTaskInputMode(null)
+              setTaskInputText('')
+            }}
+            className="ghost"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {error && <p className={styles.error}>{error}</p>}
 
