@@ -6,7 +6,7 @@ help:
 	@echo "Available targets:"
 	@echo ""
 	@echo "  Build:"
-	@echo "    build         Build everything (server + web UI)"
+	@echo "    build         Build everything (server + web UI + pi gateway)"
 	@echo "    build-server  Build Go server binary"
 	@echo "    build-web     Build React web UI"
 	@echo ""
@@ -57,7 +57,7 @@ help:
 	@echo "    android-test-nav       Run navigation tests only"
 
 # Build
-build: build-web build-server
+build: build-pi-gateway build-web build-server
 
 build-server:
 	cd server && go build -o bin/server ./cmd/server
