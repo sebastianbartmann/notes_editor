@@ -77,7 +77,7 @@ export default function (pi: ExtensionAPI) {
     if (!lastSystemPrompt) return;
     // Anthropic OAuth tokens in Pi run in "Claude Code identity" mode internally.
     // Custom tool names can cause Anthropic to reject the token ("only authorized for Claude Code").
-    // Therefore we expose only Claude Code tool names (read/write/grep/glob/webfetch/websearch) and
+    // Therefore we expose only Claude Code tool names (read/write/ls/grep/glob/bash/webfetch/websearch) and
     // map them to Notes Editor server tools.
     const toolHint = [
       'Notes Editor tools:',
@@ -86,6 +86,7 @@ export default function (pi: ExtensionAPI) {
       '- ls: list files/directories in the person vault (path is vault-relative; use \'.\' for root)',
       '- grep: search text in the person vault (path optional, vault-relative)',
       '- glob: find files by glob pattern in the person vault (path optional, vault-relative)',
+      '- bash: run a bash command from the person vault root',
       '- webfetch: fetch a URL (server-side)',
       '- websearch: search the web (server-side)',
       '',
@@ -167,6 +168,20 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params) {
       const { pattern, path, limit } = params as any;
       const content = await callTool('glob_files', { pattern, path, limit } as Record<string, unknown>);
+      return { content: [{ type: 'text', text: content }], details: {} };
+    },
+  });
+
+  pi.registerTool({
+    name: 'bash',
+    label: 'bash',
+    description: 'Run a bash command from the person vault root.',
+    parameters: Type.Object({
+      command: Type.String({ description: 'Bash command to execute' }),
+      timeout_seconds: Type.Optional(Type.Number({ description: 'Optional timeout in seconds (default: 10, max: 60)' })),
+    }),
+    async execute(_toolCallId, params) {
+      const content = await callTool('run_bash', params as unknown as Record<string, unknown>);
       return { content: [{ type: 'text', text: content }], details: {} };
     },
   });

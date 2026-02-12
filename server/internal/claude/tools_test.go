@@ -360,3 +360,103 @@ func TestToolExecutor_WebSearch_WrappedAndCapped(t *testing.T) {
 		t.Fatalf("upstream hits after cached call = %d, want 1", hits.Load())
 	}
 }
+
+func TestToolExecutor_RunBash_Success(t *testing.T) {
+	root := t.TempDir()
+	person := "sebastian"
+	if err := os.MkdirAll(filepath.Join(root, person), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	store := vault.NewStore(root)
+	te := NewToolExecutor(store, nil, person)
+
+	out, err := te.ExecuteTool("run_bash", map[string]any{
+		"command": `echo "hello"`,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteTool(run_bash): %v", err)
+	}
+
+	if !strings.HasPrefix(out, "<bash_result_json>\n") || !strings.HasSuffix(out, "\n</bash_result_json>") {
+		t.Fatalf("unexpected wrapper: %q", out)
+	}
+
+	raw := strings.TrimPrefix(out, "<bash_result_json>\n")
+	raw = strings.TrimSuffix(raw, "\n</bash_result_json>")
+
+	var payload struct {
+		ExitCode int    `json:"exit_code"`
+		Stdout   string `json:"stdout"`
+		Stderr   string `json:"stderr"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v; out=%q", err, out)
+	}
+	if payload.ExitCode != 0 {
+		t.Fatalf("exit_code=%d want=0", payload.ExitCode)
+	}
+	if payload.Stdout != "hello\n" {
+		t.Fatalf("stdout=%q want=%q", payload.Stdout, "hello\n")
+	}
+	if payload.Stderr != "" {
+		t.Fatalf("stderr=%q want empty", payload.Stderr)
+	}
+}
+
+func TestToolExecutor_RunBash_NonZeroExit(t *testing.T) {
+	root := t.TempDir()
+	person := "sebastian"
+	if err := os.MkdirAll(filepath.Join(root, person), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	store := vault.NewStore(root)
+	te := NewToolExecutor(store, nil, person)
+
+	out, err := te.ExecuteTool("run_bash", map[string]any{
+		"command": `echo "bad" >&2; exit 7`,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteTool(run_bash): %v", err)
+	}
+
+	raw := strings.TrimPrefix(out, "<bash_result_json>\n")
+	raw = strings.TrimSuffix(raw, "\n</bash_result_json>")
+
+	var payload struct {
+		ExitCode int    `json:"exit_code"`
+		Stderr   string `json:"stderr"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v; out=%q", err, out)
+	}
+	if payload.ExitCode != 7 {
+		t.Fatalf("exit_code=%d want=7", payload.ExitCode)
+	}
+	if payload.Stderr != "bad\n" {
+		t.Fatalf("stderr=%q want=%q", payload.Stderr, "bad\n")
+	}
+}
+
+func TestToolExecutor_RunBash_Timeout(t *testing.T) {
+	root := t.TempDir()
+	person := "sebastian"
+	if err := os.MkdirAll(filepath.Join(root, person), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	store := vault.NewStore(root)
+	te := NewToolExecutor(store, nil, person)
+
+	_, err := te.ExecuteTool("run_bash", map[string]any{
+		"command":         `sleep 1`,
+		"timeout_seconds": 0.1,
+	})
+	if err == nil {
+		t.Fatalf("expected timeout error")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

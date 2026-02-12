@@ -38,6 +38,9 @@ const (
 	maxWebSearchDescChars     = 280
 	defaultQMDBinaryPath      = "/home/dev/.bun/bin/qmd"
 	defaultQMDQueryTimeout    = 90 * time.Second
+	defaultBashTimeout        = 10 * time.Second
+	maxBashTimeout            = 60 * time.Second
+	maxBashOutputBytes        = 64 * 1024
 )
 
 var (
@@ -170,6 +173,24 @@ var ToolDefinitions = []map[string]any{
 		},
 	},
 	{
+		"name":        "run_bash",
+		"description": "Run a bash command in the person's vault root",
+		"input_schema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"command": map[string]any{
+					"type":        "string",
+					"description": "Bash command to execute",
+				},
+				"timeout_seconds": map[string]any{
+					"type":        "number",
+					"description": "Optional timeout in seconds (default: 10, max: 60)",
+				},
+			},
+			"required": []string{"command"},
+		},
+	},
+	{
 		"name":        "linkedin_post",
 		"description": "Create a new LinkedIn post",
 		"input_schema": map[string]any{
@@ -272,6 +293,8 @@ func (te *ToolExecutor) ExecuteTool(name string, input map[string]any) (string, 
 		return te.webSearch(input)
 	case "web_fetch":
 		return te.webFetch(input)
+	case "run_bash":
+		return te.runBash(input)
 	case "linkedin_post":
 		return te.linkedinPost(input)
 	case "linkedin_read_comments":
@@ -504,6 +527,105 @@ func (te *ToolExecutor) searchFiles(input map[string]any) (string, error) {
 		return "", err
 	}
 	return string(result), nil
+}
+
+type cappedBuffer struct {
+	limit     int
+	buf       bytes.Buffer
+	truncated bool
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	if b.limit <= 0 || b.truncated {
+		b.truncated = true
+		return len(p), nil
+	}
+	remaining := b.limit - b.buf.Len()
+	if remaining <= 0 {
+		b.truncated = true
+		return len(p), nil
+	}
+	if len(p) > remaining {
+		_, _ = b.buf.Write(p[:remaining])
+		b.truncated = true
+		return len(p), nil
+	}
+	_, _ = b.buf.Write(p)
+	return len(p), nil
+}
+
+func (b *cappedBuffer) String() string {
+	return b.buf.String()
+}
+
+func (te *ToolExecutor) runBash(input map[string]any) (string, error) {
+	command, ok := input["command"].(string)
+	if !ok || strings.TrimSpace(command) == "" {
+		return "", fmt.Errorf("command is required")
+	}
+
+	timeout := defaultBashTimeout
+	if rawTimeout, ok := input["timeout_seconds"]; ok {
+		switch v := rawTimeout.(type) {
+		case float64:
+			if v > 0 {
+				timeout = time.Duration(v * float64(time.Second))
+			}
+		case int:
+			if v > 0 {
+				timeout = time.Duration(v) * time.Second
+			}
+		}
+	}
+	if timeout > maxBashTimeout {
+		timeout = maxBashTimeout
+	}
+
+	vaultRoot, err := vault.ResolvePath(te.store.RootPath(), te.person, ".")
+	if err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "bash", "-lc", command)
+	cmd.Dir = vaultRoot
+
+	stdout := &cappedBuffer{limit: maxBashOutputBytes}
+	stderr := &cappedBuffer{limit: maxBashOutputBytes}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	err = cmd.Run()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return "", fmt.Errorf("bash command timed out after %s", timeout)
+	}
+
+	exitCode := 0
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		} else {
+			return "", fmt.Errorf("bash command failed: %w", err)
+		}
+	}
+
+	response := map[string]any{
+		"command":          command,
+		"exit_code":        exitCode,
+		"stdout":           stdout.String(),
+		"stderr":           stderr.String(),
+		"stdout_truncated": stdout.truncated,
+		"stderr_truncated": stderr.truncated,
+	}
+
+	encoded, marshalErr := json.Marshal(response)
+	if marshalErr != nil {
+		return "", marshalErr
+	}
+	return "<bash_result_json>\n" + string(encoded) + "\n</bash_result_json>", nil
 }
 
 var qmdSnippetLineRE = regexp.MustCompile(`^\s*(\d+):\s?(.*)$`)
