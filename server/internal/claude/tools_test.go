@@ -2,7 +2,6 @@ package claude
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,73 +23,23 @@ func TestToolExecutor_SearchFiles_UsesQMD(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	origEndpoint := qmdMCPEndpoint
-	origClient := qmdMCPClient
+	origBinary := qmdBinaryPath
 	t.Cleanup(func() {
-		qmdMCPEndpoint = origEndpoint
-		qmdMCPClient = origClient
+		qmdBinaryPath = origBinary
 	})
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/mcp" {
-			http.NotFound(w, r)
-			return
-		}
-		body, _ := io.ReadAll(r.Body)
-		var req struct {
-			ID     any            `json:"id"`
-			Method string         `json:"method"`
-			Params map[string]any `json:"params"`
-		}
-		if err := json.Unmarshal(body, &req); err != nil {
-			t.Fatalf("invalid request JSON: %v", err)
-		}
-
-		switch req.Method {
-		case "initialize":
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"jsonrpc": "2.0",
-				"id":      req.ID,
-				"result": map[string]any{
-					"protocolVersion": "2025-06-18",
-				},
-			})
-		case "tools/call":
-			if got := req.Params["name"]; got != "deep_search" {
-				t.Fatalf("tools/call name=%v want deep_search", got)
-			}
-			args, _ := req.Params["arguments"].(map[string]any)
-			if got := args["collection"]; got != person {
-				t.Fatalf("collection=%v want %q", got, person)
-			}
-			if got := args["query"]; got != "match" {
-				t.Fatalf("query=%v want %q", got, "match")
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"jsonrpc": "2.0",
-				"id":      req.ID,
-				"result": map[string]any{
-					"structuredContent": map[string]any{
-						"results": []map[string]any{
-							{
-								"docid":   "#abc123",
-								"score":   0.87,
-								"file":    "notes/today.md",
-								"title":   "Today",
-								"context": "Journal",
-								"snippet": "12: first match\n25: second match",
-							},
-						},
-					},
-				},
-			})
-		default:
-			t.Fatalf("unexpected method: %s", req.Method)
-		}
-	}))
-	defer srv.Close()
-	qmdMCPEndpoint = srv.URL + "/mcp"
-	qmdMCPClient = srv.Client()
+	argsPath := filepath.Join(t.TempDir(), "args.txt")
+	qmdPath := filepath.Join(t.TempDir(), "qmd")
+	script := "#!/usr/bin/env bash\n" +
+		"set -euo pipefail\n" +
+		"printf '%s\\n' \"$@\" > '" + argsPath + "'\n" +
+		"cat <<'JSON'\n" +
+		"{\"results\":[{\"docid\":\"#abc123\",\"score\":0.87,\"file\":\"notes/today.md\",\"title\":\"Today\",\"context\":\"Journal\",\"snippet\":\"12: first match\\n25: second match\"}]}\n" +
+		"JSON\n"
+	if err := os.WriteFile(qmdPath, []byte(script), 0755); err != nil {
+		t.Fatalf("write qmd fake: %v", err)
+	}
+	qmdBinaryPath = qmdPath
 
 	store := vault.NewStore(root)
 	te := NewToolExecutor(store, nil, person)
@@ -124,6 +73,21 @@ func TestToolExecutor_SearchFiles_UsesQMD(t *testing.T) {
 	if payload[0].Matches[0].LineNumber != 12 || payload[0].Matches[1].LineNumber != 25 {
 		t.Fatalf("unexpected line numbers: %+v", payload[0].Matches)
 	}
+
+	argsRaw, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args: %v", err)
+	}
+	args := strings.Split(strings.TrimSpace(string(argsRaw)), "\n")
+	want := []string{"query", "match", "--json", "--line-numbers", "-c", person, "-n", "50"}
+	if len(args) != len(want) {
+		t.Fatalf("arg count=%d want %d args=%v", len(args), len(want), args)
+	}
+	for i, w := range want {
+		if args[i] != w {
+			t.Fatalf("arg[%d]=%q want %q; all=%v", i, args[i], w, args)
+		}
+	}
 }
 
 func TestToolExecutor_SearchFiles_QMDErrorBubblesUp(t *testing.T) {
@@ -133,42 +97,20 @@ func TestToolExecutor_SearchFiles_QMDErrorBubblesUp(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	origEndpoint := qmdMCPEndpoint
-	origClient := qmdMCPClient
+	origBinary := qmdBinaryPath
 	t.Cleanup(func() {
-		qmdMCPEndpoint = origEndpoint
-		qmdMCPClient = origClient
+		qmdBinaryPath = origBinary
 	})
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var req struct {
-			ID     any    `json:"id"`
-			Method string `json:"method"`
-		}
-		if err := json.Unmarshal(body, &req); err != nil {
-			t.Fatalf("invalid request JSON: %v", err)
-		}
-		if req.Method == "initialize" {
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"jsonrpc": "2.0",
-				"id":      req.ID,
-				"result":  map[string]any{"protocolVersion": "2025-06-18"},
-			})
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"jsonrpc": "2.0",
-			"id":      req.ID,
-			"error": map[string]any{
-				"code":    -32000,
-				"message": "qmd exploded",
-			},
-		})
-	}))
-	defer srv.Close()
-	qmdMCPEndpoint = srv.URL + "/mcp"
-	qmdMCPClient = srv.Client()
+	qmdPath := filepath.Join(t.TempDir(), "qmd")
+	script := "#!/usr/bin/env bash\n" +
+		"set -euo pipefail\n" +
+		"echo 'qmd exploded' >&2\n" +
+		"exit 23\n"
+	if err := os.WriteFile(qmdPath, []byte(script), 0755); err != nil {
+		t.Fatalf("write qmd fake: %v", err)
+	}
+	qmdBinaryPath = qmdPath
 
 	store := vault.NewStore(root)
 	te := NewToolExecutor(store, nil, person)

@@ -13,12 +13,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -36,8 +36,8 @@ const (
 	defaultWebSearchMaxResult = 5
 	maxWebSearchResultCount   = 20
 	maxWebSearchDescChars     = 280
-	defaultQMDMCPEndpoint     = "http://127.0.0.1:8181/mcp"
-	defaultQMDMCPTimeout      = 90 * time.Second
+	defaultQMDBinaryPath      = "/home/dev/.bun/bin/qmd"
+	defaultQMDQueryTimeout    = 90 * time.Second
 )
 
 var (
@@ -45,9 +45,7 @@ var (
 	webSearchClient   = &http.Client{Timeout: defaultWebSearchTimeout}
 	webSearchCacheMu  sync.Mutex
 	webSearchCache    = map[string]webSearchCacheEntry{}
-	qmdMCPEndpoint    = defaultQMDMCPEndpoint
-	qmdMCPClient      = &http.Client{Timeout: defaultQMDMCPTimeout}
-	qmdMCPNextID      atomic.Int64
+	qmdBinaryPath     = defaultQMDBinaryPath
 )
 
 type webSearchCacheEntry struct {
@@ -510,17 +508,6 @@ func (te *ToolExecutor) searchFiles(input map[string]any) (string, error) {
 
 var qmdSnippetLineRE = regexp.MustCompile(`^\s*(\d+):\s?(.*)$`)
 
-type qmdMCPRPCResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      any             `json:"id,omitempty"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *struct {
-		Code    int             `json:"code"`
-		Message string          `json:"message"`
-		Data    json.RawMessage `json:"data,omitempty"`
-	} `json:"error,omitempty"`
-}
-
 type qmdSearchResult struct {
 	DocID   string  `json:"docid"`
 	File    string  `json:"file"`
@@ -531,120 +518,78 @@ type qmdSearchResult struct {
 }
 
 func qmdDeepSearch(query, collection string, limit int) ([]qmdSearchResult, error) {
-	if strings.TrimSpace(qmdMCPEndpoint) == "" {
-		return nil, fmt.Errorf("qmd mcp endpoint is empty")
+	if strings.TrimSpace(qmdBinaryPath) == "" {
+		return nil, fmt.Errorf("qmd binary path is empty")
 	}
 	if limit <= 0 {
 		limit = 50
 	}
 
-	if err := qmdEnsureInitialized(); err != nil {
-		return nil, err
+	args := []string{
+		"query",
+		query,
+		"--json",
+		"--line-numbers",
+		"-c", collection,
+		"-n", strconv.Itoa(limit),
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultQMDQueryTimeout)
+	defer cancel()
 
-	params := map[string]any{
-		"name": "deep_search",
-		"arguments": map[string]any{
-			"query":      query,
-			"limit":      limit,
-			"collection": collection,
-		},
+	cmd := exec.CommandContext(ctx, qmdBinaryPath, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	raw, err := cmd.Output()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return nil, fmt.Errorf("qmd query timed out after %s", defaultQMDQueryTimeout)
 	}
-	resp, err := qmdCallRPC("tools/call", params)
 	if err != nil {
-		return nil, err
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = strings.TrimSpace(string(raw))
+		}
+		if msg == "" {
+			msg = err.Error()
+		}
+		return nil, fmt.Errorf("qmd query failed: %s", msg)
 	}
 
-	var toolResult struct {
-		IsError           bool `json:"isError"`
+	results, err := decodeQMDQueryResults(raw)
+	if err != nil {
+		return nil, fmt.Errorf("qmd query invalid JSON: %w", err)
+	}
+	return results, nil
+}
+
+func decodeQMDQueryResults(raw []byte) ([]qmdSearchResult, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return []qmdSearchResult{}, nil
+	}
+
+	var direct []qmdSearchResult
+	if err := json.Unmarshal(trimmed, &direct); err == nil {
+		return direct, nil
+	}
+
+	var wrapped struct {
+		Results []qmdSearchResult `json:"results"`
+	}
+	if err := json.Unmarshal(trimmed, &wrapped); err == nil && wrapped.Results != nil {
+		return wrapped.Results, nil
+	}
+
+	var mcpEnvelope struct {
 		StructuredContent struct {
 			Results []qmdSearchResult `json:"results"`
 		} `json:"structuredContent"`
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
 	}
-	if err := json.Unmarshal(resp.Result, &toolResult); err != nil {
-		return nil, fmt.Errorf("qmd mcp invalid tool result: %w", err)
-	}
-	if toolResult.IsError {
-		msg := "qmd mcp tool returned error"
-		if len(toolResult.Content) > 0 && strings.TrimSpace(toolResult.Content[0].Text) != "" {
-			msg = toolResult.Content[0].Text
-		}
-		return nil, fmt.Errorf(msg)
-	}
-	if toolResult.StructuredContent.Results == nil {
-		return []qmdSearchResult{}, nil
-	}
-	return toolResult.StructuredContent.Results, nil
-}
-
-func qmdEnsureInitialized() error {
-	initParams := map[string]any{
-		"protocolVersion": "2025-03-26",
-		"clientInfo": map[string]any{
-			"name":    "notes-editor",
-			"version": "1.0.0",
-		},
-		"capabilities": map[string]any{},
-	}
-	resp, err := qmdCallRPC("initialize", initParams)
-	if err != nil {
-		return fmt.Errorf("qmd mcp initialize failed: %w", err)
-	}
-	if len(resp.Result) == 0 {
-		return fmt.Errorf("qmd mcp initialize returned empty result")
-	}
-	return nil
-}
-
-func qmdCallRPC(method string, params map[string]any) (*qmdMCPRPCResponse, error) {
-	reqID := qmdMCPNextID.Add(1)
-	payload := map[string]any{
-		"jsonrpc": "2.0",
-		"id":      reqID,
-		"method":  method,
-		"params":  params,
-	}
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
+	if err := json.Unmarshal(trimmed, &mcpEnvelope); err == nil && mcpEnvelope.StructuredContent.Results != nil {
+		return mcpEnvelope.StructuredContent.Results, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultQMDMCPTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, qmdMCPEndpoint, bytes.NewReader(encoded))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("MCP-Protocol-Version", "2025-03-26")
-
-	resp, err := qmdMCPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("qmd mcp request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
-	if err != nil {
-		return nil, fmt.Errorf("qmd mcp read failed: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("qmd mcp status %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
-	}
-
-	var decoded qmdMCPRPCResponse
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return nil, fmt.Errorf("qmd mcp invalid JSON: %w", err)
-	}
-	if decoded.Error != nil {
-		return nil, fmt.Errorf("qmd mcp rpc error %d: %s", decoded.Error.Code, decoded.Error.Message)
-	}
-	return &decoded, nil
+	return nil, fmt.Errorf("unsupported qmd result format")
 }
 
 func parseQMDLineMatches(snippet string) []map[string]any {
