@@ -117,6 +117,11 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 	appSession.AddMessage("user", req.Message)
 
 	runtimeSessionID := r.getRuntimeSessionID(person, appSession.ID)
+	if runtimeSessionID == "" && strings.TrimSpace(req.SessionID) != "" {
+		// Fallback: if app->runtime mapping is unknown, attempt direct runtime resume
+		// using the provided session id (works for recovered Pi runtime ids).
+		runtimeSessionID = strings.TrimSpace(req.SessionID)
+	}
 
 	systemPrompt := claude.SystemPrompt
 	if r.store != nil {

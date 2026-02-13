@@ -204,10 +204,10 @@ func TestPiGatewayRuntimePersistsSessionMappingAcrossRestart(t *testing.T) {
 	if len(receivedSession) != 2 {
 		t.Fatalf("expected 2 requests to gateway, got %d", len(receivedSession))
 	}
-	if receivedSession[0] != "" {
-		t.Fatalf("expected first request to omit runtime session id, got %q", receivedSession[0])
+	if receivedSession[0] != "app-session-1" {
+		t.Fatalf("expected first request to use provided app session id, got %q", receivedSession[0])
 	}
-	if receivedSession[1] != "runtime-session-1" {
+	if receivedSession[1] != "app-session-1" {
 		t.Fatalf("expected second request to reuse persisted runtime session id, got %q", receivedSession[1])
 	}
 }

@@ -2,6 +2,8 @@ package agent
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -100,6 +102,8 @@ func (s *Service) runtimeModeForSession(person, sessionID string) (string, bool)
 }
 
 func (s *Service) ListSessions(person string) ([]SessionSummary, error) {
+	s.hydrateGatewayRecoveredSessions(person)
+
 	s.mu.Lock()
 	personSessions := s.sessionRecordsByPerson[person]
 	records := make([]*sessionRecord, 0, len(personSessions))
@@ -137,6 +141,93 @@ func (s *Service) ListSessions(person string) ([]SessionSummary, error) {
 		summaries = append(summaries, summary)
 	}
 	return summaries, nil
+}
+
+func (s *Service) hydrateGatewayRecoveredSessions(person string) {
+	runtime := s.runtimes[RuntimeModeGatewaySubscription]
+	if runtime == nil || !runtime.Available() {
+		return
+	}
+
+	recovered := listGatewayRuntimeSessionFiles(person)
+	if len(recovered) == 0 {
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	personSessions := s.sessionRecordsByPerson[person]
+	if personSessions == nil {
+		personSessions = make(map[string]*sessionRecord)
+		s.sessionRecordsByPerson[person] = personSessions
+	}
+
+	for _, rec := range recovered {
+		if _, exists := personSessions[rec.SessionID]; exists {
+			continue
+		}
+		seq := s.sessionSequenceByPerson[person] + 1
+		s.sessionSequenceByPerson[person] = seq
+		personSessions[rec.SessionID] = &sessionRecord{
+			SessionID:   rec.SessionID,
+			Person:      person,
+			Name:        buildSessionName("", seq),
+			RuntimeMode: RuntimeModeGatewaySubscription,
+			CreatedAt:   rec.Timestamp,
+			LastUsedAt:  rec.Timestamp,
+		}
+	}
+}
+
+type recoveredRuntimeSession struct {
+	SessionID string
+	Timestamp time.Time
+}
+
+func listGatewayRuntimeSessionFiles(person string) []recoveredRuntimeSession {
+	person = strings.TrimSpace(person)
+	if person == "" {
+		return nil
+	}
+
+	sessionDir := strings.TrimSpace(os.Getenv("PI_GATEWAY_PI_SESSION_DIR"))
+	if sessionDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil
+		}
+		sessionDir = filepath.Join(home, ".pi", "notes-editor-sessions")
+	}
+
+	pattern := filepath.Join(sessionDir, person+"--*.jsonl")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil
+	}
+
+	out := make([]recoveredRuntimeSession, 0, len(matches))
+	for _, fullPath := range matches {
+		base := filepath.Base(fullPath)
+		if !strings.HasPrefix(base, person+"--") || !strings.HasSuffix(base, ".jsonl") {
+			continue
+		}
+		sessionID := strings.TrimSuffix(strings.TrimPrefix(base, person+"--"), ".jsonl")
+		sessionID = strings.TrimSpace(sessionID)
+		if sessionID == "" {
+			continue
+		}
+
+		ts := time.Now().UTC()
+		if info, err := os.Stat(fullPath); err == nil {
+			ts = info.ModTime().UTC()
+		}
+		out = append(out, recoveredRuntimeSession{
+			SessionID: sessionID,
+			Timestamp: ts,
+		})
+	}
+	return out
 }
 
 func (s *Service) ClearAllSessions(person string) error {
