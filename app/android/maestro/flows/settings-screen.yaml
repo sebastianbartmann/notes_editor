@@ -1,7 +1,7 @@
 appId: com.bartmann.noteseditor
 ---
 - launchApp
-- tapOn: "Tools"
+- tapOn: "More"
 - waitForAnimationToEnd
 
 # Navigate to Settings
@@ -28,3 +28,9 @@ appId: com.bartmann.noteseditor
 - tapOn: "Sebastian"
 - waitForAnimationToEnd
 - takeScreenshot: "settings-05-person-selected"
+
+# Verify backup section (may require scroll on small emulator viewport)
+- scroll
+- scroll
+- assertVisible: "Download backup (.zip)"
+- takeScreenshot: "settings-06-backup-visible"

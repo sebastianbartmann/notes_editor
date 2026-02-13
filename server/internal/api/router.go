@@ -145,6 +145,7 @@ func NewRouter(srv *Server) http.Handler {
 		// Settings routes
 		r.Get("/settings/env", srv.handleGetEnv)
 		r.Post("/settings/env", srv.handleSetEnv)
+		r.Get("/settings/vault-backup", srv.handleDownloadVaultBackup)
 
 		// LinkedIn OAuth
 		r.Get("/linkedin/oauth/callback", srv.handleLinkedInCallback)

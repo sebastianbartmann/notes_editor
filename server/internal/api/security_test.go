@@ -270,6 +270,7 @@ func TestAuthenticationRequired(t *testing.T) {
 		{"GET", "/api/agent/gateway/health", ""},
 		{"GET", "/api/settings/env", ""},
 		{"POST", "/api/settings/env", `{"content":"KEY=value"}`},
+		{"GET", "/api/settings/vault-backup", ""},
 		{"GET", "/api/linkedin/health", ""},
 	}
 
@@ -383,6 +384,7 @@ func TestPersonRequiredForProtectedEndpoints(t *testing.T) {
 		{"POST", "/api/agent/actions/test/run", `{}`},
 		{"POST", "/api/agent/tools/execute", `{"tool":"read_file","args":{"path":"notes/test.md"}}`},
 		{"GET", "/api/agent/gateway/health", ""},
+		{"GET", "/api/settings/vault-backup", ""},
 		{"GET", "/api/linkedin/health", ""},
 	}
 

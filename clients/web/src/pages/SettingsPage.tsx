@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { usePerson } from '../hooks/usePerson'
 import { useTheme } from '../hooks/useTheme'
 import { useAuth } from '../hooks/useAuth'
-import { fetchEnv, saveEnv } from '../api/settings'
+import { downloadVaultBackup, fetchEnv, saveEnv } from '../api/settings'
 import { getAgentConfig, getAgentGatewayHealth, saveAgentConfig } from '../api/agent'
 import styles from './SettingsPage.module.css'
 
@@ -18,6 +18,8 @@ export default function SettingsPage() {
   const [agentStatus, setAgentStatus] = useState('')
   const [gatewayStatus, setGatewayStatus] = useState('Checking gateway...')
   const [isSavingAgent, setIsSavingAgent] = useState(false)
+  const [backupStatus, setBackupStatus] = useState('')
+  const [isDownloadingBackup, setIsDownloadingBackup] = useState(false)
 
   useEffect(() => {
     fetchEnv()
@@ -84,6 +86,20 @@ export default function SettingsPage() {
       setAgentStatus(`Save failed: ${err instanceof Error ? err.message : err}`)
     } finally {
       setIsSavingAgent(false)
+    }
+  }
+
+  const handleDownloadBackup = async () => {
+    if (isDownloadingBackup || !person) return
+    setIsDownloadingBackup(true)
+    setBackupStatus('')
+    try {
+      await downloadVaultBackup()
+      setBackupStatus('Backup download started')
+    } catch (err) {
+      setBackupStatus(`Backup failed: ${err instanceof Error ? err.message : err}`)
+    } finally {
+      setIsDownloadingBackup(false)
     }
   }
 
@@ -187,6 +203,17 @@ export default function SettingsPage() {
           {agentStatus && <span className={styles.envStatus}>{agentStatus}</span>}
         </div>
         <p className={styles.hint}>{gatewayStatus}</p>
+      </section>
+
+      <section className={styles.section}>
+        <h3>Backup</h3>
+        <p className={styles.hint}>Download a compressed copy of the selected person's vault.</p>
+        <div className={styles.envActions}>
+          <button onClick={handleDownloadBackup} disabled={isDownloadingBackup || !person}>
+            {isDownloadingBackup ? 'Preparing backup...' : 'Download backup (.zip)'}
+          </button>
+          {backupStatus && <span className={styles.envStatus}>{backupStatus}</span>}
+        </div>
       </section>
 
       <section className={styles.section}>

@@ -1,10 +1,16 @@
 package api
 
 import (
+	"archive/zip"
 	"encoding/json"
+	"fmt"
+	"io"
+	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // handleGetEnv returns the contents of the .env file.
@@ -53,4 +59,97 @@ func (s *Server) handleSetEnv(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeSuccess(w, "Settings saved")
+}
+
+// handleDownloadVaultBackup streams a ZIP backup for the selected person's vault.
+func (s *Server) handleDownloadVaultBackup(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
+	s.syncMgr.TriggerPullIfStale(30 * time.Second)
+
+	personRoot := filepath.Join(s.config.NotesRoot, person)
+	info, err := os.Stat(personRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeNotFound(w, "Person vault not found")
+			return
+		}
+		writeBadRequest(w, err.Error())
+		return
+	}
+	if !info.IsDir() {
+		writeBadRequest(w, "Person vault is not a directory")
+		return
+	}
+
+	filename := fmt.Sprintf("%s-vault-%s.zip", person, time.Now().Format("20060102-150405"))
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	w.Header().Set("Cache-Control", "no-store")
+
+	zw := zip.NewWriter(w)
+	if err := writeVaultZip(zw, personRoot); err != nil {
+		log.Printf("backup zip failed for person=%s: %v", person, err)
+	}
+	if err := zw.Close(); err != nil {
+		log.Printf("backup zip close failed for person=%s: %v", person, err)
+	}
+}
+
+func writeVaultZip(zw *zip.Writer, personRoot string) error {
+	return filepath.WalkDir(personRoot, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == personRoot {
+			return nil
+		}
+
+		if d.Type()&os.ModeSymlink != 0 {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		relativePath, err := filepath.Rel(personRoot, path)
+		if err != nil {
+			return err
+		}
+		zipPath := filepath.ToSlash(relativePath)
+
+		if d.IsDir() {
+			_, err := zw.Create(zipPath + "/")
+			return err
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+		header.Name = zipPath
+		header.Method = zip.Deflate
+
+		writer, err := zw.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		_, err = io.Copy(writer, file)
+		return err
+	})
 }

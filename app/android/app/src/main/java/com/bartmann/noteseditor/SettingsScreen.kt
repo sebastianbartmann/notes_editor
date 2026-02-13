@@ -1,5 +1,7 @@
 package com.bartmann.noteseditor
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,16 +25,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.dp
+import java.io.IOException
 import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(modifier: Modifier) {
     val currentPerson = UserSettings.person
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var envContent by remember { mutableStateOf("") }
     var envStatus by remember { mutableStateOf("") }
@@ -41,8 +46,33 @@ fun SettingsScreen(modifier: Modifier) {
     var agentPrompt by remember { mutableStateOf("") }
     var agentStatus by remember { mutableStateOf("") }
     var isSavingAgent by remember { mutableStateOf(false) }
+    var backupStatus by remember { mutableStateOf("") }
+    var isSavingBackup by remember { mutableStateOf(false) }
     var navStatus by remember { mutableStateOf("") }
     val selectedNavIds = UserSettings.bottomNavIds
+    val backupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri == null) {
+            isSavingBackup = false
+            backupStatus = "Backup canceled"
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            try {
+                val output = context.contentResolver.openOutputStream(uri)
+                    ?: throw IOException("Unable to open destination file")
+                output.use {
+                    ApiClient.downloadVaultBackupTo(it)
+                }
+                backupStatus = "Backup saved"
+            } catch (exc: Exception) {
+                backupStatus = "Backup failed: ${exc.message}"
+            } finally {
+                isSavingBackup = false
+            }
+        }
+    }
 
     fun moveNavItem(id: String, delta: Int) {
         val currentIndex = selectedNavIds.indexOf(id)
@@ -172,6 +202,26 @@ fun SettingsScreen(modifier: Modifier) {
             )
             if (agentStatus.isNotBlank()) {
                 StatusMessage(text = agentStatus, showDivider = false)
+            }
+            CompactDivider()
+            SectionTitle(text = "Backup")
+            AppText(
+                text = "Download a compressed copy of the selected person's vault.",
+                style = AppTheme.typography.bodySmall,
+                color = AppTheme.colors.muted
+            )
+            CompactButton(
+                text = if (isSavingBackup) "Preparing backup..." else "Download backup (.zip)",
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    if (isSavingBackup || currentPerson == null) return@CompactButton
+                    isSavingBackup = true
+                    backupStatus = ""
+                    backupLauncher.launch("${currentPerson}-vault-backup.zip")
+                }
+            )
+            if (backupStatus.isNotBlank()) {
+                StatusMessage(text = backupStatus, showDivider = false)
             }
             CompactDivider()
             SectionTitle(text = "Navigation")

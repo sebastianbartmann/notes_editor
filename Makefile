@@ -246,6 +246,11 @@ android-test-claude: android-emulator-start android-check-maestro
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
 android-test-settings: android-emulator-start android-check-maestro
+	@echo "Building and installing debug APK..."
+	@GRADLE_USER_HOME="$(PWD)/.gradle" \
+	$(PWD)/app/gradle-8.7/bin/gradle --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
+	@$(ANDROID_HOME)/platform-tools/adb install -r $(PWD)/app/android/app/build/outputs/apk/debug/app-debug.apk
+	@echo "Running Maestro settings flow..."
 	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/settings-screen.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
