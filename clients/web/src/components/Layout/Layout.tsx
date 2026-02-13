@@ -11,13 +11,19 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const isFilesRoute = location.pathname === '/files' || location.pathname.startsWith('/files/')
+  const isDailyRoute = location.pathname === '/daily'
+  const containerClass = isFilesRoute
+    ? styles.containerWide
+    : isDailyRoute
+      ? styles.containerDaily
+      : ''
 
   return (
     <div className={styles.layout}>
       <Header />
       <Navigation />
       <main className={styles.main}>
-        <div className={`${styles.container} ${isFilesRoute ? styles.containerWide : ''}`}>
+        <div className={`${styles.container} ${containerClass}`}>
           {children}
         </div>
       </main>

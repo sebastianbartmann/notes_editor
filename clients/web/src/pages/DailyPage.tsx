@@ -266,7 +266,7 @@ export default function DailyPage() {
           content={content}
           onTaskToggle={handleTaskToggle}
           onUnpin={handleUnpin}
-          className={styles.dailyNoteView}
+          size="large"
         />
       )}
 

@@ -75,6 +75,10 @@
   max-width: min(80vw, 1400px);
 }
 
+.containerDaily {
+  max-width: min(90vw, 1040px);
+}
+
 @media (max-width: 600px) {
   .header {
     padding: var(--space-2);

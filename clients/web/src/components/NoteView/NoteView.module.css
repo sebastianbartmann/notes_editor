@@ -9,6 +9,12 @@
   overflow-y: auto;
 }
 
+.noteViewLarge {
+  font-size: 15px;
+  line-height: 1.75;
+  max-height: 52vh;
+}
+
 .line {
   min-height: 1.6em;
 }
@@ -107,4 +113,28 @@
 .checkbox {
   margin-top: 2px;
   accent-color: var(--accent);
+}
+
+.noteViewLarge .h1 {
+  font-size: 24px;
+}
+
+.noteViewLarge .h2 {
+  font-size: 20px;
+}
+
+.noteViewLarge .h3 {
+  font-size: 18px;
+}
+
+.noteViewLarge .h4 {
+  font-size: 17px;
+}
+
+.noteViewLarge .h5 {
+  font-size: 16px;
+}
+
+.noteViewLarge .h6 {
+  font-size: 15px;
 }
