@@ -4,6 +4,7 @@ interface NoteViewProps {
   content: string
   onTaskToggle?: (line: number) => void
   onUnpin?: (line: number) => void
+  className?: string
 }
 
 export type LineType = 'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'H6' | 'TASK' | 'TEXT' | 'EMPTY'
@@ -70,12 +71,13 @@ export default function NoteView({
   content,
   onTaskToggle,
   onUnpin,
+  className,
 }: NoteViewProps) {
   const lines = content.split('\n')
   const parsed = lines.map((line, i) => parseLine(line, i + 1))
 
   return (
-    <div className={styles.noteView}>
+    <div className={`${styles.noteView} ${className ?? ''}`.trim()}>
       {parsed.map((line, i) => (
         <div key={i} className={styles.line}>
           {line.type === 'EMPTY' ? (

@@ -259,12 +259,14 @@ export default function DailyPage() {
           content={content}
           onSave={handleSave}
           onCancel={() => setIsEditing(false)}
+          textareaClassName={styles.dailyEditorTextarea}
         />
       ) : (
         <NoteView
           content={content}
           onTaskToggle={handleTaskToggle}
           onUnpin={handleUnpin}
+          className={styles.dailyNoteView}
         />
       )}
 

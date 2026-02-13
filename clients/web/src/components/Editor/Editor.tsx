@@ -5,9 +5,17 @@ interface EditorProps {
   content: string
   onSave: (content: string) => void
   onCancel: () => void
+  className?: string
+  textareaClassName?: string
 }
 
-export default function Editor({ content, onSave, onCancel }: EditorProps) {
+export default function Editor({
+  content,
+  onSave,
+  onCancel,
+  className,
+  textareaClassName,
+}: EditorProps) {
   const [value, setValue] = useState(content)
 
   const handleSave = () => {
@@ -15,11 +23,11 @@ export default function Editor({ content, onSave, onCancel }: EditorProps) {
   }
 
   return (
-    <div className={styles.editor}>
+    <div className={`${styles.editor} ${className ?? ''}`.trim()}>
       <textarea
         value={value}
         onChange={e => setValue(e.target.value)}
-        className={styles.textarea}
+        className={`${styles.textarea} ${textareaClassName ?? ''}`.trim()}
         autoFocus
       />
       <div className={styles.actions}>
