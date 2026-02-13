@@ -32,6 +32,8 @@ type piGatewayStreamEvent struct {
 	Message   string         `json:"message,omitempty"`
 }
 
+const piRuntimeSessionMapPath = ".notes-editor/runtime-session-map.json"
+
 // PiGatewayRuntime bridges the Go server to the local Pi sidecar.
 type PiGatewayRuntime struct {
 	baseURL string
@@ -41,6 +43,7 @@ type PiGatewayRuntime struct {
 	sessions                   *claude.SessionStore
 	mu                         sync.Mutex
 	runtimeSessionByAppSession map[string]string
+	sessionMapLoaded           bool
 }
 
 // NewPiGatewayRuntime creates a Pi gateway runtime.
@@ -59,6 +62,7 @@ func NewPiGatewayRuntime(baseURL string) *PiGatewayRuntime {
 // WithDependencies injects vault dependencies for prompt/historical context.
 func (r *PiGatewayRuntime) WithDependencies(store *vault.Store, _ *linkedin.Service) *PiGatewayRuntime {
 	r.store = store
+	r.ensureSessionMapLoaded()
 	return r
 }
 
@@ -250,14 +254,24 @@ func (r *PiGatewayRuntime) ClearSession(sessionID string) error {
 			Reason: "Gateway URL not configured",
 		}
 	}
+	r.ensureSessionMapLoaded()
 	r.sessions.Clear(sessionID)
+	changed := false
+	var snapshot map[string]string
 	r.mu.Lock()
 	for key := range r.runtimeSessionByAppSession {
 		if strings.HasSuffix(key, "::"+sessionID) {
 			delete(r.runtimeSessionByAppSession, key)
+			changed = true
 		}
 	}
+	if changed {
+		snapshot = cloneSessionMap(r.runtimeSessionByAppSession)
+	}
 	r.mu.Unlock()
+	if changed {
+		r.persistSessionMap(snapshot)
+	}
 	return nil
 }
 
@@ -277,6 +291,7 @@ func (r *PiGatewayRuntime) GetHistory(sessionID string) ([]claude.ChatMessage, e
 }
 
 func (r *PiGatewayRuntime) getRuntimeSessionID(person, appSessionID string) string {
+	r.ensureSessionMapLoaded()
 	key := sessionRunKey(person, appSessionID)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -284,10 +299,77 @@ func (r *PiGatewayRuntime) getRuntimeSessionID(person, appSessionID string) stri
 }
 
 func (r *PiGatewayRuntime) setRuntimeSessionID(person, appSessionID, runtimeSessionID string) {
+	r.ensureSessionMapLoaded()
 	key := sessionRunKey(person, appSessionID)
+	var snapshot map[string]string
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	if existing := r.runtimeSessionByAppSession[key]; existing == runtimeSessionID {
+		r.mu.Unlock()
+		return
+	}
 	r.runtimeSessionByAppSession[key] = runtimeSessionID
+	snapshot = cloneSessionMap(r.runtimeSessionByAppSession)
+	r.mu.Unlock()
+	r.persistSessionMap(snapshot)
+}
+
+func (r *PiGatewayRuntime) ensureSessionMapLoaded() {
+	r.mu.Lock()
+	if r.sessionMapLoaded || r.store == nil {
+		r.mu.Unlock()
+		return
+	}
+	r.sessionMapLoaded = true
+	store := r.store
+	r.mu.Unlock()
+
+	raw, err := store.ReadRootFile(piRuntimeSessionMapPath)
+	if err != nil {
+		return
+	}
+
+	var payload struct {
+		Mappings map[string]string `json:"mappings"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return
+	}
+
+	r.mu.Lock()
+	for key, value := range payload.Mappings {
+		k := strings.TrimSpace(key)
+		v := strings.TrimSpace(value)
+		if k == "" || v == "" {
+			continue
+		}
+		if _, exists := r.runtimeSessionByAppSession[k]; !exists {
+			r.runtimeSessionByAppSession[k] = v
+		}
+	}
+	r.mu.Unlock()
+}
+
+func (r *PiGatewayRuntime) persistSessionMap(snapshot map[string]string) {
+	if r.store == nil {
+		return
+	}
+	body, err := json.Marshal(struct {
+		Mappings map[string]string `json:"mappings"`
+	}{
+		Mappings: snapshot,
+	})
+	if err != nil {
+		return
+	}
+	_ = r.store.WriteRootFile(piRuntimeSessionMapPath, string(body))
+}
+
+func cloneSessionMap(input map[string]string) map[string]string {
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }
 
 func mapPiTransportError(err error) error {

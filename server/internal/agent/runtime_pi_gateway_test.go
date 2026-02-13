@@ -2,11 +2,13 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"notes-editor/internal/vault"
@@ -126,5 +128,86 @@ func TestPiGatewayRuntimeTrimsLeadingBlankLinesInTextStream(t *testing.T) {
 
 	if len(deltas) != 1 || deltas[0] != "Hello" {
 		t.Fatalf("unexpected deltas: %#v", deltas)
+	}
+}
+
+func TestPiGatewayRuntimePersistsSessionMappingAcrossRestart(t *testing.T) {
+	type chatPayload struct {
+		Person    string `json:"person"`
+		SessionID string `json:"session_id"`
+		Message   string `json:"message"`
+	}
+
+	var (
+		mu              sync.Mutex
+		receivedSession []string
+	)
+
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/chat-stream" {
+			http.NotFound(w, r)
+			return
+		}
+
+		var payload chatPayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		mu.Lock()
+		receivedSession = append(receivedSession, payload.SessionID)
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		startSessionID := payload.SessionID
+		if strings.TrimSpace(startSessionID) == "" {
+			startSessionID = "runtime-session-1"
+		}
+		_, _ = w.Write([]byte(`{"type":"start","session_id":"` + startSessionID + `"}` + "\n"))
+		_, _ = w.Write([]byte(`{"type":"text","delta":"ok"}` + "\n"))
+		_, _ = w.Write([]byte(`{"type":"done"}` + "\n"))
+	}))
+	defer gateway.Close()
+
+	root := t.TempDir()
+	person := "petra"
+	if err := os.MkdirAll(filepath.Join(root, person), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	store := vault.NewStore(root)
+
+	const appSessionID = "app-session-1"
+
+	runtime1 := NewPiGatewayRuntime(gateway.URL).WithDependencies(store, nil)
+	stream1, err := runtime1.ChatStream(context.Background(), person, RuntimeChatRequest{
+		SessionID: appSessionID,
+		Message:   "hello",
+	})
+	if err != nil {
+		t.Fatalf("chat stream 1 failed: %v", err)
+	}
+	for range stream1.Events {
+	}
+
+	runtime2 := NewPiGatewayRuntime(gateway.URL).WithDependencies(store, nil)
+	stream2, err := runtime2.ChatStream(context.Background(), person, RuntimeChatRequest{
+		SessionID: appSessionID,
+		Message:   "resume",
+	})
+	if err != nil {
+		t.Fatalf("chat stream 2 failed: %v", err)
+	}
+	for range stream2.Events {
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(receivedSession) != 2 {
+		t.Fatalf("expected 2 requests to gateway, got %d", len(receivedSession))
+	}
+	if receivedSession[0] != "" {
+		t.Fatalf("expected first request to omit runtime session id, got %q", receivedSession[0])
+	}
+	if receivedSession[1] != "runtime-session-1" {
+		t.Fatalf("expected second request to reuse persisted runtime session id, got %q", receivedSession[1])
 	}
 }

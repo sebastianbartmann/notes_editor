@@ -28,3 +28,4 @@
 - Added person-scoped backup export endpoint `GET /api/settings/vault-backup` that streams selected person's vault as ZIP attachment.
 - Backup ZIP writer skips symlinks while walking the person root to avoid following links outside the vault subtree.
 - Added backup actions in both Settings UIs (web + Android); Android uses `CreateDocument("application/zip")` and streams response to selected SAF URI.
+- Session recovery nuance in `runtime_mode=gateway_subscription`: Pi runtime sessions persist on disk (`~/.pi/notes-editor-sessions/<person>--<runtime_session_id>.jsonl`) and can be resumed directly via sidecar `POST /v1/chat-stream` with that `session_id`, even after server restart. However, Go agent app sessions are in-memory and app->runtime mapping is lost on restart; `/api/agent/chat-stream` cannot rebind to old runtime sessions without additional mapping persistence or fallback logic.

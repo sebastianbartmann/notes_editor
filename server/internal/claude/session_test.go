@@ -74,6 +74,13 @@ func TestSessionStore_GetOrCreate(t *testing.T) {
 	if session3.ID == session1.ID {
 		t.Error("should create new session for different person")
 	}
+
+	// Unknown provided ID should be preserved for the same person.
+	const explicitID = "session-explicit-123"
+	session4 := store.GetOrCreate(explicitID, "sebastian")
+	if session4.ID != explicitID {
+		t.Fatalf("expected explicit session id %q, got %q", explicitID, session4.ID)
+	}
 }
 
 func TestSessionStore_Clear(t *testing.T) {

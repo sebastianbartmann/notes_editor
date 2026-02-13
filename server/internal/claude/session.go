@@ -62,11 +62,15 @@ func (ss *SessionStore) GetOrCreate(sessionID, person string) *Session {
 				return session
 			}
 			// Different person - create new session
+			sessionID = ""
 		}
 	}
 
 	// Create new session
-	newID := uuid.New().String()
+	newID := sessionID
+	if newID == "" {
+		newID = uuid.New().String()
+	}
 	session := &Session{
 		ID:       newID,
 		Person:   person,
