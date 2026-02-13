@@ -15,6 +15,7 @@ const (
 	defaultSessionNamePrefix = "Session"
 	maxSessionNameLen        = 72
 	maxSessionPreviewLen     = 140
+	maxRecoveredSessions     = 30
 )
 
 type sessionRecord struct {
@@ -131,7 +132,17 @@ func (s *Service) ListSessions(person string) ([]SessionSummary, error) {
 
 		runtime := s.runtimes[rec.RuntimeMode]
 		if runtime != nil && runtime.Available() {
-			history, err := runtime.GetHistory(rec.SessionID)
+			var history []claude.ChatMessage
+			var err error
+			if rec.RuntimeMode == RuntimeModeGatewaySubscription {
+				if piRuntime, ok := runtime.(*PiGatewayRuntime); ok {
+					history, err = piRuntime.GetHistoryForPerson(person, rec.SessionID)
+				} else {
+					history, err = runtime.GetHistory(rec.SessionID)
+				}
+			} else {
+				history, err = runtime.GetHistory(rec.SessionID)
+			}
 			if err == nil {
 				summary.MessageCount = len(history)
 				summary.LastPreview = historyPreview(history)
@@ -164,6 +175,10 @@ func (s *Service) hydrateGatewayRecoveredSessions(person string) {
 	}
 
 	for _, rec := range recovered {
+		history, err := readGatewaySessionHistory(person, rec.SessionID)
+		if err != nil || len(history) == 0 {
+			continue
+		}
 		if _, exists := personSessions[rec.SessionID]; exists {
 			continue
 		}
@@ -191,13 +206,9 @@ func listGatewayRuntimeSessionFiles(person string) []recoveredRuntimeSession {
 		return nil
 	}
 
-	sessionDir := strings.TrimSpace(os.Getenv("PI_GATEWAY_PI_SESSION_DIR"))
+	sessionDir := gatewaySessionDir()
 	if sessionDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil
-		}
-		sessionDir = filepath.Join(home, ".pi", "notes-editor-sessions")
+		return nil
 	}
 
 	pattern := filepath.Join(sessionDir, person+"--*.jsonl")
@@ -226,6 +237,12 @@ func listGatewayRuntimeSessionFiles(person string) []recoveredRuntimeSession {
 			SessionID: sessionID,
 			Timestamp: ts,
 		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Timestamp.After(out[j].Timestamp)
+	})
+	if len(out) > maxRecoveredSessions {
+		out = out[:maxRecoveredSessions]
 	}
 	return out
 }

@@ -395,7 +395,12 @@ func (s *Service) GetHistory(person, sessionID string) ([]claude.ChatMessage, er
 	if err != nil {
 		return nil, err
 	}
-	history, err := runtime.GetHistory(sessionID)
+	var history []claude.ChatMessage
+	if piRuntime, ok := runtime.(*PiGatewayRuntime); ok {
+		history, err = piRuntime.GetHistoryForPerson(person, sessionID)
+	} else {
+		history, err = runtime.GetHistory(sessionID)
+	}
 	if err != nil {
 		return nil, err
 	}

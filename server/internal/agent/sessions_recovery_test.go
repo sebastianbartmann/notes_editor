@@ -17,10 +17,11 @@ func TestListGatewayRuntimeSessionFiles(t *testing.T) {
 	newer := filepath.Join(dir, "petra--new-session.jsonl")
 	other := filepath.Join(dir, "sebastian--ignore.jsonl")
 
-	if err := os.WriteFile(older, []byte("{}\n"), 0644); err != nil {
+	sessionBody := "{\"type\":\"message\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}\n"
+	if err := os.WriteFile(older, []byte(sessionBody), 0644); err != nil {
 		t.Fatalf("write older: %v", err)
 	}
-	if err := os.WriteFile(newer, []byte("{}\n"), 0644); err != nil {
+	if err := os.WriteFile(newer, []byte(sessionBody), 0644); err != nil {
 		t.Fatalf("write newer: %v", err)
 	}
 	if err := os.WriteFile(other, []byte("{}\n"), 0644); err != nil {
@@ -51,7 +52,8 @@ func TestListGatewayRuntimeSessionFiles(t *testing.T) {
 func TestListSessionsHydratesGatewayRecoveredSessions(t *testing.T) {
 	t.Setenv("PI_GATEWAY_PI_SESSION_DIR", t.TempDir())
 	dir := os.Getenv("PI_GATEWAY_PI_SESSION_DIR")
-	if err := os.WriteFile(filepath.Join(dir, "petra--recover-me.jsonl"), []byte("{}\n"), 0644); err != nil {
+	body := "{\"type\":\"message\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}\n"
+	if err := os.WriteFile(filepath.Join(dir, "petra--recover-me.jsonl"), []byte(body), 0644); err != nil {
 		t.Fatalf("write session file: %v", err)
 	}
 

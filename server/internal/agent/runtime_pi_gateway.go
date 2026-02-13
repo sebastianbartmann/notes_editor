@@ -295,6 +295,39 @@ func (r *PiGatewayRuntime) GetHistory(sessionID string) ([]claude.ChatMessage, e
 	return history, nil
 }
 
+// GetHistoryForPerson returns history for a session in gateway mode by reading the
+// persisted Pi session file, with in-memory fallback for compatibility.
+func (r *PiGatewayRuntime) GetHistoryForPerson(person, sessionID string) ([]claude.ChatMessage, error) {
+	if !r.Available() {
+		return nil, &RuntimeUnavailableError{
+			Mode:   RuntimeModeGatewaySubscription,
+			Reason: "Gateway URL not configured",
+		}
+	}
+
+	appSessionID := strings.TrimSpace(sessionID)
+	if appSessionID == "" {
+		return []claude.ChatMessage{}, nil
+	}
+
+	runtimeSessionID := r.getRuntimeSessionID(person, appSessionID)
+	if runtimeSessionID == "" {
+		runtimeSessionID = appSessionID
+	}
+
+	history, err := readGatewaySessionHistory(person, runtimeSessionID)
+	if err == nil && len(history) > 0 {
+		return history, nil
+	}
+	// Backwards-compatible fallback: return in-memory history when file parsing
+	// yields no messages or file is unavailable.
+	mem := r.sessions.GetHistory(appSessionID)
+	if mem == nil {
+		return []claude.ChatMessage{}, nil
+	}
+	return mem, nil
+}
+
 func (r *PiGatewayRuntime) getRuntimeSessionID(person, appSessionID string) string {
 	r.ensureSessionMapLoaded()
 	key := sessionRunKey(person, appSessionID)
