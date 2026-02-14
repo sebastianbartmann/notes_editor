@@ -95,17 +95,7 @@ private fun SyncBadge() {
     val recentError = status?.lastError != null && lastErrAge <= 10 * 60_000
 
     val isSynced = status != null && !pending && !stale && !recentError
-    val reason = when {
-        status == null -> "no status"
-        pending -> "syncing"
-        recentError -> "recent error"
-        lastPullAt == null -> "never pulled"
-        stale -> "stale"
-        else -> "unknown"
-    }
-
-    val text = if (isSynced) "Synced" else "Not synced"
-    val hint = if (isSynced) null else reason
+    val text = "Sync"
 
     val color = when {
         isSynced -> Color(0xFF2ECC71)
@@ -129,13 +119,6 @@ private fun SyncBadge() {
             style = AppTheme.typography.label,
             color = AppTheme.colors.muted
         )
-        if (hint != null) {
-            AppText(
-                text = "($hint)",
-                style = AppTheme.typography.label,
-                color = AppTheme.colors.muted
-            )
-        }
     }
 }
 
@@ -143,34 +126,23 @@ private fun SyncBadge() {
 private fun IndexBadge() {
     val status = AppSync.indexStatus
 
-    val text: String
-    val hint: String?
+    val text = "Index"
     val color: Color
 
     when {
         status == null -> {
-            text = "Index"
-            hint = "no status"
             color = Color(0xFF95A5A6)
         }
         status.inProgress || status.pending -> {
-            text = "Indexing"
-            hint = status.lastReason ?: "working"
             color = Color(0xFFF1C40F)
         }
         !status.lastError.isNullOrBlank() -> {
-            text = "Index err"
-            hint = null
             color = Color(0xFFE74C3C)
         }
         !status.lastSuccessAt.isNullOrBlank() -> {
-            text = "Indexed"
-            hint = null
             color = Color(0xFF2ECC71)
         }
         else -> {
-            text = "Index idle"
-            hint = null
             color = Color(0xFF95A5A6)
         }
     }
@@ -192,13 +164,6 @@ private fun IndexBadge() {
             style = AppTheme.typography.label,
             color = AppTheme.colors.muted
         )
-        if (hint != null) {
-            AppText(
-                text = "($hint)",
-                style = AppTheme.typography.label,
-                color = AppTheme.colors.muted
-            )
-        }
     }
 }
 

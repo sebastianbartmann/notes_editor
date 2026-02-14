@@ -29,3 +29,10 @@
 - Backup ZIP writer skips symlinks while walking the person root to avoid following links outside the vault subtree.
 - Added backup actions in both Settings UIs (web + Android); Android uses `CreateDocument("application/zip")` and streams response to selected SAF URI.
 - Session recovery nuance in `runtime_mode=gateway_subscription`: Pi runtime sessions persist on disk (`~/.pi/notes-editor-sessions/<person>--<runtime_session_id>.jsonl`) and can be resumed directly via sidecar `POST /v1/chat-stream` with that `session_id`, even after server restart. However, Go agent app sessions are in-memory and app->runtime mapping is lost on restart; `/api/agent/chat-stream` cannot rebind to old runtime sessions without additional mapping persistence or fallback logic.
+
+## 2026-02-14
+
+- Android `EnvResponse` should keep `success` optional/defaulted (`true`) because `GET /api/settings/env` server payload is `{ "content": "..." }` without a `success` field; strict required Boolean causes settings load failure in Kotlin serialization.
+- Header space on smaller Android screens is tight in Agent view; compact sync/index badges to dot + short label (`Sync`, `Index`) and show detailed sync/index reason text inside `SyncScreen` instead.
+- Added Android device-level global `textScale` setting (`UserSettings`) and applied it centrally in `Theme.kt` typography construction so one setting scales Daily/Files/Agent/chat/read/edit text consistently, including note heading hierarchy.
+- Replaced Android text-size presets with granular global controls (`A-` / `A+` stepping by 5%, reset) backed by `nextTextScale` math in `UserSettings`; covered by unit tests and verified via Maestro settings flow screenshots.

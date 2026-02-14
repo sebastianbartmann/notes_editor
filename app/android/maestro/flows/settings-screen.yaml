@@ -12,6 +12,7 @@ appId: com.bartmann.noteseditor
 # Verify settings elements
 - assertVisible: "Person"
 - assertVisible: "Theme"
+- assertVisible: "Text size"
 - takeScreenshot: "settings-02-elements"
 
 # Test theme toggle
@@ -29,8 +30,19 @@ appId: com.bartmann.noteseditor
 - waitForAnimationToEnd
 - takeScreenshot: "settings-05-person-selected"
 
+# Test granular text size controls
+- scroll
+- assertVisible: "A+"
+- takeScreenshot: "settings-06-text-size-initial"
+- tapOn: "A+"
+- waitForAnimationToEnd
+- takeScreenshot: "settings-07-text-size-up"
+- tapOn: "A-"
+- waitForAnimationToEnd
+- takeScreenshot: "settings-08-text-size-down"
+
 # Verify backup section (may require scroll on small emulator viewport)
 - scroll
 - scroll
 - assertVisible: "Download backup (.zip)"
-- takeScreenshot: "settings-06-backup-visible"
+- takeScreenshot: "settings-09-backup-visible"

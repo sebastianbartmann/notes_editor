@@ -5,12 +5,14 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlin.math.round
 
 object UserSettings {
     private const val PREFS_NAME = "notes_settings"
     private const val KEY_PERSON = "person_root"
     private const val KEY_THEME = "theme"
     private const val KEY_BOTTOM_NAV = "bottom_nav"
+    private const val KEY_TEXT_SCALE = "text_scale"
     private lateinit var prefs: SharedPreferences
 
     var person by mutableStateOf<String?>(null)
@@ -18,6 +20,8 @@ object UserSettings {
     var theme by mutableStateOf("dark")
         private set
     var bottomNavIds by mutableStateOf(defaultBottomNavIds)
+        private set
+    var textScale by mutableStateOf(DEFAULT_TEXT_SCALE)
         private set
 
     fun init(context: Context) {
@@ -28,6 +32,7 @@ object UserSettings {
         bottomNavIds = sanitizeStoredBottomNavIds(
             storedBottomNav.split(",").map { it.trim() }.filter { it.isNotBlank() }
         )
+        textScale = sanitizeTextScale(prefs.getFloat(KEY_TEXT_SCALE, DEFAULT_TEXT_SCALE))
     }
 
     fun updatePerson(value: String) {
@@ -45,4 +50,38 @@ object UserSettings {
         bottomNavIds = normalized
         prefs.edit().putString(KEY_BOTTOM_NAV, normalized.joinToString(",")).apply()
     }
+
+    fun updateTextScale(value: Float) {
+        val normalized = sanitizeTextScale(value)
+        textScale = normalized
+        prefs.edit().putFloat(KEY_TEXT_SCALE, normalized).apply()
+    }
+
+    fun stepTextScale(stepDelta: Int) {
+        if (stepDelta == 0) return
+        updateTextScale(nextTextScale(textScale, stepDelta))
+    }
+
+    fun resetTextScale() {
+        updateTextScale(DEFAULT_TEXT_SCALE)
+    }
+}
+
+const val DEFAULT_TEXT_SCALE = 1.0f
+const val MIN_TEXT_SCALE = 0.85f
+const val MAX_TEXT_SCALE = 1.4f
+const val TEXT_SCALE_STEP = 0.05f
+
+fun sanitizeTextScale(value: Float): Float {
+    if (!value.isFinite()) {
+        return DEFAULT_TEXT_SCALE
+    }
+    return value.coerceIn(MIN_TEXT_SCALE, MAX_TEXT_SCALE)
+}
+
+fun nextTextScale(current: Float, stepDelta: Int): Float {
+    val base = sanitizeTextScale(current)
+    val stepped = base + (stepDelta * TEXT_SCALE_STEP)
+    val snapped = round(stepped / TEXT_SCALE_STEP) * TEXT_SCALE_STEP
+    return sanitizeTextScale(snapped)
 }

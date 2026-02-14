@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -26,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
@@ -147,6 +149,52 @@ fun SettingsScreen(modifier: Modifier) {
                 ThemeButton(label = "Dark", value = "dark")
                 ThemeButton(label = "Light", value = "light")
             }
+            CompactDivider()
+            SectionTitle(text = "Text size")
+            AppText(
+                text = "Global reading/editing size for notes, files, and agent chat.",
+                style = AppTheme.typography.bodySmall,
+                color = AppTheme.colors.muted
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CompactButton(
+                    text = "A-",
+                    modifier = Modifier
+                        .width(64.dp)
+                        .testTag("text-scale-down"),
+                    onClick = {
+                        if (UserSettings.textScale > MIN_TEXT_SCALE) {
+                            UserSettings.stepTextScale(-1)
+                        }
+                    }
+                )
+                CompactButton(
+                    text = "Reset",
+                    modifier = Modifier.weight(1f),
+                    onClick = { UserSettings.resetTextScale() }
+                )
+                CompactButton(
+                    text = "A+",
+                    modifier = Modifier
+                        .width(64.dp)
+                        .testTag("text-scale-up"),
+                    onClick = {
+                        if (UserSettings.textScale < MAX_TEXT_SCALE) {
+                            UserSettings.stepTextScale(1)
+                        }
+                    }
+                )
+            }
+            AppText(
+                text = "Current: ${textScaleLabel(UserSettings.textScale)} (${textScaleStepLabel()})",
+                style = AppTheme.typography.label,
+                color = AppTheme.colors.muted,
+                modifier = Modifier.testTag("text-scale-current")
+            )
             CompactDivider()
             SectionTitle(text = "Agent")
             AppText(
@@ -372,6 +420,16 @@ private fun RowScope.ThemeButton(label: String, value: String) {
         textColor = AppTheme.colors.text,
         onClick = { UserSettings.updateTheme(value) }
     )
+}
+
+private fun textScaleLabel(scale: Float): String {
+    val pct = (scale * 100f).toInt()
+    return "$pct%"
+}
+
+private fun textScaleStepLabel(): String {
+    val stepPct = (TEXT_SCALE_STEP * 100f).toInt()
+    return "step ${stepPct}%"
 }
 
 @Composable

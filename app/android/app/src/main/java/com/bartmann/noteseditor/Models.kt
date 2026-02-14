@@ -100,7 +100,7 @@ data class GitActionResponse(
 
 @Serializable
 data class EnvResponse(
-    val success: Boolean,
+    val success: Boolean = true,
     val content: String = "",
     val message: String = ""
 )

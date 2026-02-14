@@ -9,6 +9,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -64,20 +65,48 @@ private val LocalAppColors = staticCompositionLocalOf {
 
 private val LocalAppSpacing = staticCompositionLocalOf { AppSpacing() }
 
-private val LocalAppTypography = staticCompositionLocalOf {
-    val appFont = FontFamily(
-        Font(R.font.jetbrains_mono_nerd_regular, weight = FontWeight.Normal),
-        Font(R.font.jetbrains_mono_nerd_medium, weight = FontWeight.Medium),
-        Font(R.font.jetbrains_mono_nerd_bold, weight = FontWeight.Bold),
-    )
-    AppTypography(
-        body = TextStyle(fontSize = 12.sp, lineHeight = 17.sp, fontFamily = appFont),
-        bodySmall = TextStyle(fontSize = 11.sp, lineHeight = 15.sp, fontFamily = appFont),
-        title = TextStyle(fontSize = 16.sp, lineHeight = 20.sp, fontFamily = appFont, fontWeight = FontWeight.Medium),
-        section = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontFamily = appFont, letterSpacing = 0.4.sp),
-        label = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontFamily = appFont),
+private val appFont = FontFamily(
+    Font(R.font.jetbrains_mono_nerd_regular, weight = FontWeight.Normal),
+    Font(R.font.jetbrains_mono_nerd_medium, weight = FontWeight.Medium),
+    Font(R.font.jetbrains_mono_nerd_bold, weight = FontWeight.Bold),
+)
+
+private fun scaled(unit: TextUnit, scale: Float): TextUnit = unit * scale
+
+private fun buildTypography(scale: Float): AppTypography {
+    val textScale = sanitizeTextScale(scale)
+    return AppTypography(
+        body = TextStyle(
+            fontSize = scaled(12.sp, textScale),
+            lineHeight = scaled(17.sp, textScale),
+            fontFamily = appFont
+        ),
+        bodySmall = TextStyle(
+            fontSize = scaled(11.sp, textScale),
+            lineHeight = scaled(15.sp, textScale),
+            fontFamily = appFont
+        ),
+        title = TextStyle(
+            fontSize = scaled(16.sp, textScale),
+            lineHeight = scaled(20.sp, textScale),
+            fontFamily = appFont,
+            fontWeight = FontWeight.Medium
+        ),
+        section = TextStyle(
+            fontSize = scaled(12.sp, textScale),
+            lineHeight = scaled(16.sp, textScale),
+            fontFamily = appFont,
+            letterSpacing = scaled(0.4.sp, textScale)
+        ),
+        label = TextStyle(
+            fontSize = scaled(11.sp, textScale),
+            lineHeight = scaled(14.sp, textScale),
+            fontFamily = appFont
+        ),
     )
 }
+
+private val LocalAppTypography = staticCompositionLocalOf { buildTypography(DEFAULT_TEXT_SCALE) }
 
 object AppTheme {
     val colors: AppColors
@@ -124,7 +153,7 @@ fun NotesEditorTheme(content: @Composable () -> Unit) {
         )
     }
     val spacing = AppSpacing()
-    val typography = LocalAppTypography.current
+    val typography = buildTypography(UserSettings.textScale)
     CompositionLocalProvider(
         LocalAppColors provides colors,
         LocalAppSpacing provides spacing,
