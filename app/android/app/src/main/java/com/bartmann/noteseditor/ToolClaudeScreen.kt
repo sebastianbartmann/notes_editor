@@ -417,6 +417,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         showSessionsDialog = false
                     }
                 },
+                containerColor = AppTheme.colors.panel,
+                iconContentColor = AppTheme.colors.text,
+                titleContentColor = AppTheme.colors.text,
+                textContentColor = AppTheme.colors.text,
                 title = {
                     AppText("Sessions", AppTheme.typography.title, AppTheme.colors.text)
                 },

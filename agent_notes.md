@@ -36,3 +36,5 @@
 - Header space on smaller Android screens is tight in Agent view; compact sync/index badges to dot + short label (`Sync`, `Index`) and show detailed sync/index reason text inside `SyncScreen` instead.
 - Added Android device-level global `textScale` setting (`UserSettings`) and applied it centrally in `Theme.kt` typography construction so one setting scales Daily/Files/Agent/chat/read/edit text consistently, including note heading hierarchy.
 - Replaced Android text-size presets with granular global controls (`A-` / `A+` stepping by 5%, reset) backed by `nextTextScale` math in `UserSettings`; covered by unit tests and verified via Maestro settings flow screenshots.
+- Agent sessions modal uses Material `AlertDialog`; to avoid white/black fallback mismatch across app themes, set `containerColor`, `titleContentColor`, `textContentColor` explicitly from `AppTheme.colors`.
+- Updated Maestro `claude-screen.yaml` to current navigation labels (`More` -> `Agent`) and added sessions-modal screenshot coverage.

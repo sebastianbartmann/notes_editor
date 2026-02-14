@@ -1,22 +1,27 @@
 appId: com.bartmann.noteseditor
 ---
 - launchApp
-- tapOn: "Tools"
+- tapOn: "More"
 - waitForAnimationToEnd
 
-# Navigate to Claude
-- tapOn: "Claude"
+# Navigate to Agent
+- tapOn: "Agent"
 - waitForAnimationToEnd
 - takeScreenshot: "claude-01-initial"
 
 # Verify chat interface elements
-- assertVisible: "Clear"
+- assertVisible: "Sessions"
 - takeScreenshot: "claude-02-chat-interface"
 
-# Input a message (but don't send to avoid API calls)
-- tapOn: "Message"
-- inputText: "Hello Claude"
-- takeScreenshot: "claude-03-message-typed"
+# Open sessions modal and verify it renders
+- tapOn: "Sessions"
+- waitForAnimationToEnd
+- assertVisible: "Sessions"
+- takeScreenshot: "claude-03-sessions-modal"
+- tapOn: "Close"
+- waitForAnimationToEnd
 
-# Keep input state visible for compatibility with older Maestro versions
-- takeScreenshot: "claude-04-message-still-typed"
+# Input a message (but don't send to avoid API calls)
+- tapOn: "Ask Agent..."
+- inputText: "Hello Agent"
+- takeScreenshot: "claude-04-message-typed"
