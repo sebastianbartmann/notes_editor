@@ -8,10 +8,10 @@ import androidx.compose.runtime.setValue
 
 object ClaudeSessionStore {
     var sessionId by mutableStateOf<String?>(null)
-    val messages = mutableStateListOf<ChatMessage>()
+    val messages = mutableStateListOf<AgentConversationItem>()
     private val draftInputsByPerson = mutableStateMapOf<String, String>()
 
-    fun loadSession(newSessionId: String?, history: List<ChatMessage>) {
+    fun loadSession(newSessionId: String?, history: List<AgentConversationItem>) {
         sessionId = newSessionId
         messages.clear()
         messages.addAll(history)

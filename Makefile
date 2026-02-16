@@ -1,4 +1,4 @@
-.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd install-pi-gateway-systemd status-pi-gateway-systemd install-qmd-systemd status-qmd-systemd restart-services setup-android-build-toolchain build-android install-android deploy-android debug-android build build-server build-web lint clean build-pi-gateway run-pi-gateway android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-settings android-test-nav
+.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd install-pi-gateway-systemd status-pi-gateway-systemd install-qmd-systemd status-qmd-systemd restart-services setup-android-build-toolchain build-android install-android deploy-android debug-android build build-server build-web lint clean build-pi-gateway run-pi-gateway android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-claude-toolcall android-test-settings android-test-nav android-install-debug
 
 ANDROID_GRADLE_VERSION := 8.7
 ANDROID_GRADLE_DIR := $(PWD)/app/gradle-$(ANDROID_GRADLE_VERSION)
@@ -59,6 +59,7 @@ help:
 	@echo "  Android:"
 	@echo "    setup-android-build-toolchain Install repo-local Android CLI build prerequisites"
 	@echo "    build-android   Build the Android debug APK"
+	@echo "    android-install-debug Build + install the debug APK on connected device/emulator"
 	@echo "    install-android Install the debug APK via adb (USB)"
 	@echo "    deploy-android  Build and install the debug APK"
 	@echo "    debug-android   Print adb error log output"
@@ -74,6 +75,7 @@ help:
 	@echo "    android-test-files     Run files screen tests only"
 	@echo "    android-test-sleep     Run sleep screen tests only"
 	@echo "    android-test-claude    Run claude screen tests only"
+	@echo "    android-test-claude-toolcall Run claude tool-call integration flow"
 	@echo "    android-test-settings  Run settings screen tests only"
 	@echo "    android-test-nav       Run navigation tests only"
 
@@ -182,22 +184,27 @@ setup-android-build-toolchain:
 
 build-android:
 	GRADLE_USER_HOME="$(PWD)/.gradle" \
-	$(PWD)/app/gradle-8.7/bin/gradle --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
+	$(ANDROID_GRADLE) --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
 
 install-android:
-	ADB_SERVER_SOCKET=tcp:localhost:5038 \
-	$(PWD)/app/android_sdk/platform-tools/adb install -r \
+	$(ANDROID_ADB) wait-for-device
+	$(ANDROID_ADB) install -r \
 	$(PWD)/app/android/app/build/outputs/apk/debug/app-debug.apk
 
 deploy-android: build-android install-android
 
+android-install-debug: build-android install-android
+
 debug-android:
-	ADB_SERVER_SOCKET=tcp:localhost:5038 \
-	$(PWD)/app/android_sdk/platform-tools/adb logcat -d *:E
+	$(ANDROID_ADB) wait-for-device
+	$(ANDROID_ADB) logcat -d *:E
 
 # Android Testing with Maestro
 # Uses ANDROID_HOME if set, otherwise defaults to $HOME/android-sdk
 ANDROID_HOME ?= $(HOME)/android-sdk
+ANDROID_ADB := $(ANDROID_HOME)/platform-tools/adb
+ANDROID_EMULATOR := $(ANDROID_HOME)/emulator/emulator
+ANDROID_GRADLE := $(PWD)/app/gradle-8.7/bin/gradle
 MAESTRO_FLOWS := $(PWD)/app/android/maestro/flows
 MAESTRO_SCREENSHOTS := $(PWD)/app/android/maestro/screenshots
 MAESTRO_BIN := $(shell command -v maestro 2>/dev/null)
@@ -229,11 +236,11 @@ android-test-setup:
 	@echo "Setup complete! Run 'make android-test' to run tests."
 
 android-emulator-start:
-	@if ! $(ANDROID_HOME)/platform-tools/adb devices | grep -q emulator; then \
+	@if ! $(ANDROID_ADB) devices | grep -q emulator; then \
 		echo "Starting headless emulator..."; \
-		$(ANDROID_HOME)/emulator/emulator -avd notes_editor_test \
+		$(ANDROID_EMULATOR) -avd notes_editor_test \
 			-no-window -no-audio -gpu swiftshader_indirect & \
-		$(ANDROID_HOME)/platform-tools/adb wait-for-device; \
+		$(ANDROID_ADB) wait-for-device; \
 		echo "Waiting for emulator to boot..."; \
 		sleep 30; \
 		echo "Emulator ready."; \
@@ -242,7 +249,7 @@ android-emulator-start:
 	fi
 
 android-emulator-stop:
-	@$(ANDROID_HOME)/platform-tools/adb -s emulator-5554 emu kill 2>/dev/null || echo "No emulator running."
+	@$(ANDROID_ADB) -s emulator-5554 emu kill 2>/dev/null || echo "No emulator running."
 
 android-check-maestro:
 	@if [ ! -x "$(MAESTRO_BIN)" ]; then \
@@ -255,8 +262,9 @@ android-check-maestro:
 android-test: android-emulator-start android-check-maestro
 	@echo "Building and installing debug APK..."
 	@GRADLE_USER_HOME="$(PWD)/.gradle" \
-	$(PWD)/app/gradle-8.7/bin/gradle --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
-	@$(ANDROID_HOME)/platform-tools/adb install -r $(PWD)/app/android/app/build/outputs/apk/debug/app-debug.apk
+	$(ANDROID_GRADLE) --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
+	@$(ANDROID_ADB) wait-for-device
+	@$(ANDROID_ADB) install -r $(PWD)/app/android/app/build/outputs/apk/debug/app-debug.apk
 	@echo "Running Maestro tests..."
 	@mkdir -p $(MAESTRO_SCREENSHOTS)
 	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS) --output $(MAESTRO_SCREENSHOTS)
@@ -288,11 +296,16 @@ android-test-claude: android-emulator-start android-check-maestro
 	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/claude-screen.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
+android-test-claude-toolcall: android-emulator-start android-check-maestro android-install-debug
+	@$(MAESTRO_BIN) test $(PWD)/app/android/maestro/integration/claude-toolcall.yaml --output $(MAESTRO_SCREENSHOTS)
+	@echo "Screenshots saved to: app/android/maestro/screenshots/"
+
 android-test-settings: android-emulator-start android-check-maestro
 	@echo "Building and installing debug APK..."
 	@GRADLE_USER_HOME="$(PWD)/.gradle" \
-	$(PWD)/app/gradle-8.7/bin/gradle --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
-	@$(ANDROID_HOME)/platform-tools/adb install -r $(PWD)/app/android/app/build/outputs/apk/debug/app-debug.apk
+	$(ANDROID_GRADLE) --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
+	@$(ANDROID_ADB) wait-for-device
+	@$(ANDROID_ADB) install -r $(PWD)/app/android/app/build/outputs/apk/debug/app-debug.apk
 	@echo "Running Maestro settings flow..."
 	@$(MAESTRO_BIN) test $(MAESTRO_FLOWS)/settings-screen.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"

@@ -1,0 +1,28 @@
+appId: com.bartmann.noteseditor
+---
+- launchApp
+- tapOn: "More"
+- waitForAnimationToEnd
+
+# Navigate to Agent
+- tapOn: "Agent"
+- waitForAnimationToEnd
+- takeScreenshot: "claude-toolcall-01-initial"
+
+# Start a fresh session so prior context cannot satisfy the request
+- tapOn: "New"
+- waitForAnimationToEnd
+
+# Trigger a deterministic tool-need request
+- tapOn: "Ask Agent..."
+- inputText: "This session is run by Maestro to test tool execution output. Run one simple tool now to trigger tool call output for the test. Keep final text to just a few tokens."
+- tapOn: "Send"
+- hideKeyboard
+- takeScreenshot: "claude-toolcall-02-sent"
+
+# Best-effort wait for inline tool call event
+- extendedWaitUntil:
+    visible: "Tool call: .*"
+    timeout: 35000
+
+- takeScreenshot: "claude-toolcall-03-tool-call-visible"

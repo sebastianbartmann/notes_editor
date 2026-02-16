@@ -177,14 +177,26 @@ func (s *Server) handleAgentSessionHistory(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	history, err := agentSvc.GetHistory(person, sessionID)
+	items, err := agentSvc.GetConversationHistory(person, sessionID)
 	if err != nil {
 		writeBadRequest(w, err.Error())
 		return
 	}
 
+	messages := make([]claude.ChatMessage, 0, len(items))
+	for _, item := range items {
+		if item.Type != agent.ConversationItemMessage {
+			continue
+		}
+		if item.Role != "user" && item.Role != "assistant" {
+			continue
+		}
+		messages = append(messages, claude.ChatMessage{Role: item.Role, Content: item.Content})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"messages": history,
+		"items":    items,
+		"messages": messages,
 	})
 }
 

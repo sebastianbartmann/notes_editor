@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { usePerson } from '../hooks/usePerson'
 import { agentChatStream, clearAgentSession, clearAllAgentSessions, getAgentSessionHistory, listAgentActions, listAgentSessions } from '../api/agent'
 import { useAgentSession } from '../context/AgentSessionContext'
-import type { AgentAction, AgentChatRequest, AgentSessionSummary, AgentStreamEvent, ChatMessage } from '../api/types'
+import type { AgentAction, AgentChatRequest, AgentConversationItem, AgentSessionSummary, AgentStreamEvent } from '../api/types'
 import styles from './ClaudePage.module.css'
 
 export default function ClaudePage() {
@@ -11,7 +11,6 @@ export default function ClaudePage() {
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingText, setStreamingText] = useState('')
-  const [toolStatus, setToolStatus] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [actions, setActions] = useState<AgentAction[]>([])
   const [actionsError, setActionsError] = useState('')
@@ -21,7 +20,7 @@ export default function ClaudePage() {
   const [sessionsError, setSessionsError] = useState('')
   const [sessionsBusy, setSessionsBusy] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const session = person ? getSession(person) : { sessionId: null, messages: [] as ChatMessage[] }
+  const session = person ? getSession(person) : { sessionId: null, messages: [] as AgentConversationItem[] }
   const sessionId = session.sessionId
   const messages = session.messages
 
@@ -42,7 +41,16 @@ export default function ClaudePage() {
     getAgentSessionHistory(sessionId)
       .then((resp) => {
         if (!cancelled) {
-          setMessages(person, resp.messages || [])
+          if (resp.items && resp.items.length > 0) {
+            setMessages(person, resp.items)
+            return
+          }
+          const legacyItems = (resp.messages || []).map((msg) => ({
+            type: 'message' as const,
+            role: msg.role,
+            content: msg.content,
+          }))
+          setMessages(person, legacyItems)
         }
       })
       .catch(() => {
@@ -136,20 +144,15 @@ export default function ClaudePage() {
     if (isStreaming || !person) return
 
     if (userBubble) {
-      appendMessage(person, { role: 'user', content: userBubble })
+      appendMessage(person, { type: 'message', role: 'user', content: userBubble })
     }
     setIsStreaming(true)
     setStreamingText('')
-    setToolStatus(null)
     setError('')
 
     let fullResponse = ''
-    let streamError = ''
     try {
       for await (const event of agentChatStream(request)) {
-        if (event.type === 'error') {
-          streamError = event.message || 'Stream error'
-        }
         handleStreamEvent(event, (text) => {
           fullResponse += text
           setStreamingText(fullResponse)
@@ -157,16 +160,13 @@ export default function ClaudePage() {
       }
 
       if (fullResponse) {
-        appendMessage(person, { role: 'assistant', content: fullResponse })
-      } else if (streamError) {
-        appendMessage(person, { role: 'assistant', content: `Error: ${streamError}` })
+        appendMessage(person, { type: 'message', role: 'assistant', content: fullResponse })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message')
     } finally {
       setIsStreaming(false)
       setStreamingText('')
-      setToolStatus(null)
     }
   }
 
@@ -204,22 +204,53 @@ export default function ClaudePage() {
         }
         break
       case 'tool_call':
-        if (event.tool) {
-          setToolStatus(`Using ${event.tool}...`)
-        }
+        appendMessage(person, {
+          type: 'tool_call',
+          tool: event.tool,
+          args: event.args,
+          run_id: event.run_id,
+          seq: event.seq,
+          ts: event.ts,
+        })
         break
       case 'tool_result':
-        if (event.summary) {
-          setToolStatus(event.summary)
-        } else if (event.tool) {
-          setToolStatus(`Tool ${event.tool} finished`)
-        }
+        appendMessage(person, {
+          type: 'tool_result',
+          tool: event.tool,
+          ok: event.ok,
+          summary: event.summary,
+          run_id: event.run_id,
+          seq: event.seq,
+          ts: event.ts,
+        })
         break
       case 'status':
-        setToolStatus(event.message || null)
+        appendMessage(person, {
+          type: 'status',
+          message: event.message,
+          run_id: event.run_id,
+          seq: event.seq,
+          ts: event.ts,
+        })
         break
       case 'error':
+        appendMessage(person, {
+          type: 'error',
+          message: event.message || 'Stream error',
+          run_id: event.run_id,
+          seq: event.seq,
+          ts: event.ts,
+        })
         setError(event.message || 'Stream error')
+        break
+      case 'usage':
+        appendMessage(person, {
+          type: 'usage',
+          usage: event.usage,
+          run_id: event.run_id,
+          seq: event.seq,
+          ts: event.ts,
+        })
         break
       case 'done':
         if (event.session_id) {
@@ -240,6 +271,94 @@ export default function ClaudePage() {
   const formatSessionMeta = (session: AgentSessionSummary) => {
     const when = new Date(session.last_used_at).toLocaleString()
     return `${session.message_count} msgs • ${when}`
+  }
+
+  const formatUsage = (item: AgentConversationItem) => {
+    const usage = item.usage
+    if (!usage) return 'Usage update'
+    const total = usage.total_tokens ?? 0
+    const left = usage.remaining_tokens
+    const window = usage.context_window
+    if (typeof left === 'number' && typeof window === 'number' && window > 0) {
+      return `Usage: ${total} tokens, ${left} left of ${window}`
+    }
+    return `Usage: ${total} tokens`
+  }
+
+  const formatItemMeta = (item: AgentConversationItem) => {
+    const parts: string[] = []
+    if (item.seq) {
+      parts.push(`#${item.seq}`)
+    }
+    if (item.ts) {
+      const parsed = new Date(item.ts)
+      if (!Number.isNaN(parsed.getTime())) {
+        parts.push(parsed.toLocaleTimeString())
+      }
+    }
+    return parts.join(' • ')
+  }
+
+  const renderInlineItem = (item: AgentConversationItem, key: string) => {
+    if (item.type === 'message') {
+      const isUser = item.role === 'user'
+      return (
+        <div
+          key={key}
+          className={`${styles.bubble} ${isUser ? styles.userBubble : styles.assistantBubble}`}
+        >
+          {item.content}
+        </div>
+      )
+    }
+
+    const meta = formatItemMeta(item)
+    if (item.type === 'tool_call') {
+      return (
+        <div key={key} className={`${styles.eventRow} ${styles.eventToolCall}`}>
+          <div className={styles.eventTitle}>Tool call: {item.tool || 'unknown'}</div>
+          {meta && <div className={styles.eventMeta}>{meta}</div>}
+          {item.args && (
+            <details className={styles.eventArgs}>
+              <summary>Arguments</summary>
+              <pre>{JSON.stringify(item.args, null, 2)}</pre>
+            </details>
+          )}
+        </div>
+      )
+    }
+    if (item.type === 'tool_result') {
+      const status = item.ok === false ? 'failed' : 'finished'
+      return (
+        <div key={key} className={`${styles.eventRow} ${styles.eventToolResult}`}>
+          <div className={styles.eventTitle}>Tool {item.tool || 'unknown'} {status}</div>
+          {item.summary && <div>{item.summary}</div>}
+          {meta && <div className={styles.eventMeta}>{meta}</div>}
+        </div>
+      )
+    }
+    if (item.type === 'status') {
+      return (
+        <div key={key} className={`${styles.eventRow} ${styles.eventStatus}`}>
+          <div className={styles.eventTitle}>{item.message || 'Status update'}</div>
+          {meta && <div className={styles.eventMeta}>{meta}</div>}
+        </div>
+      )
+    }
+    if (item.type === 'usage') {
+      return (
+        <div key={key} className={`${styles.eventRow} ${styles.eventUsage}`}>
+          <div className={styles.eventTitle}>{formatUsage(item)}</div>
+          {meta && <div className={styles.eventMeta}>{meta}</div>}
+        </div>
+      )
+    }
+    return (
+      <div key={key} className={`${styles.eventRow} ${styles.eventError}`}>
+        <div className={styles.eventTitle}>{item.message || 'Error'}</div>
+        {meta && <div className={styles.eventMeta}>{meta}</div>}
+      </div>
+    )
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -288,24 +407,12 @@ export default function ClaudePage() {
 
       <div className={styles.chat}>
         <div className={styles.messages}>
-          {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`${styles.bubble} ${
-                msg.role === 'user' ? styles.userBubble : styles.assistantBubble
-              }`}
-            >
-              {msg.content}
-            </div>
-          ))}
+          {messages.map((item, i) => renderInlineItem(item, `${i}`))}
           {streamingText && (
             <div className={`${styles.bubble} ${styles.assistantBubble}`}>
               {streamingText}
               <span className={styles.cursor}>|</span>
             </div>
-          )}
-          {toolStatus && (
-            <div className={styles.toolStatus}>{toolStatus}</div>
           )}
           {error && <div className={styles.error}>{error}</div>}
           <div ref={messagesEndRef} />

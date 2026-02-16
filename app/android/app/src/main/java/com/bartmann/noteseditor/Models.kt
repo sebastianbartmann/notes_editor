@@ -144,12 +144,52 @@ data class AgentStreamEvent(
     val sessionId: String? = null,
     @SerialName("run_id")
     val runId: String? = null,
+    val seq: Int? = null,
+    val ts: String? = null,
     val delta: String? = null,
     val tool: String? = null,
     val args: JsonElement? = null,
     val ok: Boolean? = null,
     val summary: String? = null,
-    val message: String? = null
+    val message: String? = null,
+    val usage: AgentUsage? = null
+)
+
+@Serializable
+data class AgentUsage(
+    @SerialName("input_tokens")
+    val inputTokens: Int? = null,
+    @SerialName("output_tokens")
+    val outputTokens: Int? = null,
+    @SerialName("cache_read_tokens")
+    val cacheReadTokens: Int? = null,
+    @SerialName("cache_write_tokens")
+    val cacheWriteTokens: Int? = null,
+    @SerialName("total_tokens")
+    val totalTokens: Int? = null,
+    @SerialName("context_window")
+    val contextWindow: Int? = null,
+    @SerialName("remaining_tokens")
+    val remainingTokens: Int? = null
+)
+
+@Serializable
+data class AgentConversationItem(
+    val type: String,
+    val role: String? = null,
+    val content: String? = null,
+    @SerialName("session_id")
+    val sessionId: String? = null,
+    @SerialName("run_id")
+    val runId: String? = null,
+    val seq: Int? = null,
+    val ts: String? = null,
+    val tool: String? = null,
+    val args: JsonElement? = null,
+    val ok: Boolean? = null,
+    val summary: String? = null,
+    val message: String? = null,
+    val usage: AgentUsage? = null
 )
 
 @Serializable
@@ -206,6 +246,7 @@ data class AgentSessionsResponse(
 
 @Serializable
 data class AgentSessionHistoryResponse(
+    val items: List<AgentConversationItem> = emptyList(),
     val messages: List<ChatMessage> = emptyList()
 )
 

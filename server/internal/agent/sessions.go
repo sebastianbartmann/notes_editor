@@ -130,23 +130,40 @@ func (s *Service) ListSessions(person string) ([]SessionSummary, error) {
 			LastUsedAt: rec.LastUsedAt,
 		}
 
-		runtime := s.runtimes[rec.RuntimeMode]
-		if runtime != nil && runtime.Available() {
-			var history []claude.ChatMessage
-			var err error
-			if rec.RuntimeMode == RuntimeModeGatewaySubscription {
-				if piRuntime, ok := runtime.(*PiGatewayRuntime); ok {
-					history, err = piRuntime.GetHistoryForPerson(person, rec.SessionID)
-				} else {
-					history, err = runtime.GetHistory(rec.SessionID)
+		items := s.getStoredConversation(person, rec.SessionID)
+		if len(items) > 0 {
+			msgCount := 0
+			for _, item := range items {
+				if item.Type == ConversationItemMessage {
+					msgCount++
 				}
+			}
+			summary.MessageCount = msgCount
+			summary.LastPreview = historyPreviewItems(items)
+			summaries = append(summaries, summary)
+			continue
+		}
+
+		runtime := s.runtimes[rec.RuntimeMode]
+		if runtime == nil || !runtime.Available() {
+			summaries = append(summaries, summary)
+			continue
+		}
+
+		var history []claude.ChatMessage
+		var err error
+		if rec.RuntimeMode == RuntimeModeGatewaySubscription {
+			if piRuntime, ok := runtime.(*PiGatewayRuntime); ok {
+				history, err = piRuntime.GetHistoryForPerson(person, rec.SessionID)
 			} else {
 				history, err = runtime.GetHistory(rec.SessionID)
 			}
-			if err == nil {
-				summary.MessageCount = len(history)
-				summary.LastPreview = historyPreview(history)
-			}
+		} else {
+			history, err = runtime.GetHistory(rec.SessionID)
+		}
+		if err == nil {
+			summary.MessageCount = len(history)
+			summary.LastPreview = historyPreview(history)
 		}
 
 		summaries = append(summaries, summary)
@@ -255,6 +272,7 @@ func (s *Service) ClearAllSessions(person string) error {
 		records = append(records, *rec)
 	}
 	delete(s.sessionRecordsByPerson, person)
+	delete(s.conversationsByPerson, person)
 	s.mu.Unlock()
 
 	var firstErr error

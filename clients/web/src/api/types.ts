@@ -150,15 +150,44 @@ export interface AgentChatResponse {
 }
 
 export interface AgentStreamEvent {
-  type: 'start' | 'text' | 'tool_call' | 'tool_result' | 'status' | 'error' | 'done'
+  type: 'start' | 'text' | 'tool_call' | 'tool_result' | 'status' | 'error' | 'usage' | 'done'
   session_id?: string
   run_id?: string
+  seq?: number
+  ts?: string
   delta?: string
   tool?: string
   args?: Record<string, unknown>
   ok?: boolean
   summary?: string
   message?: string
+  usage?: AgentUsage
+}
+
+export interface AgentUsage {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_tokens?: number
+  cache_write_tokens?: number
+  total_tokens?: number
+  context_window?: number
+  remaining_tokens?: number
+}
+
+export interface AgentConversationItem {
+  type: 'message' | 'tool_call' | 'tool_result' | 'status' | 'error' | 'usage'
+  role?: 'user' | 'assistant'
+  content?: string
+  session_id?: string
+  run_id?: string
+  seq?: number
+  ts?: string
+  tool?: string
+  args?: Record<string, unknown>
+  ok?: boolean
+  summary?: string
+  message?: string
+  usage?: AgentUsage
 }
 
 export interface AgentConfig {
@@ -200,6 +229,7 @@ export interface AgentGatewayHealth {
 }
 
 export interface AgentHistoryResponse {
+  items?: AgentConversationItem[]
   messages: ChatMessage[]
 }
 

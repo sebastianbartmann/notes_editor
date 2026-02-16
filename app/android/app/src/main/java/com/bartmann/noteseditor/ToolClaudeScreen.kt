@@ -41,9 +41,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -74,12 +71,12 @@ fun ToolClaudeScreen(modifier: Modifier) {
         ClaudeSessionStore.updateDraftInput(person, "")
         isLoading = true
         statusMessage = "Connecting..."
-        messages.add(ChatMessage(role = "user", content = text))
+        messages.add(AgentConversationItem(type = "message", role = "user", content = text))
 
         scope.launch {
             try {
                 val assistantIndex = messages.size
-                messages.add(ChatMessage(role = "assistant", content = ""))
+                messages.add(AgentConversationItem(type = "message", role = "assistant", content = ""))
                 var assistantText = ""
                 ApiClient.agentChatStream(text, ClaudeSessionStore.sessionId).collect { event ->
                     when (event.type) {
@@ -90,26 +87,43 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
                         "text" -> {
                             assistantText += event.delta.orEmpty()
-                            messages[assistantIndex] = ChatMessage(role = "assistant", content = assistantText)
+                            messages[assistantIndex] = AgentConversationItem(type = "message", role = "assistant", content = assistantText)
                         }
                         "tool_call" -> {
-                            val url = event.args
-                                ?.jsonObject
-                                ?.get("url")
-                                ?.jsonPrimitive
-                                ?.contentOrNull
-                            statusMessage = if (url != null) {
-                                "Tool: ${event.tool} $url"
-                            } else {
-                                "Tool: ${event.tool ?: "working"}"
-                            }
+                            messages.add(
+                                AgentConversationItem(
+                                    type = "tool_call",
+                                    runId = event.runId,
+                                    seq = event.seq,
+                                    ts = event.ts,
+                                    tool = event.tool,
+                                    args = event.args
+                                )
+                            )
                         }
                         "tool_result" -> {
-                            statusMessage = event.summary
-                                ?: "Tool ${event.tool ?: "unknown"} finished"
+                            messages.add(
+                                AgentConversationItem(
+                                    type = "tool_result",
+                                    runId = event.runId,
+                                    seq = event.seq,
+                                    ts = event.ts,
+                                    tool = event.tool,
+                                    ok = event.ok,
+                                    summary = event.summary
+                                )
+                            )
                         }
                         "status" -> {
-                            statusMessage = event.message ?: "Working..."
+                            messages.add(
+                                AgentConversationItem(
+                                    type = "status",
+                                    runId = event.runId,
+                                    seq = event.seq,
+                                    ts = event.ts,
+                                    message = event.message
+                                )
+                            )
                         }
                         "done" -> {
                             if (!event.sessionId.isNullOrBlank()) {
@@ -119,13 +133,30 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
                         "error" -> {
                             val errorText = event.message ?: "stream error"
+                            messages.add(
+                                AgentConversationItem(
+                                    type = "error",
+                                    runId = event.runId,
+                                    seq = event.seq,
+                                    ts = event.ts,
+                                    message = errorText
+                                )
+                            )
                             statusMessage = "Error: $errorText"
                             if (assistantText.isBlank()) {
-                                messages[assistantIndex] = ChatMessage(
-                                    role = "assistant",
-                                    content = "Error: $errorText"
-                                )
+                                messages[assistantIndex] = AgentConversationItem(type = "message", role = "assistant", content = "Error: $errorText")
                             }
+                        }
+                        "usage" -> {
+                            messages.add(
+                                AgentConversationItem(
+                                    type = "usage",
+                                    runId = event.runId,
+                                    seq = event.seq,
+                                    ts = event.ts,
+                                    usage = event.usage
+                                )
+                            )
                         }
                     }
                 }
@@ -150,12 +181,12 @@ fun ToolClaudeScreen(modifier: Modifier) {
         pendingConfirmation = null
         isLoading = true
         statusMessage = "Running ${action.label}..."
-        messages.add(ChatMessage(role = "user", content = "Run action: ${action.label}"))
+        messages.add(AgentConversationItem(type = "message", role = "user", content = "Run action: ${action.label}"))
 
         scope.launch {
             try {
                 val assistantIndex = messages.size
-                messages.add(ChatMessage(role = "assistant", content = ""))
+                messages.add(AgentConversationItem(type = "message", role = "assistant", content = ""))
                 var assistantText = ""
                 ApiClient.agentChatStream(
                     message = "",
@@ -171,16 +202,43 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
                         "text" -> {
                             assistantText += event.delta.orEmpty()
-                            messages[assistantIndex] = ChatMessage(role = "assistant", content = assistantText)
+                            messages[assistantIndex] = AgentConversationItem(type = "message", role = "assistant", content = assistantText)
                         }
                         "tool_call" -> {
-                            statusMessage = "Tool: ${event.tool ?: "working"}"
+                            messages.add(
+                                AgentConversationItem(
+                                    type = "tool_call",
+                                    runId = event.runId,
+                                    seq = event.seq,
+                                    ts = event.ts,
+                                    tool = event.tool,
+                                    args = event.args
+                                )
+                            )
                         }
                         "tool_result" -> {
-                            statusMessage = event.summary ?: "Tool finished"
+                            messages.add(
+                                AgentConversationItem(
+                                    type = "tool_result",
+                                    runId = event.runId,
+                                    seq = event.seq,
+                                    ts = event.ts,
+                                    tool = event.tool,
+                                    ok = event.ok,
+                                    summary = event.summary
+                                )
+                            )
                         }
                         "status" -> {
-                            statusMessage = event.message ?: "Working..."
+                            messages.add(
+                                AgentConversationItem(
+                                    type = "status",
+                                    runId = event.runId,
+                                    seq = event.seq,
+                                    ts = event.ts,
+                                    message = event.message
+                                )
+                            )
                         }
                         "done" -> {
                             if (!event.sessionId.isNullOrBlank()) {
@@ -190,13 +248,30 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
                         "error" -> {
                             val errorText = event.message ?: "stream error"
+                            messages.add(
+                                AgentConversationItem(
+                                    type = "error",
+                                    runId = event.runId,
+                                    seq = event.seq,
+                                    ts = event.ts,
+                                    message = errorText
+                                )
+                            )
                             statusMessage = "Error: $errorText"
                             if (assistantText.isBlank()) {
-                                messages[assistantIndex] = ChatMessage(
-                                    role = "assistant",
-                                    content = "Error: $errorText"
-                                )
+                                messages[assistantIndex] = AgentConversationItem(type = "message", role = "assistant", content = "Error: $errorText")
                             }
+                        }
+                        "usage" -> {
+                            messages.add(
+                                AgentConversationItem(
+                                    type = "usage",
+                                    runId = event.runId,
+                                    seq = event.seq,
+                                    ts = event.ts,
+                                    usage = event.usage
+                                )
+                            )
                         }
                     }
                 }
@@ -393,7 +468,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 }
                 if (isLoading) {
                     item {
-                        ChatBubble(message = ChatMessage(role = "assistant", content = "..."))
+                        ChatBubble(message = AgentConversationItem(type = "message", role = "assistant", content = "..."))
                     }
                 }
             }
@@ -503,7 +578,65 @@ fun ToolClaudeScreen(modifier: Modifier) {
 }
 
 @Composable
-private fun ChatBubble(message: ChatMessage) {
+private fun ChatBubble(message: AgentConversationItem) {
+    if (message.type != "message") {
+        val (title, detail) = when (message.type) {
+            "tool_call" -> {
+                val argsText = formatAgentArgs(message.args)
+                "Tool call: ${message.tool ?: "unknown"}" to argsText
+            }
+            "tool_result" -> {
+                val status = if (message.ok == false) "failed" else "finished"
+                "Tool ${message.tool ?: "unknown"} $status" to message.summary.orEmpty()
+            }
+            "status" -> (message.message ?: "Status update") to ""
+            "usage" -> {
+                val total = message.usage?.totalTokens ?: 0
+                val remaining = message.usage?.remainingTokens
+                val window = message.usage?.contextWindow
+                if (remaining != null && window != null && window > 0) {
+                    "Usage: $total tokens, $remaining left of $window" to ""
+                } else {
+                    "Usage: $total tokens" to ""
+                }
+            }
+            else -> (message.message ?: "Error") to ""
+        }
+        val border = when (message.type) {
+            "tool_call", "usage" -> AppTheme.colors.accent
+            "error" -> AppTheme.colors.danger
+            else -> AppTheme.colors.panelBorder
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .background(AppTheme.colors.button)
+                .border(width = 1.dp, color = border, shape = RoundedCornerShape(6.dp))
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SelectionContainer {
+                    AppText(
+                        text = title,
+                        style = AppTheme.typography.bodySmall,
+                        color = if (message.type == "error") AppTheme.colors.danger else AppTheme.colors.text
+                    )
+                }
+                if (detail.isNotBlank()) {
+                    SelectionContainer {
+                        AppText(
+                            text = detail,
+                            style = AppTheme.typography.label,
+                            color = AppTheme.colors.muted
+                        )
+                    }
+                }
+            }
+        }
+        return
+    }
+
     val isUser = message.role == "user"
     val alignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
     val bgColor = if (isUser) AppTheme.colors.accentDim else AppTheme.colors.input
@@ -526,13 +659,19 @@ private fun ChatBubble(message: ChatMessage) {
             )
             SelectionContainer {
                 AppText(
-                    text = message.content,
+                    text = message.content.orEmpty(),
                     style = AppTheme.typography.bodySmall,
                     color = AppTheme.colors.text
                 )
             }
         }
     }
+}
+
+private fun formatAgentArgs(args: kotlinx.serialization.json.JsonElement?): String {
+    val raw = args?.toString().orEmpty()
+    if (raw.isBlank()) return ""
+    return if (raw.length > 320) raw.take(320) + "..." else raw
 }
 
 @Composable

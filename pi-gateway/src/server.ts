@@ -225,6 +225,16 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
   await runExclusive(pc, async () => {
     const sessionPath = ensureSessionPath(person, runtimeSessionId);
     await pc.client.switchSession(sessionPath);
+    let contextWindow: number | undefined;
+    try {
+      const state = await pc.client.getState();
+      const cw = Number(state?.model?.contextWindow || 0);
+      if (Number.isFinite(cw) && cw > 0) {
+        contextWindow = cw;
+      }
+    } catch {
+      // Best-effort only.
+    }
 
     writeEvent(res, {
       type: 'status',
@@ -271,6 +281,26 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
         }
         case 'message_end': {
           const msg = event?.message;
+          const usage = msg?.usage;
+          if (usage && typeof usage === 'object') {
+            const input = Number(usage.input || 0);
+            const output = Number(usage.output || 0);
+            const cacheRead = Number(usage.cacheRead || 0);
+            const cacheWrite = Number(usage.cacheWrite || 0);
+            const total = Number(usage.totalTokens || input + output + cacheRead + cacheWrite);
+            const usagePayload: Record<string, unknown> = {
+              input_tokens: input,
+              output_tokens: output,
+              cache_read_tokens: cacheRead,
+              cache_write_tokens: cacheWrite,
+              total_tokens: total,
+            };
+            if (contextWindow && contextWindow > 0) {
+              usagePayload.context_window = contextWindow;
+              usagePayload.remaining_tokens = Math.max(0, contextWindow - total);
+            }
+            writeEvent(res, { type: 'usage', run_id: runId, usage: usagePayload });
+          }
           if (msg?.role === 'assistant' && typeof msg?.errorMessage === 'string' && msg.errorMessage.trim()) {
             lastRunError = msg.errorMessage.trim();
             sawRunError = true;

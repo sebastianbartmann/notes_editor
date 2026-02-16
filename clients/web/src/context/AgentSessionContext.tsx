@@ -1,18 +1,18 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import type { ChatMessage } from '../api/types'
+import type { AgentConversationItem } from '../api/types'
 
 type Person = 'sebastian' | 'petra'
 
 interface AgentSessionState {
   sessionId: string | null
-  messages: ChatMessage[]
+  messages: AgentConversationItem[]
 }
 
 interface AgentSessionContextType {
   getSession: (person: Person) => AgentSessionState
   setSessionId: (person: Person, sessionId: string | null) => void
-  setMessages: (person: Person, messages: ChatMessage[]) => void
-  appendMessage: (person: Person, message: ChatMessage) => void
+  setMessages: (person: Person, messages: AgentConversationItem[]) => void
+  appendMessage: (person: Person, message: AgentConversationItem) => void
   clearSession: (person: Person) => void
 }
 
@@ -82,14 +82,14 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const setMessages = useCallback((person: Person, messages: ChatMessage[]) => {
+  const setMessages = useCallback((person: Person, messages: AgentConversationItem[]) => {
     setSessions((prev) => ({
       ...prev,
       [person]: { ...prev[person], messages },
     }))
   }, [])
 
-  const appendMessage = useCallback((person: Person, message: ChatMessage) => {
+  const appendMessage = useCallback((person: Person, message: AgentConversationItem) => {
     setSessions((prev) => ({
       ...prev,
       [person]: {

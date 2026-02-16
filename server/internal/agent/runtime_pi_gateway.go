@@ -24,12 +24,14 @@ type piGatewayStreamEvent struct {
 	Type      string         `json:"type"`
 	SessionID string         `json:"session_id,omitempty"`
 	RunID     string         `json:"run_id,omitempty"`
+	Seq       int            `json:"seq,omitempty"`
 	Delta     string         `json:"delta,omitempty"`
 	Tool      string         `json:"tool,omitempty"`
 	Args      map[string]any `json:"args,omitempty"`
 	OK        bool           `json:"ok,omitempty"`
 	Summary   string         `json:"summary,omitempty"`
 	Message   string         `json:"message,omitempty"`
+	Usage     *UsageSnapshot `json:"usage,omitempty"`
 }
 
 const piRuntimeSessionMapPath = ".notes-editor/runtime-session-map.json"
@@ -222,6 +224,8 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 				// The gateway now executes tools by delegating back to the Go server, so
 				// tool results are streamed directly from the sidecar.
 				out <- StreamEvent{Type: "tool_result", Tool: event.Tool, OK: event.OK, Summary: event.Summary}
+			case "usage":
+				out <- StreamEvent{Type: "usage", Usage: event.Usage}
 			case "error":
 				out <- StreamEvent{Type: "error", Message: event.Message}
 			case "done":

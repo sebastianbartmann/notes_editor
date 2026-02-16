@@ -107,6 +107,11 @@ export class PiRpcClient {
     await this.send({ type: 'switch_session', sessionPath });
   }
 
+  async getState(): Promise<any> {
+    const resp = await this.send({ type: 'get_state' });
+    return resp.data;
+  }
+
   waitForIdle(timeoutMs: number): Promise<void> {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {

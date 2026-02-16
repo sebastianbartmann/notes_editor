@@ -77,6 +77,7 @@ type Service struct {
 	activeSessionRun        map[string]string
 	sessionRecordsByPerson  map[string]map[string]*sessionRecord
 	sessionSequenceByPerson map[string]int
+	conversationsByPerson   map[string]map[string][]ConversationItem
 	runtimes                map[string]Runtime
 }
 
@@ -127,6 +128,7 @@ func NewServiceWithRuntimesAndOptions(store *vault.Store, runtimes map[string]Ru
 		activeSessionRun:        make(map[string]string),
 		sessionRecordsByPerson:  make(map[string]map[string]*sessionRecord),
 		sessionSequenceByPerson: make(map[string]int),
+		conversationsByPerson:   make(map[string]map[string][]ConversationItem),
 		runtimes:                runtimes,
 	}
 }
@@ -233,31 +235,91 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 
 	go func() {
 		finalSessionID := req.SessionID
+		runItems := make([]ConversationItem, 0, 24)
+		var assistantText strings.Builder
+		userText := strings.TrimSpace(req.Message)
+		if userText == "" && strings.TrimSpace(req.ActionID) != "" {
+			userText = "Run action: " + strings.TrimSpace(req.ActionID)
+		}
+		if userText != "" {
+			runItems = append(runItems, ConversationItem{
+				Type:    ConversationItemMessage,
+				Role:    "user",
+				Content: userText,
+				RunID:   runID,
+				TS:      time.Now().UTC(),
+			})
+		}
+
+		seq := 0
+		emit := func(event StreamEvent) {
+			if event.RunID == "" {
+				event.RunID = runID
+			}
+			if event.TS.IsZero() {
+				event.TS = time.Now().UTC()
+			}
+			seq++
+			if event.Seq == 0 {
+				event.Seq = seq
+			}
+			out <- event
+			if item, ok := conversationItemFromStreamEvent(event); ok {
+				runItems = append(runItems, item)
+			}
+		}
+
+		emitTerminal := func(message string) {
+			emit(StreamEvent{
+				Type:    "error",
+				Message: message,
+			})
+			emit(StreamEvent{
+				Type:      "done",
+				SessionID: finalSessionID,
+			})
+		}
+
 		defer close(out)
 		defer s.unregisterRun(runID)
 		defer s.endSessionRun(person, req.SessionID, runID)
 		defer func() {
+			if assistantText.Len() > 0 {
+				runItems = append(runItems, ConversationItem{
+					Type:      ConversationItemMessage,
+					Role:      "assistant",
+					Content:   assistantText.String(),
+					SessionID: finalSessionID,
+					RunID:     runID,
+					TS:        time.Now().UTC(),
+				})
+			}
+			if finalSessionID != "" && len(runItems) > 0 {
+				for i := range runItems {
+					if runItems[i].SessionID == "" {
+						runItems[i].SessionID = finalSessionID
+					}
+				}
+				s.appendStoredConversation(person, finalSessionID, runItems)
+			}
 			s.touchSession(person, finalSessionID, req.Message, usedRuntime.Mode())
 		}()
 
-		out <- StreamEvent{
+		emit(StreamEvent{
 			Type:      "start",
 			SessionID: req.SessionID,
-			RunID:     runID,
-		}
+		})
 		if fallbackMessage != "" {
-			out <- StreamEvent{
+			emit(StreamEvent{
 				Type:    "status",
 				Message: fallbackMessage,
-				RunID:   runID,
-			}
+			})
 		}
 		if resolved.ActionMaxSteps > defaultActionStepsLimit {
-			out <- StreamEvent{
+			emit(StreamEvent{
 				Type:    "status",
 				Message: fmt.Sprintf(maxStepsLimitStatusFmt, resolved.ActionMaxSteps),
-				RunID:   runID,
-			}
+			})
 		}
 
 		timer := time.NewTimer(s.maxRunDuration)
@@ -271,28 +333,27 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 		for {
 			select {
 			case <-ctx.Done():
-				s.emitTerminal(out, finalSessionID, runID, "Run cancelled")
+				emitTerminal("Run cancelled")
 				s.drainStream(upstream.Events)
 				return
 			case <-run.cancel:
-				s.emitTerminal(out, finalSessionID, runID, "Run cancelled")
+				emitTerminal("Run cancelled")
 				s.drainStream(upstream.Events)
 				return
 			case <-timer.C:
-				s.emitTerminal(out, finalSessionID, runID, "Run timed out")
+				emitTerminal("Run timed out")
 				s.drainStream(upstream.Events)
 				return
 			case event, ok := <-upstream.Events:
 				if !ok {
 					if !sawDone {
 						if !sawText && !sawError {
-							s.emitTerminal(out, finalSessionID, runID, emptyStreamStatus)
+							emitTerminal(emptyStreamStatus)
 						} else {
-							out <- StreamEvent{
+							emit(StreamEvent{
 								Type:      "done",
 								SessionID: finalSessionID,
-								RunID:     runID,
-							}
+							})
 						}
 					}
 					return
@@ -306,26 +367,27 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 				if event.Type == "tool_call" {
 					toolCallsSeen++
 					if toolLimit > 0 && toolCallsSeen > toolLimit {
-						s.emitTerminal(out, finalSessionID, runID, fmt.Sprintf(toolCallLimitStatusFmt, toolLimit))
+						emitTerminal(fmt.Sprintf(toolCallLimitStatusFmt, toolLimit))
 						s.drainStream(upstream.Events)
 						return
 					}
 				}
 				if event.Type == "text" && event.Delta != "" {
 					sawText = true
+					assistantText.WriteString(event.Delta)
 				}
 				if event.Type == "error" {
 					sawError = true
 				}
 				if event.Type == "done" {
 					if !sawText && !sawError {
-						s.emitTerminal(out, finalSessionID, runID, emptyStreamStatus)
+						emitTerminal(emptyStreamStatus)
 						sawDone = true
 						continue
 					}
 					sawDone = true
 				}
-				out <- event
+				emit(event)
 			}
 		}
 	}()
@@ -399,14 +461,19 @@ func (s *Service) ClearSession(person, sessionID string) error {
 		return err
 	}
 	s.removeSessionRecord(person, sessionID)
+	s.removeStoredConversation(person, sessionID)
 	return nil
 }
 
-// GetHistory returns app-level session history for the selected runtime mode.
-func (s *Service) GetHistory(person, sessionID string) ([]claude.ChatMessage, error) {
+// GetConversationHistory returns unified persisted conversation items for a session.
+func (s *Service) GetConversationHistory(person, sessionID string) ([]ConversationItem, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, fmt.Errorf("session_id is required")
+	}
+
+	if history := s.getStoredConversation(person, sessionID); len(history) > 0 {
+		return history, nil
 	}
 
 	runtime, err := s.runtimeForSession(person, sessionID)
@@ -422,8 +489,35 @@ func (s *Service) GetHistory(person, sessionID string) ([]claude.ChatMessage, er
 	if err != nil {
 		return nil, err
 	}
+
+	items := chatMessagesToItems(history)
+	if len(items) > 0 {
+		s.replaceStoredConversation(person, sessionID, items)
+	}
 	s.touchSession(person, sessionID, "", runtime.Mode())
-	return history, nil
+	return items, nil
+}
+
+// GetHistory returns chat-only history for legacy Claude endpoints.
+func (s *Service) GetHistory(person, sessionID string) ([]claude.ChatMessage, error) {
+	items, err := s.GetConversationHistory(person, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]claude.ChatMessage, 0, len(items))
+	for _, item := range items {
+		if item.Type != ConversationItemMessage {
+			continue
+		}
+		if item.Role != "user" && item.Role != "assistant" {
+			continue
+		}
+		out = append(out, claude.ChatMessage{
+			Role:    item.Role,
+			Content: item.Content,
+		})
+	}
+	return out, nil
 }
 
 // StopRun stops a currently active streaming run.
@@ -438,6 +532,65 @@ func (s *Service) StopRun(runID string) bool {
 		close(run.cancel)
 	})
 	return true
+}
+
+func (s *Service) getStoredConversation(person, sessionID string) []ConversationItem {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	personSessions := s.conversationsByPerson[person]
+	if personSessions == nil {
+		return nil
+	}
+	items := personSessions[sessionID]
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]ConversationItem, len(items))
+	copy(out, items)
+	return out
+}
+
+func (s *Service) replaceStoredConversation(person, sessionID string, items []ConversationItem) {
+	if len(items) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	personSessions := s.conversationsByPerson[person]
+	if personSessions == nil {
+		personSessions = make(map[string][]ConversationItem)
+		s.conversationsByPerson[person] = personSessions
+	}
+	copied := make([]ConversationItem, len(items))
+	copy(copied, items)
+	personSessions[sessionID] = copied
+}
+
+func (s *Service) appendStoredConversation(person, sessionID string, items []ConversationItem) {
+	if len(items) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	personSessions := s.conversationsByPerson[person]
+	if personSessions == nil {
+		personSessions = make(map[string][]ConversationItem)
+		s.conversationsByPerson[person] = personSessions
+	}
+	personSessions[sessionID] = append(personSessions[sessionID], items...)
+}
+
+func (s *Service) removeStoredConversation(person, sessionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	personSessions := s.conversationsByPerson[person]
+	if personSessions == nil {
+		return
+	}
+	delete(personSessions, sessionID)
+	if len(personSessions) == 0 {
+		delete(s.conversationsByPerson, person)
+	}
 }
 
 func (s *Service) registerRun(runID string) *runControl {
@@ -586,6 +739,42 @@ func (s *Service) effectiveToolLimit(actionMaxSteps int) int {
 	return limit
 }
 
+func conversationItemFromStreamEvent(event StreamEvent) (ConversationItem, bool) {
+	base := ConversationItem{
+		SessionID: event.SessionID,
+		RunID:     event.RunID,
+		Seq:       event.Seq,
+		TS:        event.TS,
+	}
+	switch event.Type {
+	case "tool_call":
+		base.Type = ConversationItemToolCall
+		base.Tool = event.Tool
+		base.Args = event.Args
+		return base, true
+	case "tool_result":
+		base.Type = ConversationItemToolResult
+		base.Tool = event.Tool
+		base.OK = event.OK
+		base.Summary = event.Summary
+		return base, true
+	case "status":
+		base.Type = ConversationItemStatus
+		base.Message = event.Message
+		return base, true
+	case "error":
+		base.Type = ConversationItemError
+		base.Message = event.Message
+		return base, true
+	case "usage":
+		base.Type = ConversationItemUsage
+		base.Usage = event.Usage
+		return base, true
+	default:
+		return ConversationItem{}, false
+	}
+}
+
 func mapClaudeEvent(event claude.StreamEvent) []StreamEvent {
 	switch event.Type {
 	case "text":
@@ -622,6 +811,23 @@ func mapClaudeEvent(event claude.StreamEvent) []StreamEvent {
 		return []StreamEvent{{
 			Type:    "error",
 			Message: event.Message,
+		}}
+	case "usage":
+		var usage *UsageSnapshot
+		if event.Usage != nil {
+			usage = &UsageSnapshot{
+				InputTokens:      event.Usage.InputTokens,
+				OutputTokens:     event.Usage.OutputTokens,
+				CacheReadTokens:  event.Usage.CacheReadTokens,
+				CacheWriteTokens: event.Usage.CacheWriteTokens,
+				TotalTokens:      event.Usage.TotalTokens,
+				ContextWindow:    event.Usage.ContextWindow,
+				RemainingTokens:  event.Usage.RemainingTokens,
+			}
+		}
+		return []StreamEvent{{
+			Type:  "usage",
+			Usage: usage,
 		}}
 	case "done":
 		return []StreamEvent{{

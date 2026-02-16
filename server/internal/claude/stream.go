@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -21,6 +22,18 @@ type StreamEvent struct {
 	Input     any    `json:"input,omitempty"`
 	SessionID string `json:"session_id,omitempty"`
 	Message   string `json:"message,omitempty"`
+	Usage     *Usage `json:"usage,omitempty"`
+}
+
+// Usage reports token and context-window usage for the active assistant turn.
+type Usage struct {
+	InputTokens      int `json:"input_tokens,omitempty"`
+	OutputTokens     int `json:"output_tokens,omitempty"`
+	CacheReadTokens  int `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
+	TotalTokens      int `json:"total_tokens,omitempty"`
+	ContextWindow    int `json:"context_window,omitempty"`
+	RemainingTokens  int `json:"remaining_tokens,omitempty"`
 }
 
 // ChatStream performs a streaming chat request.
@@ -288,6 +301,24 @@ func (s *Service) processStream(body io.Reader, events chan<- StreamEvent) (*ant
 					finalResponse.StopReason = stopReason
 				}
 			}
+			if usageRaw, ok := event["usage"].(map[string]any); ok {
+				if usage := parseAnthropicUsage(usageRaw); usage != nil {
+					events <- StreamEvent{Type: "usage", Usage: usage}
+				}
+			}
+
+		case "message_start":
+			msg, ok := event["message"].(map[string]any)
+			if !ok {
+				continue
+			}
+			usageRaw, ok := msg["usage"].(map[string]any)
+			if !ok {
+				continue
+			}
+			if usage := parseAnthropicUsage(usageRaw); usage != nil {
+				events <- StreamEvent{Type: "usage", Usage: usage}
+			}
 
 		case "message_stop":
 			// Message complete
@@ -308,4 +339,54 @@ func (s *Service) processStream(body io.Reader, events chan<- StreamEvent) (*ant
 
 	finalResponse.Content = contentBlocks
 	return &finalResponse, textBuilder.String(), nil
+}
+
+func parseAnthropicUsage(raw map[string]any) *Usage {
+	if len(raw) == 0 {
+		return nil
+	}
+	in := int(readNumber(raw, "input_tokens"))
+	out := int(readNumber(raw, "output_tokens"))
+	cacheRead := int(readNumber(raw, "cache_read_input_tokens"))
+	cacheWrite := int(readNumber(raw, "cache_creation_input_tokens"))
+	total := in + out + cacheRead + cacheWrite
+
+	// The configured model in this app uses a 200k context window.
+	const contextWindow = 200000
+	remaining := contextWindow - total
+	if remaining < 0 {
+		remaining = 0
+	}
+	if total == 0 && in == 0 && out == 0 && cacheRead == 0 && cacheWrite == 0 {
+		return nil
+	}
+	return &Usage{
+		InputTokens:      in,
+		OutputTokens:     out,
+		CacheReadTokens:  cacheRead,
+		CacheWriteTokens: cacheWrite,
+		TotalTokens:      total,
+		ContextWindow:    contextWindow,
+		RemainingTokens:  remaining,
+	}
+}
+
+func readNumber(raw map[string]any, key string) float64 {
+	v, ok := raw[key]
+	if !ok {
+		return 0
+	}
+	switch n := v.(type) {
+	case float64:
+		if math.IsNaN(n) || math.IsInf(n, 0) {
+			return 0
+		}
+		return n
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	default:
+		return 0
+	}
 }

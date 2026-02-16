@@ -50,6 +50,7 @@ make android-test-daily-scroll-focus  # Daily editor scroll/focus regression tes
 make android-test-files      # Files screen tests
 make android-test-sleep      # Sleep screen tests
 make android-test-claude     # Claude screen tests
+make android-test-claude-toolcall  # Agent tool-call integration flow
 make android-test-settings   # Settings screen tests
 make android-test-nav        # Full navigation tests
 ```
@@ -71,6 +72,10 @@ make android-emulator-stop   # Stop emulator
 | `files-screen.yaml` | Tests file browser | 4 |
 | `claude-screen.yaml` | Tests Claude chat interface | 4 |
 | `settings-screen.yaml` | Tests settings, theme, person selection | 5 |
+
+Integration flows (run manually):
+- `integration/claude-toolcall.yaml` - sends a real Agent prompt and waits for inline `Tool call:` event.
+- Requires reachable backend/runtime (not a pure offline UI smoke test).
 
 ## Screenshots
 
