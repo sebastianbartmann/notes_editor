@@ -42,3 +42,4 @@
 ## 2026-02-16
 
 - Android Agent composer row now uses `height(IntrinsicSize.Min)` and send button `fillMaxHeight()` (instead of fixed `48.dp`) so button height matches the multi-line `CompactTextField` and scales correctly with typography/textScale changes.
+- Android error/status banners are now selectable: `StatusMessage` wraps content in `SelectionContainer`, and direct error text in `SyncScreen` / Agent sessions dialog should use `SelectableAppText` so users can copy backend error details.

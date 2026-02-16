@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
@@ -385,7 +386,21 @@ fun MessageBadge(text: String) {
             .border(1.dp, AppTheme.colors.panelBorder, shape)
             .padding(horizontal = AppTheme.spacing.sm, vertical = 4.dp)
     ) {
-        AppText(text = text, style = AppTheme.typography.label, color = AppTheme.colors.text)
+        SelectionContainer {
+            AppText(text = text, style = AppTheme.typography.label, color = AppTheme.colors.text)
+        }
+    }
+}
+
+@Composable
+fun SelectableAppText(
+    text: String,
+    style: TextStyle,
+    color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    SelectionContainer {
+        AppText(text = text, style = style, color = color, modifier = modifier)
     }
 }
 

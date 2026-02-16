@@ -440,7 +440,11 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
 
                         if (sessionsError.isNotBlank()) {
-                            AppText(sessionsError, AppTheme.typography.bodySmall, AppTheme.colors.danger)
+                            SelectableAppText(
+                                text = sessionsError,
+                                style = AppTheme.typography.bodySmall,
+                                color = AppTheme.colors.danger
+                            )
                         }
 
                         sessions.forEach { session ->

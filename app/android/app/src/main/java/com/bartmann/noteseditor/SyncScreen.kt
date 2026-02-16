@@ -127,7 +127,7 @@ fun SyncScreen(modifier: Modifier) {
                 )
             }
             if (error.isNotBlank()) {
-                AppText(
+                SelectableAppText(
                     text = error,
                     style = AppTheme.typography.bodySmall,
                     color = AppTheme.colors.danger
