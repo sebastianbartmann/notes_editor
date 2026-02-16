@@ -12,7 +12,8 @@ appId: com.bartmann.noteseditor
 - assertVisible: "Save"
 
 # Seed long content so deep scrolling is available even if backend load fails.
-- tapOn: "Edit note"
+- tapOn:
+    point: "50%,38%"
 - eraseText
 - inputText: |
     line 01

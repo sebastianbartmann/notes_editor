@@ -1,42 +1,43 @@
 appId: com.bartmann.noteseditor
 ---
 - launchApp
+- tapOn:
+    text: "Sebastian"
+    optional: true
+- waitForAnimationToEnd
 - takeScreenshot: "nav-01-launch"
 
-# Verify bottom nav exists
+# Verify baseline nav anchors (footer is user-configurable; "More" is fixed)
 - assertVisible: "Daily"
-- assertVisible: "Files"
-- assertVisible: "Sleep"
-- assertVisible: "Tools"
+- assertVisible: "More"
 
 # Navigate to Files
+- tapOn: "More"
+- waitForAnimationToEnd
 - tapOn: "Files"
 - waitForAnimationToEnd
 - takeScreenshot: "nav-02-files"
 
 # Navigate to Sleep
+- tapOn: "More"
+- waitForAnimationToEnd
 - tapOn: "Sleep"
 - waitForAnimationToEnd
 - takeScreenshot: "nav-03-sleep"
 
-# Navigate to Tools
-- tapOn: "Tools"
+# Navigate to More
+- tapOn: "More"
 - waitForAnimationToEnd
-- takeScreenshot: "nav-04-tools"
+- takeScreenshot: "nav-04-more"
 
-# Navigate to Claude via Tools
-- tapOn: "Claude"
+# Navigate to Agent via More
+- tapOn: "Agent"
 - waitForAnimationToEnd
-- takeScreenshot: "nav-05-claude"
+- takeScreenshot: "nav-05-agent"
 
-# Back to Tools
+# Back to More
 - back
-- takeScreenshot: "nav-06-back-to-tools"
-
-# Navigate to Settings
-- tapOn: "Settings"
-- waitForAnimationToEnd
-- takeScreenshot: "nav-07-settings"
+- takeScreenshot: "nav-06-back-to-more"
 
 # Back to Daily
 - tapOn: "Daily"

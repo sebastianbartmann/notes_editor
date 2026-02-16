@@ -50,7 +50,8 @@ import java.time.format.DateTimeFormatter
 
 @Composable
 fun ToolClaudeScreen(modifier: Modifier) {
-    var inputText by remember { mutableStateOf("") }
+    val person = UserSettings.person
+    var inputText by remember(person) { mutableStateOf(ClaudeSessionStore.draftInput(person)) }
     var isLoading by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("") }
     var actions by remember { mutableStateOf<List<AgentAction>>(emptyList()) }
@@ -65,12 +66,12 @@ fun ToolClaudeScreen(modifier: Modifier) {
     val messages = ClaudeSessionStore.messages
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val person = UserSettings.person
 
     fun sendMessage() {
         val text = inputText.trim()
         if (text.isEmpty() || isLoading) return
         inputText = ""
+        ClaudeSessionStore.updateDraftInput(person, "")
         isLoading = true
         statusMessage = "Connecting..."
         messages.add(ChatMessage(role = "user", content = text))
@@ -394,7 +395,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
             ) {
                 CompactTextField(
                     value = inputText,
-                    onValueChange = { inputText = it },
+                    onValueChange = {
+                        inputText = it
+                        ClaudeSessionStore.updateDraftInput(person, it)
+                    },
                     placeholder = "Ask Agent...",
                     modifier = Modifier.weight(1f),
                     minLines = 2

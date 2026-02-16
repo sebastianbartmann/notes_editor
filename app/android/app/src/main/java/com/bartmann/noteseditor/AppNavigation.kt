@@ -110,11 +110,13 @@ fun NotesEditorApp() {
         if (currentRoute == route) {
             return
         }
-        val popped = navController.popBackStack(route, inclusive = false)
-        if (!popped) {
-            navController.navigate(route) {
-                launchSingleTop = true
+        navController.navigate(route) {
+            // Preserve destination state (including text input) across bottom-nav style switches.
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
             }
+            launchSingleTop = true
+            restoreState = true
         }
     }
     AppNav.openSync = { navigateByRoute(Screen.Sync.route) }

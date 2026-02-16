@@ -43,3 +43,7 @@
 
 - Android Agent composer row now uses `height(IntrinsicSize.Min)` and send button `fillMaxHeight()` (instead of fixed `48.dp`) so button height matches the multi-line `CompactTextField` and scales correctly with typography/textScale changes.
 - Android error/status banners are now selectable: `StatusMessage` wraps content in `SelectionContainer`, and direct error text in `SyncScreen` / Agent sessions dialog should use `SelectableAppText` so users can copy backend error details.
+- Android Agent draft input now persists across navigation/view switches per person via `ClaudeSessionStore` (`draftInputsByPerson`) and is cleared only when message send succeeds (input submit path clears draft).
+- Android tab/view switching now uses Navigation Compose state restoration (`navigate { popUpTo(start) { saveState = true }; restoreState = true; launchSingleTop = true }`) instead of `popBackStack(route, false)`, so `remember` screen state (including text inputs) survives switching between views.
+- Maestro flow stability updates: `full-navigation.yaml` should not assume fixed bottom-nav entries (`Sleep`, `Tools`) or old labels (`Claude`); use `More` + current `Agent` label and avoid settings-route assumptions there because nav is user-configurable and settings is already covered in `settings-screen.yaml`.
+- Maestro `daily-editor-scroll-focus.yaml` should not target placeholder text (`Edit note`) because placeholder disappears when editor already has content/state; use a stable tap point/focus action instead.
