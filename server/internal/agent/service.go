@@ -19,6 +19,7 @@ const (
 	defaultMaxRunDuration   = 2 * time.Minute
 	defaultMaxToolCalls     = 40
 	piFallbackStatus        = "Gateway runtime unavailable; using Anthropic API key runtime for this run"
+	emptyStreamStatus       = "No assistant output received (upstream closed without text/error)"
 	maxStepsLimitStatusFmt  = "Action max_steps=%d applied for this run"
 	toolCallLimitStatusFmt  = "Run exceeded max tool calls (%d)"
 	defaultActionStepsLimit = 0
@@ -263,6 +264,8 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 		defer timer.Stop()
 
 		sawDone := false
+		sawText := false
+		sawError := false
 		toolCallsSeen := 0
 
 		for {
@@ -282,10 +285,14 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 			case event, ok := <-upstream.Events:
 				if !ok {
 					if !sawDone {
-						out <- StreamEvent{
-							Type:      "done",
-							SessionID: finalSessionID,
-							RunID:     runID,
+						if !sawText && !sawError {
+							s.emitTerminal(out, finalSessionID, runID, emptyStreamStatus)
+						} else {
+							out <- StreamEvent{
+								Type:      "done",
+								SessionID: finalSessionID,
+								RunID:     runID,
+							}
 						}
 					}
 					return
@@ -304,7 +311,18 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 						return
 					}
 				}
+				if event.Type == "text" && event.Delta != "" {
+					sawText = true
+				}
+				if event.Type == "error" {
+					sawError = true
+				}
 				if event.Type == "done" {
+					if !sawText && !sawError {
+						s.emitTerminal(out, finalSessionID, runID, emptyStreamStatus)
+						sawDone = true
+						continue
+					}
 					sawDone = true
 				}
 				out <- event

@@ -144,8 +144,12 @@ export default function ClaudePage() {
     setError('')
 
     let fullResponse = ''
+    let streamError = ''
     try {
       for await (const event of agentChatStream(request)) {
+        if (event.type === 'error') {
+          streamError = event.message || 'Stream error'
+        }
         handleStreamEvent(event, (text) => {
           fullResponse += text
           setStreamingText(fullResponse)
@@ -154,6 +158,8 @@ export default function ClaudePage() {
 
       if (fullResponse) {
         appendMessage(person, { role: 'assistant', content: fullResponse })
+      } else if (streamError) {
+        appendMessage(person, { role: 'assistant', content: `Error: ${streamError}` })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message')

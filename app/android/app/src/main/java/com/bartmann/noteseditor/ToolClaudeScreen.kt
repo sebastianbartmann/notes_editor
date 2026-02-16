@@ -118,7 +118,14 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             statusMessage = ""
                         }
                         "error" -> {
-                            statusMessage = "Error: ${event.message}"
+                            val errorText = event.message ?: "stream error"
+                            statusMessage = "Error: $errorText"
+                            if (assistantText.isBlank()) {
+                                messages[assistantIndex] = ChatMessage(
+                                    role = "assistant",
+                                    content = "Error: $errorText"
+                                )
+                            }
                         }
                     }
                 }
@@ -182,7 +189,14 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             statusMessage = ""
                         }
                         "error" -> {
-                            statusMessage = "Error: ${event.message}"
+                            val errorText = event.message ?: "stream error"
+                            statusMessage = "Error: $errorText"
+                            if (assistantText.isBlank()) {
+                                messages[assistantIndex] = ChatMessage(
+                                    role = "assistant",
+                                    content = "Error: $errorText"
+                                )
+                            }
                         }
                     }
                 }

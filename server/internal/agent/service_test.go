@@ -243,3 +243,93 @@ func TestChatStreamRegistersNewSessionFromStreamEvent(t *testing.T) {
 		t.Fatalf("expected session_id new-session-1, got %q", sessions[0].SessionID)
 	}
 }
+
+func TestChatStreamEmitsErrorWhenDoneArrivesWithoutOutput(t *testing.T) {
+	upstream := make(chan StreamEvent, 1)
+	upstream <- StreamEvent{Type: "done", SessionID: "s-empty"}
+	close(upstream)
+
+	runtime := &stubRuntime{
+		mode:      RuntimeModeAnthropicAPIKey,
+		available: true,
+		streamResp: &RuntimeStream{
+			Events: upstream,
+		},
+	}
+
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey:     runtime,
+		RuntimeModeGatewaySubscription: &stubRuntime{mode: RuntimeModeGatewaySubscription, available: false},
+	})
+
+	run, err := svc.ChatStream(context.Background(), "sebastian", ChatRequest{
+		Message: "empty output",
+	})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+
+	var got []StreamEvent
+	for event := range run.Events {
+		got = append(got, event)
+	}
+	if len(got) < 2 {
+		t.Fatalf("expected at least error+done events, got %d", len(got))
+	}
+
+	var sawError bool
+	var sawDone bool
+	for _, event := range got {
+		if event.Type == "error" && strings.Contains(event.Message, "No assistant output received") {
+			sawError = true
+		}
+		if event.Type == "done" {
+			sawDone = true
+		}
+	}
+	if !sawError {
+		t.Fatalf("expected empty stream error, events=%v", got)
+	}
+	if !sawDone {
+		t.Fatalf("expected done event, events=%v", got)
+	}
+}
+
+func TestChatStreamEmitsErrorWhenStreamClosesWithoutDoneOrOutput(t *testing.T) {
+	upstream := make(chan StreamEvent)
+	close(upstream)
+
+	runtime := &stubRuntime{
+		mode:      RuntimeModeAnthropicAPIKey,
+		available: true,
+		streamResp: &RuntimeStream{
+			Events: upstream,
+		},
+	}
+
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey:     runtime,
+		RuntimeModeGatewaySubscription: &stubRuntime{mode: RuntimeModeGatewaySubscription, available: false},
+	})
+
+	run, err := svc.ChatStream(context.Background(), "sebastian", ChatRequest{
+		Message: "empty close",
+	})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+
+	var sawError bool
+	var sawDone bool
+	for event := range run.Events {
+		if event.Type == "error" && strings.Contains(event.Message, "No assistant output received") {
+			sawError = true
+		}
+		if event.Type == "done" {
+			sawDone = true
+		}
+	}
+	if !sawError || !sawDone {
+		t.Fatalf("expected empty-stream error and done, got error=%v done=%v", sawError, sawDone)
+	}
+}
