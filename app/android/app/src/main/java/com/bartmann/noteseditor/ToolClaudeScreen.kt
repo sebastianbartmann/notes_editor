@@ -6,7 +6,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -384,7 +386,9 @@ fun ToolClaudeScreen(modifier: Modifier) {
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
@@ -398,7 +402,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 CompactButton(
                     text = if (isLoading) "..." else "Send",
                     modifier = Modifier
-                        .height(48.dp)
+                        .fillMaxHeight()
                         .width(84.dp),
                     onClick = { if (!isLoading && inputText.isNotBlank()) sendMessage() }
                 )

@@ -32,6 +32,15 @@ app/gradle-8.7/
 
 # Maestro test screenshots
 app/android/maestro/screenshots/
+# Maestro screenshots created in repo root when output path is not applied
+/claude-*.png
+/settings-*.png
+/files-*.png
+/sleep-*.png
+/nav-*.png
+/daily-scroll-*.png
+/[0-9][0-9]-*.png
+/[0-9][0-9][a-z]-*.png
 
 # Build output
 build/

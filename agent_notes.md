@@ -38,3 +38,7 @@
 - Replaced Android text-size presets with granular global controls (`A-` / `A+` stepping by 5%, reset) backed by `nextTextScale` math in `UserSettings`; covered by unit tests and verified via Maestro settings flow screenshots.
 - Agent sessions modal uses Material `AlertDialog`; to avoid white/black fallback mismatch across app themes, set `containerColor`, `titleContentColor`, `textContentColor` explicitly from `AppTheme.colors`.
 - Updated Maestro `claude-screen.yaml` to current navigation labels (`More` -> `Agent`) and added sessions-modal screenshot coverage.
+
+## 2026-02-16
+
+- Android Agent composer row now uses `height(IntrinsicSize.Min)` and send button `fillMaxHeight()` (instead of fixed `48.dp`) so button height matches the multi-line `CompactTextField` and scales correctly with typography/textScale changes.
