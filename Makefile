@@ -1,4 +1,24 @@
-.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd install-pi-gateway-systemd status-pi-gateway-systemd install-qmd-systemd status-qmd-systemd restart-services build-android install-android deploy-android debug-android build build-server build-web lint clean build-pi-gateway run-pi-gateway android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-settings android-test-nav
+.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd install-pi-gateway-systemd status-pi-gateway-systemd install-qmd-systemd status-qmd-systemd restart-services setup-android-build-toolchain build-android install-android deploy-android debug-android build build-server build-web lint clean build-pi-gateway run-pi-gateway android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-settings android-test-nav
+
+ANDROID_GRADLE_VERSION := 8.7
+ANDROID_GRADLE_DIR := $(PWD)/app/gradle-$(ANDROID_GRADLE_VERSION)
+ANDROID_GRADLE_BIN := $(ANDROID_GRADLE_DIR)/bin/gradle
+ANDROID_GRADLE_ZIP := gradle-$(ANDROID_GRADLE_VERSION)-bin.zip
+ANDROID_GRADLE_URL := https://services.gradle.org/distributions/$(ANDROID_GRADLE_ZIP)
+
+ANDROID_SDK_ROOT := $(PWD)/app/android_sdk
+ANDROID_CMDLINE_TOOLS_BIN := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin
+ANDROID_SDKMANAGER := $(ANDROID_CMDLINE_TOOLS_BIN)/sdkmanager
+ANDROID_LOCAL_PROPERTIES := $(PWD)/app/android/local.properties
+
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+ANDROID_CMDLINE_TOOLS_URL := https://dl.google.com/android/repository/commandlinetools-mac-14742923_latest.zip
+else ifeq ($(UNAME_S),Linux)
+ANDROID_CMDLINE_TOOLS_URL := https://dl.google.com/android/repository/commandlinetools-linux-14742923_latest.zip
+else
+ANDROID_CMDLINE_TOOLS_URL :=
+endif
 
 .DEFAULT_GOAL := help
 
@@ -37,6 +57,7 @@ help:
 	@echo "    restart-services Restart qmd + gateway + server services"
 	@echo ""
 	@echo "  Android:"
+	@echo "    setup-android-build-toolchain Install repo-local Android CLI build prerequisites"
 	@echo "    build-android   Build the Android debug APK"
 	@echo "    install-android Install the debug APK via adb (USB)"
 	@echo "    deploy-android  Build and install the debug APK"
@@ -136,6 +157,28 @@ restart-services:
 	sudo systemctl restart notes-qmd
 	sudo systemctl restart notes-pi-gateway
 	sudo systemctl restart notes-editor
+
+setup-android-build-toolchain:
+	@[ -n "$(ANDROID_CMDLINE_TOOLS_URL)" ] || (echo "Unsupported OS for automated Android cmdline-tools setup."; exit 1)
+	@java -version >/dev/null 2>&1 || (echo "Java runtime not found. Install JDK 17 first (example on macOS: brew install --cask temurin@17)."; exit 1)
+	@java -version 2>&1 | head -n 1 | grep '"17\.' >/dev/null || (echo "JDK 17 is required. Current Java:"; java -version; exit 1)
+	@mkdir -p "$(ANDROID_SDK_ROOT)/cmdline-tools" "$(PWD)/.tmp/android-toolchain"
+	@if [ ! -x "$(ANDROID_GRADLE_BIN)" ]; then \
+		echo "Installing Gradle $(ANDROID_GRADLE_VERSION) into app/"; \
+		curl -fsSL "$(ANDROID_GRADLE_URL)" -o "$(PWD)/.tmp/android-toolchain/$(ANDROID_GRADLE_ZIP)"; \
+		unzip -q "$(PWD)/.tmp/android-toolchain/$(ANDROID_GRADLE_ZIP)" -d "$(PWD)/app"; \
+	fi
+	@if [ ! -x "$(ANDROID_SDKMANAGER)" ]; then \
+		echo "Installing Android SDK command-line tools into app/android_sdk/"; \
+		curl -fsSL "$(ANDROID_CMDLINE_TOOLS_URL)" -o "$(PWD)/.tmp/android-toolchain/cmdline-tools.zip"; \
+		unzip -q "$(PWD)/.tmp/android-toolchain/cmdline-tools.zip" -d "$(ANDROID_SDK_ROOT)/cmdline-tools"; \
+		rm -rf "$(ANDROID_SDK_ROOT)/cmdline-tools/latest"; \
+		mv "$(ANDROID_SDK_ROOT)/cmdline-tools/cmdline-tools" "$(ANDROID_SDK_ROOT)/cmdline-tools/latest"; \
+	fi
+	@"$(ANDROID_SDKMANAGER)" --sdk_root="$(ANDROID_SDK_ROOT)" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+	@yes | "$(ANDROID_SDKMANAGER)" --sdk_root="$(ANDROID_SDK_ROOT)" --licenses >/dev/null
+	@printf "sdk.dir=%s\n" "$(ANDROID_SDK_ROOT)" > "$(ANDROID_LOCAL_PROPERTIES)"
+	@echo "Android build toolchain is ready."
 
 build-android:
 	GRADLE_USER_HOME="$(PWD)/.gradle" \
