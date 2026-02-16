@@ -197,8 +197,10 @@ object ApiClient {
     suspend fun deleteSleepEntry(line: Int): ApiMessage =
         postJson("/api/sleep-times/delete", DeleteSleepRequest(line = line))
 
-    suspend fun listFiles(path: String): FilesResponse =
-        getJson("/api/files/list?path=${URLEncoder.encode(path, "UTF-8")}")
+    suspend fun listFiles(path: String): FilesResponse {
+        val payload = getJson<FilesResponsePayload>("/api/files/list?path=${URLEncoder.encode(path, "UTF-8")}")
+        return FilesResponse(entries = payload.entries.orEmpty())
+    }
 
     suspend fun readFile(path: String): FileReadResponse =
         getJson("/api/files/read?path=${URLEncoder.encode(path, "UTF-8")}")

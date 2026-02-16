@@ -351,6 +351,32 @@ func TestFileHandlers(t *testing.T) {
 		}
 	})
 
+	t.Run("GET /api/files/list empty directory returns empty entries array", func(t *testing.T) {
+		emptyDir := filepath.Join(vaultRoot, "sebastian", "empty")
+		if err := os.MkdirAll(emptyDir, 0755); err != nil {
+			t.Fatalf("failed to create empty dir: %v", err)
+		}
+
+		req := makeRequest(t, "GET", "/api/files/list?path=empty", "", "sebastian")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(rec.Body.Bytes(), &resp)
+		entries, ok := resp["entries"].([]interface{})
+		if !ok {
+			t.Fatalf("entries should be array, got %T (%v)", resp["entries"], resp["entries"])
+		}
+		if len(entries) != 0 {
+			t.Errorf("expected empty entries, got %d", len(entries))
+		}
+	})
+
 	t.Run("GET /api/files/list nonexistent directory returns 404", func(t *testing.T) {
 		req := makeRequest(t, "GET", "/api/files/list?path=nonexistent", "", "sebastian")
 		rec := httptest.NewRecorder()

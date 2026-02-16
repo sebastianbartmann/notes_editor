@@ -32,6 +32,11 @@ data class FilesResponse(
 )
 
 @Serializable
+data class FilesResponsePayload(
+    val entries: List<FileEntry>? = emptyList()
+)
+
+@Serializable
 data class FileEntry(
     val name: String,
     val path: String,

@@ -188,6 +188,27 @@ func TestStore_ListDir(t *testing.T) {
 	}
 }
 
+func TestStore_ListDir_EmptyDirectoryReturnsEmptySlice(t *testing.T) {
+	store, tmpDir := setupTestVault(t)
+
+	emptyDir := filepath.Join(tmpDir, "sebastian", "emptydir")
+	if err := os.MkdirAll(emptyDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := store.ListDir("sebastian", "emptydir")
+	if err != nil {
+		t.Fatalf("ListDir() error = %v", err)
+	}
+
+	if entries == nil {
+		t.Fatal("ListDir() returned nil, want empty slice")
+	}
+	if len(entries) != 0 {
+		t.Errorf("ListDir() returned %d entries, want 0", len(entries))
+	}
+}
+
 func TestStore_PathTraversal(t *testing.T) {
 	store, _ := setupTestVault(t)
 

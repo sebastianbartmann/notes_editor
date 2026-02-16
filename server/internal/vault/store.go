@@ -114,7 +114,8 @@ func (s *Store) ListDir(person, path string) ([]FileEntry, error) {
 		return nil, err
 	}
 
-	var files, dirs []FileEntry
+	files := make([]FileEntry, 0)
+	dirs := make([]FileEntry, 0)
 	for _, entry := range entries {
 		name := entry.Name()
 		// Skip hidden files
