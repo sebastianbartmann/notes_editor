@@ -52,3 +52,10 @@
 - Maestro `daily-editor-scroll-focus.yaml` should not target placeholder text (`Edit note`) because placeholder disappears when editor already has content/state; use a stable tap point/focus action instead.
 - Empty directory listings in Go `ListDir` must return a non-nil slice so `/api/files/list` encodes `"entries":[]` (not `null`), otherwise Android Kotlin serialization for file lists fails with an unexpected JSON token when opening empty folders. Android `ApiClient.listFiles` now also coerces nullable payload entries to `emptyList()` for backward compatibility with older servers.
 - Android test reliability: `make android-test-claude-toolcall` must install a fresh APK before running Maestro, otherwise stale app builds can hide newly added inline stream UI (for example missing `Tool call:` bubbles) and produce false negatives. Makefile should use unified `ANDROID_HOME` paths (`$(ANDROID_ADB)`, `$(ANDROID_EMULATOR)`, `$(ANDROID_GRADLE)`) instead of hardcoded `app/android_sdk/...` to avoid silent install failures.
+
+## 2026-02-17
+
+- Agent timeline ordering regression came from buffering assistant text separately and only committing it at run end. Fix requires flushing buffered assistant text before persisting/emitting non-text timeline items (tool/status/error/usage) so history and live UI remain interleaved (`text -> tool -> text`).
+- Web Agent page now exposes an always-visible session info strip (`Session` + latest `Context` usage summary) sourced from latest `usage` item, so context-window/token info is discoverable without scanning chat bubbles.
+- Android Agent screen now mirrors sequential timeline behavior by buffering live assistant text and flushing it before non-text events; it also shows a compact session/context summary line near the top.
+- Daily input persistence across view switches requires explicit draft stores, not just local composable state. Implemented `DailyDraftStore` on Android and local draft persistence on web Daily page for append/task input state (`appendText`, `pinned`, `taskInputMode`, `taskInputText`), keyed by person.

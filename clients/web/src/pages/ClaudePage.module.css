@@ -24,6 +24,18 @@
   margin-bottom: var(--space-2);
 }
 
+.sessionInfo {
+  margin-bottom: var(--space-2);
+  padding: 6px var(--space-2);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--muted);
+  display: grid;
+  gap: 2px;
+}
+
 .actionButton {
   font-size: 11px;
   padding: 3px 8px;
@@ -49,6 +61,8 @@
 }
 
 .bubble {
+  width: 100%;
+  box-sizing: border-box;
   padding: var(--space-2);
   border-radius: var(--radius);
   font-size: 13px;
@@ -59,14 +73,10 @@
 
 .userBubble {
   background: var(--accent-dim);
-  margin-left: 20%;
-  align-self: flex-end;
 }
 
 .assistantBubble {
   background: var(--input);
-  margin-right: 20%;
-  align-self: flex-start;
 }
 
 .cursor {

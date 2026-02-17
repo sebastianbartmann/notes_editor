@@ -28,6 +28,59 @@ function buildDailyPaths(entries: { name: string; path: string; is_dir: boolean 
 }
 
 type TaskCategory = 'work' | 'priv'
+const DAILY_DRAFTS_KEY = 'notes_daily_drafts'
+
+interface DailyDraftState {
+  appendText: string
+  isPinned: boolean
+  taskInputMode: TaskCategory | null
+  taskInputText: string
+}
+
+function loadDailyDraft(person: string | null): DailyDraftState {
+  if (!person) {
+    return { appendText: '', isPinned: false, taskInputMode: null, taskInputText: '' }
+  }
+  try {
+    const raw = localStorage.getItem(DAILY_DRAFTS_KEY)
+    if (!raw) {
+      return { appendText: '', isPinned: false, taskInputMode: null, taskInputText: '' }
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const item = parsed[person]
+    if (!item || typeof item !== 'object') {
+      return { appendText: '', isPinned: false, taskInputMode: null, taskInputText: '' }
+    }
+    const value = item as Record<string, unknown>
+    const mode = value.taskInputMode
+    const validMode = mode === 'work' || mode === 'priv' ? mode : null
+    return {
+      appendText: typeof value.appendText === 'string' ? value.appendText : '',
+      isPinned: value.isPinned === true,
+      taskInputMode: validMode,
+      taskInputText: typeof value.taskInputText === 'string' ? value.taskInputText : '',
+    }
+  } catch {
+    return { appendText: '', isPinned: false, taskInputMode: null, taskInputText: '' }
+  }
+}
+
+function saveDailyDraft(person: string | null, draft: DailyDraftState) {
+  if (!person) return
+  try {
+    const raw = localStorage.getItem(DAILY_DRAFTS_KEY)
+    const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {}
+    const next: Record<string, unknown> = { ...parsed }
+    if (!draft.appendText.trim() && !draft.isPinned && !draft.taskInputMode && !draft.taskInputText.trim()) {
+      delete next[person]
+    } else {
+      next[person] = draft
+    }
+    localStorage.setItem(DAILY_DRAFTS_KEY, JSON.stringify(next))
+  } catch {
+    // Ignore local draft persistence errors.
+  }
+}
 
 export default function DailyPage() {
   const { person } = usePerson()
@@ -43,6 +96,18 @@ export default function DailyPage() {
   const [isPinned, setIsPinned] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const draft = loadDailyDraft(person)
+    setAppendText(draft.appendText)
+    setIsPinned(draft.isPinned)
+    setTaskInputMode(draft.taskInputMode)
+    setTaskInputText(draft.taskInputText)
+  }, [person])
+
+  useEffect(() => {
+    saveDailyDraft(person, { appendText, isPinned, taskInputMode, taskInputText })
+  }, [person, appendText, isPinned, taskInputMode, taskInputText])
 
   useEffect(() => {
     if (!person) return
@@ -131,6 +196,7 @@ export default function DailyPage() {
       await addTodo({ category: taskInputMode, text: taskInputText })
       setTaskInputMode(null)
       setTaskInputText('')
+      saveDailyDraft(person, { appendText, isPinned, taskInputMode: null, taskInputText: '' })
       await reloadCurrentNote()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add task')
@@ -150,6 +216,7 @@ export default function DailyPage() {
       await appendDaily({ path, text: appendText, pinned: isPinned })
       setAppendText('')
       setIsPinned(false)
+      saveDailyDraft(person, { appendText: '', isPinned: false, taskInputMode, taskInputText })
       await reloadCurrentNote()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to append')

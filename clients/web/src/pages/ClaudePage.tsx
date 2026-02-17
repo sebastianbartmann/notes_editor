@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { usePerson } from '../hooks/usePerson'
 import { agentChatStream, clearAgentSession, clearAllAgentSessions, getAgentSessionHistory, listAgentActions, listAgentSessions } from '../api/agent'
 import { useAgentSession } from '../context/AgentSessionContext'
-import type { AgentAction, AgentChatRequest, AgentConversationItem, AgentSessionSummary, AgentStreamEvent } from '../api/types'
+import type { AgentAction, AgentChatRequest, AgentConversationItem, AgentSessionSummary } from '../api/types'
 import styles from './ClaudePage.module.css'
 
 export default function ClaudePage() {
@@ -23,6 +23,15 @@ export default function ClaudePage() {
   const session = person ? getSession(person) : { sessionId: null, messages: [] as AgentConversationItem[] }
   const sessionId = session.sessionId
   const messages = session.messages
+  const latestUsage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const item = messages[i]
+      if (item.type === 'usage' && item.usage) {
+        return item.usage
+      }
+    }
+    return null
+  }, [messages])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -150,19 +159,93 @@ export default function ClaudePage() {
     setStreamingText('')
     setError('')
 
-    let fullResponse = ''
+    let bufferedText = ''
+    const flushBufferedText = () => {
+      if (!bufferedText) return
+      appendMessage(person, { type: 'message', role: 'assistant', content: bufferedText })
+      bufferedText = ''
+      setStreamingText('')
+    }
+
     try {
       for await (const event of agentChatStream(request)) {
-        handleStreamEvent(event, (text) => {
-          fullResponse += text
-          setStreamingText(fullResponse)
-        })
+        switch (event.type) {
+          case 'start':
+            if (event.session_id) {
+              setSessionId(person, event.session_id)
+            }
+            break
+          case 'text':
+            if (event.delta) {
+              bufferedText += event.delta
+              setStreamingText(bufferedText)
+            }
+            break
+          case 'tool_call':
+            flushBufferedText()
+            appendMessage(person, {
+              type: 'tool_call',
+              tool: event.tool,
+              args: event.args,
+              run_id: event.run_id,
+              seq: event.seq,
+              ts: event.ts,
+            })
+            break
+          case 'tool_result':
+            flushBufferedText()
+            appendMessage(person, {
+              type: 'tool_result',
+              tool: event.tool,
+              ok: event.ok,
+              summary: event.summary,
+              run_id: event.run_id,
+              seq: event.seq,
+              ts: event.ts,
+            })
+            break
+          case 'status':
+            flushBufferedText()
+            appendMessage(person, {
+              type: 'status',
+              message: event.message,
+              run_id: event.run_id,
+              seq: event.seq,
+              ts: event.ts,
+            })
+            break
+          case 'error':
+            flushBufferedText()
+            appendMessage(person, {
+              type: 'error',
+              message: event.message || 'Stream error',
+              run_id: event.run_id,
+              seq: event.seq,
+              ts: event.ts,
+            })
+            setError(event.message || 'Stream error')
+            break
+          case 'usage':
+            flushBufferedText()
+            appendMessage(person, {
+              type: 'usage',
+              usage: event.usage,
+              run_id: event.run_id,
+              seq: event.seq,
+              ts: event.ts,
+            })
+            break
+          case 'done':
+            flushBufferedText()
+            if (event.session_id) {
+              setSessionId(person, event.session_id)
+            }
+            break
+        }
       }
-
-      if (fullResponse) {
-        appendMessage(person, { type: 'message', role: 'assistant', content: fullResponse })
-      }
+      flushBufferedText()
     } catch (err) {
+      flushBufferedText()
       setError(err instanceof Error ? err.message : 'Failed to send message')
     } finally {
       setIsStreaming(false)
@@ -185,79 +268,6 @@ export default function ClaudePage() {
       },
       `Run action: ${action.label}`
     )
-  }
-
-  const handleStreamEvent = (
-    event: AgentStreamEvent,
-    onText: (text: string) => void
-  ) => {
-    if (!person) return
-    switch (event.type) {
-      case 'start':
-        if (event.session_id) {
-          setSessionId(person, event.session_id)
-        }
-        break
-      case 'text':
-        if (event.delta) {
-          onText(event.delta)
-        }
-        break
-      case 'tool_call':
-        appendMessage(person, {
-          type: 'tool_call',
-          tool: event.tool,
-          args: event.args,
-          run_id: event.run_id,
-          seq: event.seq,
-          ts: event.ts,
-        })
-        break
-      case 'tool_result':
-        appendMessage(person, {
-          type: 'tool_result',
-          tool: event.tool,
-          ok: event.ok,
-          summary: event.summary,
-          run_id: event.run_id,
-          seq: event.seq,
-          ts: event.ts,
-        })
-        break
-      case 'status':
-        appendMessage(person, {
-          type: 'status',
-          message: event.message,
-          run_id: event.run_id,
-          seq: event.seq,
-          ts: event.ts,
-        })
-        break
-      case 'error':
-        appendMessage(person, {
-          type: 'error',
-          message: event.message || 'Stream error',
-          run_id: event.run_id,
-          seq: event.seq,
-          ts: event.ts,
-        })
-        setError(event.message || 'Stream error')
-        break
-      case 'usage':
-        appendMessage(person, {
-          type: 'usage',
-          usage: event.usage,
-          run_id: event.run_id,
-          seq: event.seq,
-          ts: event.ts,
-        })
-        break
-      case 'done':
-        if (event.session_id) {
-          setSessionId(person, event.session_id)
-        }
-        break
-    }
   }
 
   const handleNewSession = () => {
@@ -283,6 +293,19 @@ export default function ClaudePage() {
       return `Usage: ${total} tokens, ${left} left of ${window}`
     }
     return `Usage: ${total} tokens`
+  }
+
+  const formatUsageSummary = () => {
+    if (!latestUsage) {
+      return 'Context usage not available yet.'
+    }
+    const total = latestUsage.total_tokens ?? 0
+    const left = latestUsage.remaining_tokens
+    const window = latestUsage.context_window
+    if (typeof left === 'number' && typeof window === 'number' && window > 0) {
+      return `Context: ${total.toLocaleString()} used, ${left.toLocaleString()} left of ${window.toLocaleString()}.`
+    }
+    return `Context: ${total.toLocaleString()} tokens used.`
   }
 
   const formatItemMeta = (item: AgentConversationItem) => {
@@ -404,6 +427,10 @@ export default function ClaudePage() {
         ))}
       </div>
       {actionsError && <div className={styles.error}>{actionsError}</div>}
+      <div className={styles.sessionInfo}>
+        <div><strong>Session:</strong> {sessionId || 'new'}</div>
+        <div>{formatUsageSummary()}</div>
+      </div>
 
       <div className={styles.chat}>
         <div className={styles.messages}>
