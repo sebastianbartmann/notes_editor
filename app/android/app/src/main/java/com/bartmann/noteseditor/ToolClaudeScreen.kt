@@ -55,12 +55,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
     var pendingConfirmation by remember { mutableStateOf<AgentAction?>(null) }
     var showSessionsDialog by remember { mutableStateOf(false) }
     var sessions by remember { mutableStateOf<List<AgentSessionSummary>>(emptyList()) }
-    var activeRuns by remember { mutableStateOf<List<AgentActiveRun>>(emptyList()) }
     var sessionsError by remember { mutableStateOf("") }
     var sessionsStatus by remember { mutableStateOf("") }
     var sessionsLoading by remember { mutableStateOf(false) }
     var sessionsBusy by remember { mutableStateOf(false) }
-    var sessionsView by remember { mutableStateOf("saved") }
     var streamingAssistantText by remember { mutableStateOf("") }
     var lastPerson by remember { mutableStateOf<String?>(null) }
     val messages = ClaudeSessionStore.messages
@@ -359,27 +357,11 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
     }
 
-    fun loadActiveRuns() {
-        if (person == null) return
-        scope.launch {
-            try {
-                activeRuns = ApiClient.fetchActiveAgentRuns()
-            } catch (exc: Exception) {
-                activeRuns = emptyList()
-                if (sessionsError.isBlank()) {
-                    sessionsError = "Failed to load active runs: ${exc.message}"
-                }
-            }
-        }
-    }
-
     fun openSessions() {
         if (isLoading || person == null) return
         showSessionsDialog = true
-        sessionsView = "saved"
         sessionsStatus = ""
         loadSessions()
-        loadActiveRuns()
     }
 
     fun continueSession(targetSessionId: String) {
@@ -413,7 +395,6 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 ApiClient.clearAllAgentSessions()
                 ClaudeSessionStore.clear()
                 sessions = emptyList()
-                showSessionsDialog = false
                 statusMessage = ""
                 pendingConfirmation = null
                 streamingAssistantText = ""
@@ -466,24 +447,6 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
     }
 
-    fun stopActiveRun(runId: String) {
-        if (isLoading || person == null || sessionsBusy) return
-        scope.launch {
-            sessionsBusy = true
-            sessionsError = ""
-            sessionsStatus = ""
-            try {
-                ApiClient.stopAgentRun(runId)
-                sessionsStatus = "Stopped run $runId"
-                activeRuns = ApiClient.fetchActiveAgentRuns()
-            } catch (exc: Exception) {
-                sessionsError = "Failed to stop run: ${exc.message}"
-            } finally {
-                sessionsBusy = false
-            }
-        }
-    }
-
     fun refreshCurrentSessionHistory() {
         val currentSessionId = ClaudeSessionStore.sessionId
         if (person == null || currentSessionId.isNullOrBlank() || isLoading) return
@@ -530,257 +493,194 @@ fun ToolClaudeScreen(modifier: Modifier) {
         refreshCurrentSessionHistory()
     }
 
-    LaunchedEffect(showSessionsDialog, person) {
-        if (!showSessionsDialog || person == null) return@LaunchedEffect
-        while (showSessionsDialog) {
-            loadActiveRuns()
-            delay(2000)
-        }
-    }
-
     ScreenLayout(modifier = modifier) {
-        ScreenHeader(
-            title = "Agent",
-            actionButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CompactTextButton(text = "Sessions") {
-                        openSessions()
-                    }
-                    CompactTextButton(text = "New") {
-                        startNewSession()
+        if (showSessionsDialog) {
+            ScreenHeader(
+                title = "Sessions",
+                actionButton = {
+                    CompactTextButton(text = "Close") {
+                        if (!sessionsBusy) showSessionsDialog = false
                     }
                 }
-            }
-        )
+            )
 
-        if (actions.isNotEmpty()) {
-            LazyRow(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(actions) { action ->
+                CompactButton(
+                    text = if (sessionsBusy) "Working..." else "Export .md",
+                    modifier = Modifier.weight(1f),
+                    onClick = { exportSessionsMarkdown() }
+                )
+                CompactButton(
+                    text = if (sessionsBusy) "Deleting..." else "Delete all",
+                    modifier = Modifier.weight(1f),
+                    background = AppTheme.colors.button,
+                    border = AppTheme.colors.danger,
+                    textColor = AppTheme.colors.danger,
+                    onClick = { deleteAllSessions() }
+                )
+            }
+
+            if (sessionsLoading) {
+                AppText("Loading sessions...", AppTheme.typography.bodySmall, AppTheme.colors.muted)
+            }
+            if (sessionsError.isNotBlank()) {
+                SelectableAppText(
+                    text = sessionsError,
+                    style = AppTheme.typography.bodySmall,
+                    color = AppTheme.colors.danger
+                )
+            }
+            if (sessionsStatus.isNotBlank()) {
+                SelectableAppText(
+                    text = sessionsStatus,
+                    style = AppTheme.typography.bodySmall,
+                    color = AppTheme.colors.muted
+                )
+            }
+
+            AppText(
+                "Saved sessions (${sessions.size})",
+                AppTheme.typography.body,
+                AppTheme.colors.text
+            )
+            Panel(modifier = Modifier.weight(1f)) {
+                if (sessions.isEmpty() && sessionsError.isBlank() && !sessionsLoading) {
+                    AppText("No sessions yet.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(sessions) { session ->
+                            SessionRow(
+                                session = session,
+                                active = session.sessionId == ClaudeSessionStore.sessionId,
+                                onClick = { continueSession(session.sessionId) },
+                                onDelete = { deleteSession(session.sessionId) }
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            ScreenHeader(
+                title = "Agent",
+                actionButton = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CompactTextButton(text = "Sessions") {
+                            openSessions()
+                        }
+                        CompactTextButton(text = "New") {
+                            startNewSession()
+                        }
+                    }
+                }
+            )
+
+            if (actions.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(actions) { action ->
+                        CompactButton(
+                            text = if (action.metadata.requiresConfirmation) "${action.label} *" else action.label,
+                            onClick = { runAction(action) }
+                        )
+                    }
+                }
+            } else if (actionsError.isNotBlank()) {
+                StatusMessage(text = actionsError, showDivider = false)
+            } else if (person != null) {
+                StatusMessage(
+                    text = "No actions for this person.",
+                    showDivider = false
+                )
+            }
+            if (pendingConfirmation != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     CompactButton(
-                        text = if (action.metadata.requiresConfirmation) "${action.label} *" else action.label,
-                        onClick = { runAction(action) }
+                        text = "Confirm: ${pendingConfirmation?.label}",
+                        modifier = Modifier.weight(1f),
+                        background = AppTheme.colors.accentDim,
+                        border = AppTheme.colors.accent,
+                        onClick = { pendingConfirmation?.let { runAction(it) } }
+                    )
+                    CompactButton(
+                        text = "Cancel",
+                        modifier = Modifier.width(96.dp),
+                        onClick = {
+                            pendingConfirmation = null
+                            statusMessage = ""
+                        }
                     )
                 }
             }
-        } else if (actionsError.isNotBlank()) {
-            StatusMessage(text = actionsError, showDivider = false)
-        } else if (person != null) {
+
             StatusMessage(
-                text = "No actions for this person.",
+                text = "Session: ${ClaudeSessionStore.sessionId ?: "new"}  |  $usageSummary",
                 showDivider = false
             )
-        }
-        if (pendingConfirmation != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CompactButton(
-                    text = "Confirm: ${pendingConfirmation?.label}",
-                    modifier = Modifier.weight(1f),
-                    background = AppTheme.colors.accentDim,
-                    border = AppTheme.colors.accent,
-                    onClick = { pendingConfirmation?.let { runAction(it) } }
-                )
-                CompactButton(
-                    text = "Cancel",
-                    modifier = Modifier.width(96.dp),
-                    onClick = {
-                        pendingConfirmation = null
-                        statusMessage = ""
-                    }
-                )
-            }
-        }
 
-        StatusMessage(
-            text = "Session: ${ClaudeSessionStore.sessionId ?: "new"}  |  $usageSummary",
-            showDivider = false
-        )
-
-        Panel(modifier = Modifier.weight(1f)) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(visibleMessages) { message ->
-                    ChatBubble(message = message)
-                }
-                if (streamingAssistantText.isNotBlank()) {
-                    item {
-                        ChatBubble(message = AgentConversationItem(type = "message", role = "assistant", content = streamingAssistantText))
-                    }
-                }
-                if (isLoading && streamingAssistantText.isBlank()) {
-                    item {
-                        ChatBubble(message = AgentConversationItem(type = "message", role = "assistant", content = "..."))
-                    }
-                }
-            }
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                CompactTextField(
-                    value = inputText,
-                    onValueChange = {
-                        inputText = it
-                        ClaudeSessionStore.updateDraftInput(person, it)
-                    },
-                    placeholder = "Ask Agent...",
-                    modifier = Modifier.weight(1f),
-                    minLines = 2
-                )
-                CompactButton(
-                    text = if (isLoading) "..." else "Send",
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(84.dp),
-                    onClick = { if (!isLoading && inputText.isNotBlank()) sendMessage() }
-                )
-            }
-            if (isLoading) {
-                StatusMessage(text = "Sending...")
-            } else if (statusMessage.isNotEmpty()) {
-                StatusMessage(text = statusMessage)
-            }
-        }
-
-        if (showSessionsDialog) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(AppTheme.colors.background)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp),
+            Panel(modifier = Modifier.weight(1f)) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AppText("Sessions", AppTheme.typography.title, AppTheme.colors.text)
-                        CompactButton(
-                            text = "Close",
-                            onClick = { if (!sessionsBusy) showSessionsDialog = false }
-                        )
+                    items(visibleMessages) { message ->
+                        ChatBubble(message = message)
                     }
-
-                    if (sessionsLoading) {
-                        AppText("Loading sessions...", AppTheme.typography.bodySmall, AppTheme.colors.muted)
-                    }
-                    if (sessionsError.isNotBlank()) {
-                        SelectableAppText(
-                            text = sessionsError,
-                            style = AppTheme.typography.bodySmall,
-                            color = AppTheme.colors.danger
-                        )
-                    }
-                    if (sessionsStatus.isNotBlank()) {
-                        SelectableAppText(
-                            text = sessionsStatus,
-                            style = AppTheme.typography.bodySmall,
-                            color = AppTheme.colors.muted
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CompactButton(
-                            text = "Saved (${sessions.size})",
-                            modifier = Modifier.weight(1f),
-                            background = if (sessionsView == "saved") AppTheme.colors.accentDim else AppTheme.colors.button,
-                            border = if (sessionsView == "saved") AppTheme.colors.accent else AppTheme.colors.panelBorder,
-                            onClick = { sessionsView = "saved" }
-                        )
-                        CompactButton(
-                            text = "Active (${activeRuns.size})",
-                            modifier = Modifier.weight(1f),
-                            background = if (sessionsView == "active") AppTheme.colors.accentDim else AppTheme.colors.button,
-                            border = if (sessionsView == "active") AppTheme.colors.accent else AppTheme.colors.panelBorder,
-                            onClick = { sessionsView = "active" }
-                        )
-                    }
-                    Panel(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.verticalScroll(rememberScrollState())
-                        ) {
-                            if (sessionsView == "saved") {
-                                AppText(
-                                    "Saved sessions (${sessions.size})",
-                                    AppTheme.typography.body,
-                                    AppTheme.colors.text
-                                )
-                                if (sessions.isEmpty() && sessionsError.isBlank() && !sessionsLoading) {
-                                    AppText("No sessions yet.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
-                                }
-                                sessions.forEach { session ->
-                                    SessionRow(
-                                        session = session,
-                                        active = session.sessionId == ClaudeSessionStore.sessionId,
-                                        onClick = { continueSession(session.sessionId) },
-                                        onDelete = { deleteSession(session.sessionId) }
-                                    )
-                                }
-                            } else {
-                                AppText(
-                                    "Active runs (${activeRuns.size})",
-                                    AppTheme.typography.body,
-                                    AppTheme.colors.text
-                                )
-                                if (activeRuns.isEmpty()) {
-                                    AppText("No active runs.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
-                                }
-                                activeRuns.forEach { run ->
-                                    ActiveRunRow(
-                                        run = run,
-                                        onStop = { stopActiveRun(run.runId) }
-                                    )
-                                }
-                            }
+                    if (streamingAssistantText.isNotBlank()) {
+                        item {
+                            ChatBubble(message = AgentConversationItem(type = "message", role = "assistant", content = streamingAssistantText))
                         }
                     }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CompactButton(
-                            text = if (sessionsBusy) "Working..." else "Export .md",
-                            modifier = Modifier.weight(1f),
-                            onClick = { exportSessionsMarkdown() }
-                        )
-                        CompactButton(
-                            text = if (sessionsBusy) "Deleting..." else "Delete all",
-                            modifier = Modifier.weight(1f),
-                            background = AppTheme.colors.button,
-                            border = AppTheme.colors.danger,
-                            textColor = AppTheme.colors.danger,
-                            onClick = { deleteAllSessions() }
-                        )
+                    if (isLoading && streamingAssistantText.isBlank()) {
+                        item {
+                            ChatBubble(message = AgentConversationItem(type = "message", role = "assistant", content = "..."))
+                        }
                     }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    CompactTextField(
+                        value = inputText,
+                        onValueChange = {
+                            inputText = it
+                            ClaudeSessionStore.updateDraftInput(person, it)
+                        },
+                        placeholder = "Ask Agent...",
+                        modifier = Modifier.weight(1f),
+                        minLines = 2
+                    )
+                    CompactButton(
+                        text = if (isLoading) "..." else "Send",
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(84.dp),
+                        onClick = { if (!isLoading && inputText.isNotBlank()) sendMessage() }
+                    )
+                }
+                if (isLoading) {
+                    StatusMessage(text = "Sending...")
+                } else if (statusMessage.isNotEmpty()) {
+                    StatusMessage(text = statusMessage)
                 }
             }
         }

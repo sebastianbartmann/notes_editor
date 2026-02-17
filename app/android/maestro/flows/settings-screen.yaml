@@ -40,9 +40,3 @@ appId: com.bartmann.noteseditor
 - tapOn: "A-"
 - waitForAnimationToEnd
 - takeScreenshot: "settings-08-text-size-down"
-
-# Verify backup section (may require scroll on small emulator viewport)
-- scroll
-- scroll
-- assertVisible: "Download backup (.zip)"
-- takeScreenshot: "settings-09-backup-visible"

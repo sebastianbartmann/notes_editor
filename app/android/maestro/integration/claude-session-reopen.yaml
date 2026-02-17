@@ -38,9 +38,6 @@ appId: com.bartmann.noteseditor
 - extendedWaitUntil:
     visible: "Sessions"
     timeout: 10000
-- scroll
-- scroll
-- scroll
 - extendedWaitUntil:
     visible: "Respond with exactly REOPEN_TEST_OK and nothing else."
     timeout: 15000
