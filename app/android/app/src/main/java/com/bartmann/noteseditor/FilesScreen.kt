@@ -184,7 +184,7 @@ fun FilesScreen(modifier: Modifier) {
                     level = 0
                 )
             } else {
-                AppText(
+                SelectableAppText(
                     text = if (isEditing) "Editing: $selectedFilePath" else "File: $selectedFilePath",
                     style = AppTheme.typography.label,
                     color = AppTheme.colors.muted

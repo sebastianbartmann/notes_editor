@@ -59,10 +59,25 @@ fun ToolClaudeScreen(modifier: Modifier) {
     var sessionsError by remember { mutableStateOf("") }
     var sessionsLoading by remember { mutableStateOf(false) }
     var sessionsBusy by remember { mutableStateOf(false) }
+    var streamingAssistantText by remember { mutableStateOf("") }
     var lastPerson by remember { mutableStateOf<String?>(null) }
     val messages = ClaudeSessionStore.messages
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val latestUsage = messages.lastOrNull { it.type == "usage" && it.usage != null }?.usage
+    val usageSummary = if (latestUsage?.remainingTokens != null && latestUsage.contextWindow != null && latestUsage.contextWindow > 0) {
+        "Context: ${latestUsage.totalTokens ?: 0} used, ${latestUsage.remainingTokens} left of ${latestUsage.contextWindow}"
+    } else if (latestUsage != null) {
+        "Context: ${latestUsage.totalTokens ?: 0} tokens used"
+    } else {
+        "Context: not available yet"
+    }
+
+    fun flushStreamingAssistantText() {
+        if (streamingAssistantText.isBlank()) return
+        messages.add(AgentConversationItem(type = "message", role = "assistant", content = streamingAssistantText))
+        streamingAssistantText = ""
+    }
 
     fun sendMessage() {
         val text = inputText.trim()
@@ -71,13 +86,11 @@ fun ToolClaudeScreen(modifier: Modifier) {
         ClaudeSessionStore.updateDraftInput(person, "")
         isLoading = true
         statusMessage = "Connecting..."
+        streamingAssistantText = ""
         messages.add(AgentConversationItem(type = "message", role = "user", content = text))
 
         scope.launch {
             try {
-                val assistantIndex = messages.size
-                messages.add(AgentConversationItem(type = "message", role = "assistant", content = ""))
-                var assistantText = ""
                 ApiClient.agentChatStream(text, ClaudeSessionStore.sessionId).collect { event ->
                     when (event.type) {
                         "start" -> {
@@ -86,10 +99,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             }
                         }
                         "text" -> {
-                            assistantText += event.delta.orEmpty()
-                            messages[assistantIndex] = AgentConversationItem(type = "message", role = "assistant", content = assistantText)
+                            streamingAssistantText += event.delta.orEmpty()
                         }
                         "tool_call" -> {
+                            flushStreamingAssistantText()
                             messages.add(
                                 AgentConversationItem(
                                     type = "tool_call",
@@ -102,6 +115,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             )
                         }
                         "tool_result" -> {
+                            flushStreamingAssistantText()
                             messages.add(
                                 AgentConversationItem(
                                     type = "tool_result",
@@ -115,6 +129,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             )
                         }
                         "status" -> {
+                            flushStreamingAssistantText()
                             messages.add(
                                 AgentConversationItem(
                                     type = "status",
@@ -126,12 +141,14 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             )
                         }
                         "done" -> {
+                            flushStreamingAssistantText()
                             if (!event.sessionId.isNullOrBlank()) {
                                 ClaudeSessionStore.sessionId = event.sessionId
                             }
                             statusMessage = ""
                         }
                         "error" -> {
+                            flushStreamingAssistantText()
                             val errorText = event.message ?: "stream error"
                             messages.add(
                                 AgentConversationItem(
@@ -143,11 +160,9 @@ fun ToolClaudeScreen(modifier: Modifier) {
                                 )
                             )
                             statusMessage = "Error: $errorText"
-                            if (assistantText.isBlank()) {
-                                messages[assistantIndex] = AgentConversationItem(type = "message", role = "assistant", content = "Error: $errorText")
-                            }
                         }
                         "usage" -> {
+                            flushStreamingAssistantText()
                             messages.add(
                                 AgentConversationItem(
                                     type = "usage",
@@ -161,8 +176,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
                     }
                 }
             } catch (exc: Exception) {
+                flushStreamingAssistantText()
                 statusMessage = "Error: ${exc.message}"
             } finally {
+                flushStreamingAssistantText()
                 isLoading = false
                 if (!statusMessage.startsWith("Error")) {
                     statusMessage = ""
@@ -181,13 +198,11 @@ fun ToolClaudeScreen(modifier: Modifier) {
         pendingConfirmation = null
         isLoading = true
         statusMessage = "Running ${action.label}..."
+        streamingAssistantText = ""
         messages.add(AgentConversationItem(type = "message", role = "user", content = "Run action: ${action.label}"))
 
         scope.launch {
             try {
-                val assistantIndex = messages.size
-                messages.add(AgentConversationItem(type = "message", role = "assistant", content = ""))
-                var assistantText = ""
                 ApiClient.agentChatStream(
                     message = "",
                     sessionId = ClaudeSessionStore.sessionId,
@@ -201,10 +216,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             }
                         }
                         "text" -> {
-                            assistantText += event.delta.orEmpty()
-                            messages[assistantIndex] = AgentConversationItem(type = "message", role = "assistant", content = assistantText)
+                            streamingAssistantText += event.delta.orEmpty()
                         }
                         "tool_call" -> {
+                            flushStreamingAssistantText()
                             messages.add(
                                 AgentConversationItem(
                                     type = "tool_call",
@@ -217,6 +232,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             )
                         }
                         "tool_result" -> {
+                            flushStreamingAssistantText()
                             messages.add(
                                 AgentConversationItem(
                                     type = "tool_result",
@@ -230,6 +246,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             )
                         }
                         "status" -> {
+                            flushStreamingAssistantText()
                             messages.add(
                                 AgentConversationItem(
                                     type = "status",
@@ -241,12 +258,14 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             )
                         }
                         "done" -> {
+                            flushStreamingAssistantText()
                             if (!event.sessionId.isNullOrBlank()) {
                                 ClaudeSessionStore.sessionId = event.sessionId
                             }
                             statusMessage = ""
                         }
                         "error" -> {
+                            flushStreamingAssistantText()
                             val errorText = event.message ?: "stream error"
                             messages.add(
                                 AgentConversationItem(
@@ -258,11 +277,9 @@ fun ToolClaudeScreen(modifier: Modifier) {
                                 )
                             )
                             statusMessage = "Error: $errorText"
-                            if (assistantText.isBlank()) {
-                                messages[assistantIndex] = AgentConversationItem(type = "message", role = "assistant", content = "Error: $errorText")
-                            }
                         }
                         "usage" -> {
+                            flushStreamingAssistantText()
                             messages.add(
                                 AgentConversationItem(
                                     type = "usage",
@@ -276,8 +293,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
                     }
                 }
             } catch (exc: Exception) {
+                flushStreamingAssistantText()
                 statusMessage = "Error: ${exc.message}"
             } finally {
+                flushStreamingAssistantText()
                 isLoading = false
                 if (!statusMessage.startsWith("Error")) {
                     statusMessage = ""
@@ -291,6 +310,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
         ClaudeSessionStore.clear()
         pendingConfirmation = null
         statusMessage = ""
+        streamingAssistantText = ""
     }
 
     fun loadSessions() {
@@ -325,6 +345,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 ClaudeSessionStore.loadSession(targetSessionId, history)
                 statusMessage = ""
                 pendingConfirmation = null
+                streamingAssistantText = ""
                 showSessionsDialog = false
             } catch (exc: Exception) {
                 sessionsError = "Failed to open session: ${exc.message}"
@@ -346,6 +367,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 showSessionsDialog = false
                 statusMessage = ""
                 pendingConfirmation = null
+                streamingAssistantText = ""
             } catch (exc: Exception) {
                 sessionsError = "Failed to delete sessions: ${exc.message}"
             } finally {
@@ -366,6 +388,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                     ClaudeSessionStore.clear()
                     statusMessage = ""
                     pendingConfirmation = null
+                    streamingAssistantText = ""
                 }
             } catch (exc: Exception) {
                 sessionsError = "Failed to delete session: ${exc.message}"
@@ -386,6 +409,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
             ClaudeSessionStore.clear()
             pendingConfirmation = null
             statusMessage = ""
+            streamingAssistantText = ""
         }
         lastPerson = person
         if (person == null) return@LaunchedEffect
@@ -457,6 +481,11 @@ fun ToolClaudeScreen(modifier: Modifier) {
             }
         }
 
+        StatusMessage(
+            text = "Session: ${ClaudeSessionStore.sessionId ?: "new"}  |  $usageSummary",
+            showDivider = false
+        )
+
         Panel(modifier = Modifier.weight(1f)) {
             LazyColumn(
                 state = listState,
@@ -466,7 +495,12 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 items(messages) { message ->
                     ChatBubble(message = message)
                 }
-                if (isLoading) {
+                if (streamingAssistantText.isNotBlank()) {
+                    item {
+                        ChatBubble(message = AgentConversationItem(type = "message", role = "assistant", content = streamingAssistantText))
+                    }
+                }
+                if (isLoading && streamingAssistantText.isBlank()) {
                     item {
                         ChatBubble(message = AgentConversationItem(type = "message", role = "assistant", content = "..."))
                     }
@@ -638,32 +672,26 @@ private fun ChatBubble(message: AgentConversationItem) {
     }
 
     val isUser = message.role == "user"
-    val alignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
     val bgColor = if (isUser) AppTheme.colors.accentDim else AppTheme.colors.input
 
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = alignment
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(bgColor)
+            .padding(10.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.85f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(bgColor)
-                .padding(10.dp)
-        ) {
+        AppText(
+            text = if (isUser) "You" else "Agent",
+            style = AppTheme.typography.label,
+            color = AppTheme.colors.muted
+        )
+        SelectionContainer {
             AppText(
-                text = if (isUser) "You" else "Agent",
-                style = AppTheme.typography.label,
-                color = AppTheme.colors.muted
+                text = message.content.orEmpty(),
+                style = AppTheme.typography.bodySmall,
+                color = AppTheme.colors.text
             )
-            SelectionContainer {
-                AppText(
-                    text = message.content.orEmpty(),
-                    style = AppTheme.typography.bodySmall,
-                    color = AppTheme.colors.text
-                )
-            }
         }
     }
 }

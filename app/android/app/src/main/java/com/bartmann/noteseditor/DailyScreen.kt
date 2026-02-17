@@ -40,10 +40,11 @@ import kotlinx.coroutines.launch
 fun DailyScreen(
     modifier: Modifier
 ) {
+    val person = UserSettings.person
     var content by remember { mutableStateOf("") }
     var editContent by remember { mutableStateOf(TextFieldValue("")) }
-    var appendText by remember { mutableStateOf("") }
-    var pinned by remember { mutableStateOf(false) }
+    var appendText by remember(person) { mutableStateOf(DailyDraftStore.appendText(person)) }
+    var pinned by remember(person) { mutableStateOf(DailyDraftStore.pinned(person)) }
     var message by remember { mutableStateOf("") }
     var path by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("") }
@@ -52,8 +53,8 @@ fun DailyScreen(
     var isEditing by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     val noteScrollState = rememberScrollState()
-    var taskInputMode by remember { mutableStateOf<String?>(null) }
-    var taskInputText by remember { mutableStateOf("") }
+    var taskInputMode by remember(person) { mutableStateOf(DailyDraftStore.taskInputMode(person)) }
+    var taskInputText by remember(person) { mutableStateOf(DailyDraftStore.taskInputText(person)) }
     val scope = rememberCoroutineScope()
 
     suspend fun saveCurrentBeforeSwitch(): Boolean {
@@ -130,6 +131,8 @@ fun DailyScreen(
         val taskText = taskInputText
         taskInputMode = null
         taskInputText = ""
+        DailyDraftStore.updateTaskInputMode(person, null)
+        DailyDraftStore.updateTaskInputText(person, "")
         scope.launch {
             try {
                 val response = ApiClient.addTodo(category, taskText)
@@ -149,6 +152,8 @@ fun DailyScreen(
         if (taskInputMode != null) {
             taskInputMode = null
             taskInputText = ""
+            DailyDraftStore.updateTaskInputMode(person, null)
+            DailyDraftStore.updateTaskInputText(person, "")
         } else {
             val cursorPos = editContent.selection.start
             val fraction = if (content.isNotEmpty()) cursorPos.toFloat() / content.length else 0f
@@ -316,7 +321,10 @@ fun DailyScreen(
                             ) {
                                 CompactTextField(
                                     value = taskInputText,
-                                    onValueChange = { taskInputText = it },
+                                    onValueChange = {
+                                        taskInputText = it
+                                        DailyDraftStore.updateTaskInputText(person, it)
+                                    },
                                     placeholder = "Task description",
                                     modifier = Modifier
                                         .weight(1f)
@@ -351,6 +359,8 @@ fun DailyScreen(
                                     onClick = {
                                         taskInputMode = null
                                         taskInputText = ""
+                                        DailyDraftStore.updateTaskInputMode(person, null)
+                                        DailyDraftStore.updateTaskInputText(person, "")
                                     },
                                     modifier = Modifier.size(32.dp)
                                 ) {
@@ -372,8 +382,14 @@ fun DailyScreen(
                                 )
                                 isEditing = true
                             }
-                            CompactTextButton(text = "Work task") { taskInputMode = "work" }
-                            CompactTextButton(text = "Priv task") { taskInputMode = "priv" }
+                            CompactTextButton(text = "Work task") {
+                                taskInputMode = "work"
+                                DailyDraftStore.updateTaskInputMode(person, "work")
+                            }
+                            CompactTextButton(text = "Priv task") {
+                                taskInputMode = "priv"
+                                DailyDraftStore.updateTaskInputMode(person, "priv")
+                            }
                         }
                     }
                 }
@@ -404,7 +420,10 @@ fun DailyScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable { pinned = !pinned }
+                                modifier = Modifier.clickable {
+                                    pinned = !pinned
+                                    DailyDraftStore.updatePinned(person, pinned)
+                                }
                             ) {
                                 AppCheckbox(
                                     checked = pinned
@@ -422,6 +441,8 @@ fun DailyScreen(
                                         message = response.message
                                         appendText = ""
                                         pinned = false
+                                        DailyDraftStore.updateAppendText(person, "")
+                                        DailyDraftStore.updatePinned(person, false)
                                         refresh(selectToday = path == todayPath)
                                     } catch (exc: Exception) {
                                         message = "Append failed: ${exc.message}"
@@ -432,7 +453,10 @@ fun DailyScreen(
                     }
                     CompactTextField(
                         value = appendText,
-                        onValueChange = { appendText = it },
+                        onValueChange = {
+                            appendText = it
+                            DailyDraftStore.updateAppendText(person, it)
+                        },
                         placeholder = "Write something...",
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 6

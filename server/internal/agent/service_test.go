@@ -222,6 +222,10 @@ func TestChatStreamRegistersNewSessionFromStreamEvent(t *testing.T) {
 		RuntimeModeAnthropicAPIKey:     runtime,
 		RuntimeModeGatewaySubscription: &stubRuntime{mode: RuntimeModeGatewaySubscription, available: false},
 	})
+	mode := RuntimeModeAnthropicAPIKey
+	if _, err := svc.SaveConfig("sebastian", ConfigUpdate{RuntimeMode: &mode}); err != nil {
+		t.Fatalf("failed to set runtime mode: %v", err)
+	}
 
 	run, err := svc.ChatStream(context.Background(), "sebastian", ChatRequest{
 		Message: "first message from android",
@@ -331,5 +335,68 @@ func TestChatStreamEmitsErrorWhenStreamClosesWithoutDoneOrOutput(t *testing.T) {
 	}
 	if !sawError || !sawDone {
 		t.Fatalf("expected empty-stream error and done, got error=%v done=%v", sawError, sawDone)
+	}
+}
+
+func TestChatStreamStoresAssistantSegmentsInTimelineOrder(t *testing.T) {
+	upstream := make(chan StreamEvent, 8)
+	upstream <- StreamEvent{Type: "text", Delta: "First part."}
+	upstream <- StreamEvent{Type: "tool_call", Tool: "read_file", Args: map[string]any{"path": "daily.md"}}
+	upstream <- StreamEvent{Type: "text", Delta: "Second part."}
+	upstream <- StreamEvent{Type: "tool_result", Tool: "read_file", OK: true, Summary: "Tool read_file executed"}
+	upstream <- StreamEvent{Type: "done", SessionID: "s-seq"}
+	close(upstream)
+
+	runtime := &stubRuntime{
+		mode:      RuntimeModeAnthropicAPIKey,
+		available: true,
+		streamResp: &RuntimeStream{
+			Events: upstream,
+		},
+	}
+
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey:     runtime,
+		RuntimeModeGatewaySubscription: &stubRuntime{mode: RuntimeModeGatewaySubscription, available: false},
+	})
+
+	run, err := svc.ChatStream(context.Background(), "sebastian", ChatRequest{
+		Message: "test sequence",
+	})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+	for range run.Events {
+	}
+
+	history, err := svc.GetConversationHistory("sebastian", "s-seq")
+	if err != nil {
+		t.Fatalf("failed to fetch history: %v", err)
+	}
+
+	relevant := make([]ConversationItem, 0, len(history))
+	for _, item := range history {
+		if item.Type == ConversationItemStatus {
+			continue
+		}
+		relevant = append(relevant, item)
+	}
+	if len(relevant) != 5 {
+		t.Fatalf("expected 5 relevant items, got %d", len(relevant))
+	}
+	if relevant[0].Type != ConversationItemMessage || relevant[0].Role != "user" {
+		t.Fatalf("expected first item to be user message, got %#v", relevant[0])
+	}
+	if relevant[1].Type != ConversationItemMessage || relevant[1].Role != "assistant" || relevant[1].Content != "First part." {
+		t.Fatalf("expected assistant segment before tool call, got %#v", relevant[1])
+	}
+	if relevant[2].Type != ConversationItemToolCall {
+		t.Fatalf("expected tool_call at position 3, got %#v", relevant[2])
+	}
+	if relevant[3].Type != ConversationItemMessage || relevant[3].Role != "assistant" || relevant[3].Content != "Second part." {
+		t.Fatalf("expected second assistant segment before tool result, got %#v", relevant[3])
+	}
+	if relevant[4].Type != ConversationItemToolResult {
+		t.Fatalf("expected tool_result at position 5, got %#v", relevant[4])
 	}
 }

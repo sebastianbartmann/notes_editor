@@ -38,6 +38,19 @@ appId: com.bartmann.noteseditor
 - waitForAnimationToEnd
 - takeScreenshot: "06-task-saved"
 
+# Verify append draft persists across view switches
+- tapOn: "Write something..."
+- inputText: "Draft persists across views"
+- hideKeyboard
+- takeScreenshot: "06a-draft-entered"
+- tapOn: "More"
+- waitForAnimationToEnd
+- takeScreenshot: "06b-switched-more"
+- tapOn: "Daily"
+- waitForAnimationToEnd
+- assertVisible: "Draft persists across views"
+- takeScreenshot: "06c-draft-restored"
+
 # Test edit mode
 - tapOn: "Edit"
 - assertVisible: "Save"

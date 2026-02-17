@@ -43,6 +43,9 @@
 .filePath {
   font-size: 12px;
   color: var(--muted);
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 
 .fileActions {

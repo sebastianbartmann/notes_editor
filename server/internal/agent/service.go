@@ -263,6 +263,20 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 			if event.Seq == 0 {
 				event.Seq = seq
 			}
+			// Persist assistant text in-order before non-text timeline items.
+			if event.Type != "text" {
+				if _, ok := conversationItemFromStreamEvent(event); ok && assistantText.Len() > 0 {
+					runItems = append(runItems, ConversationItem{
+						Type:      ConversationItemMessage,
+						Role:      "assistant",
+						Content:   assistantText.String(),
+						SessionID: finalSessionID,
+						RunID:     runID,
+						TS:        event.TS,
+					})
+					assistantText.Reset()
+				}
+			}
 			out <- event
 			if item, ok := conversationItemFromStreamEvent(event); ok {
 				runItems = append(runItems, item)
@@ -813,17 +827,17 @@ func mapClaudeEvent(event claude.StreamEvent) []StreamEvent {
 			Message: event.Message,
 		}}
 	case "usage":
-		var usage *UsageSnapshot
-		if event.Usage != nil {
-			usage = &UsageSnapshot{
-				InputTokens:      event.Usage.InputTokens,
-				OutputTokens:     event.Usage.OutputTokens,
-				CacheReadTokens:  event.Usage.CacheReadTokens,
-				CacheWriteTokens: event.Usage.CacheWriteTokens,
-				TotalTokens:      event.Usage.TotalTokens,
-				ContextWindow:    event.Usage.ContextWindow,
-				RemainingTokens:  event.Usage.RemainingTokens,
-			}
+		if event.Usage == nil {
+			return nil
+		}
+		usage := &UsageSnapshot{
+			InputTokens:      event.Usage.InputTokens,
+			OutputTokens:     event.Usage.OutputTokens,
+			CacheReadTokens:  event.Usage.CacheReadTokens,
+			CacheWriteTokens: event.Usage.CacheWriteTokens,
+			TotalTokens:      event.Usage.TotalTokens,
+			ContextWindow:    event.Usage.ContextWindow,
+			RemainingTokens:  event.Usage.RemainingTokens,
 		}
 		return []StreamEvent{{
 			Type:  "usage",
