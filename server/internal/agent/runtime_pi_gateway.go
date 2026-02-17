@@ -220,7 +220,9 @@ func (r *PiGatewayRuntime) ChatStream(ctx context.Context, person string, req Ru
 			case "tool_call":
 				out <- StreamEvent{Type: "tool_call", Tool: event.Tool, Args: event.Args}
 			case "status":
-				out <- StreamEvent{Type: "status", Message: event.Message}
+				// Drop gateway status chatter (mode/provider/model banners). Tool execution
+				// progress is represented via tool_call/tool_result events instead.
+				continue
 			case "tool_result":
 				// The gateway now executes tools by delegating back to the Go server, so
 				// tool results are streamed directly from the sidecar.

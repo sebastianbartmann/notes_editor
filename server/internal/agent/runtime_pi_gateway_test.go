@@ -131,6 +131,51 @@ func TestPiGatewayRuntimeTrimsLeadingBlankLinesInTextStream(t *testing.T) {
 	}
 }
 
+func TestPiGatewayRuntimeDoesNotForwardGatewayStatusEvents(t *testing.T) {
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/chat-stream":
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = w.Write([]byte(`{"type":"start","session_id":"runtime-session-1"}` + "\n"))
+			_, _ = w.Write([]byte(`{"type":"status","message":"gateway mode=pi_rpc provider=anthropic model=default"}` + "\n"))
+			_, _ = w.Write([]byte(`{"type":"text","delta":"Hello"}` + "\n"))
+			_, _ = w.Write([]byte(`{"type":"done"}` + "\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer gateway.Close()
+
+	root := t.TempDir()
+	person := "sebastian"
+	if err := os.MkdirAll(filepath.Join(root, person), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	runtime := NewPiGatewayRuntime(gateway.URL).WithDependencies(vault.NewStore(root), nil)
+	stream, err := runtime.ChatStream(context.Background(), person, RuntimeChatRequest{Message: "hello"})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+
+	var sawStatus bool
+	var sawText bool
+	for event := range stream.Events {
+		if event.Type == "status" {
+			sawStatus = true
+		}
+		if event.Type == "text" && event.Delta == "Hello" {
+			sawText = true
+		}
+	}
+	if sawStatus {
+		t.Fatal("expected gateway status events to be suppressed")
+	}
+	if !sawText {
+		t.Fatal("expected normal text events to be preserved")
+	}
+}
+
 func TestPiGatewayRuntimePersistsSessionMappingAcrossRestart(t *testing.T) {
 	type chatPayload struct {
 		Person    string `json:"person"`

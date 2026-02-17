@@ -408,21 +408,18 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 				if event.Type == "error" {
 					sawError = true
 				}
-				if event.Type == "done" {
-					if !sawText && !sawError {
-						emitTerminal(emptyStreamStatus)
+					if event.Type == "done" {
+						if !sawText && !sawError {
+							emitTerminal(emptyStreamStatus)
+							sawDone = true
+							continue
+						}
 						sawDone = true
-						continue
 					}
-					sawDone = true
+					emit(event)
 				}
-				if shouldSuppressStatusEvent(event) {
-					continue
-				}
-				emit(event)
 			}
-		}
-	}()
+		}()
 
 	return &StreamRun{
 		RunID:  runID,
@@ -830,14 +827,6 @@ func (s *Service) effectiveToolLimit(actionMaxSteps int) int {
 		limit = actionMaxSteps
 	}
 	return limit
-}
-
-func shouldSuppressStatusEvent(event StreamEvent) bool {
-	if event.Type != "status" {
-		return false
-	}
-	msg := strings.ToLower(strings.TrimSpace(event.Message))
-	return strings.Contains(msg, "gateway mode==")
 }
 
 func conversationItemFromStreamEvent(event StreamEvent) (ConversationItem, bool) {

@@ -172,9 +172,6 @@ func (s *Service) ListSessions(person string) ([]SessionSummary, error) {
 
 func (s *Service) hydrateGatewayRecoveredSessions(person string) {
 	runtime := s.runtimes[RuntimeModeGatewaySubscription]
-	if runtime == nil || !runtime.Available() {
-		return
-	}
 	piRuntime, _ := runtime.(*PiGatewayRuntime)
 
 	recovered := listGatewayRuntimeSessionFiles(person)

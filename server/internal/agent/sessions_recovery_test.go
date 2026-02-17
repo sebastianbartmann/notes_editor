@@ -94,6 +94,31 @@ func TestListSessionsHydratesGatewayRecoveredSessions(t *testing.T) {
 	}
 }
 
+func TestListSessionsHydratesGatewayRecoveredSessionsWhenRuntimeUnavailable(t *testing.T) {
+	t.Setenv("PI_GATEWAY_PI_SESSION_DIR", t.TempDir())
+	dir := os.Getenv("PI_GATEWAY_PI_SESSION_DIR")
+	body := "{\"type\":\"message\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}\n"
+	if err := os.WriteFile(filepath.Join(dir, "petra--recover-offline.jsonl"), []byte(body), 0644); err != nil {
+		t.Fatalf("write session file: %v", err)
+	}
+
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey:     &stubRuntime{mode: RuntimeModeAnthropicAPIKey, available: true},
+		RuntimeModeGatewaySubscription: &stubRuntime{mode: RuntimeModeGatewaySubscription, available: false},
+	})
+
+	sessions, err := svc.ListSessions("petra")
+	if err != nil {
+		t.Fatalf("list sessions failed: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 recovered session, got %d", len(sessions))
+	}
+	if sessions[0].SessionID != "recover-offline" {
+		t.Fatalf("expected recover-offline session id, got %q", sessions[0].SessionID)
+	}
+}
+
 func TestListSessionsDoesNotDuplicateMappedRuntimeSession(t *testing.T) {
 	t.Setenv("PI_GATEWAY_PI_SESSION_DIR", t.TempDir())
 	dir := os.Getenv("PI_GATEWAY_PI_SESSION_DIR")
