@@ -6,10 +6,22 @@ ANDROID_GRADLE_BIN := $(ANDROID_GRADLE_DIR)/bin/gradle
 ANDROID_GRADLE_ZIP := gradle-$(ANDROID_GRADLE_VERSION)-bin.zip
 ANDROID_GRADLE_URL := https://services.gradle.org/distributions/$(ANDROID_GRADLE_ZIP)
 
+ifeq ($(strip $(ANDROID_SDK_ROOT)),)
+ifeq ($(strip $(ANDROID_HOME)),)
 ANDROID_SDK_ROOT := $(PWD)/app/android_sdk
+ANDROID_HOME := $(ANDROID_SDK_ROOT)
+else
+ANDROID_SDK_ROOT := $(ANDROID_HOME)
+endif
+else
+ifeq ($(strip $(ANDROID_HOME)),)
+ANDROID_HOME := $(ANDROID_SDK_ROOT)
+endif
+endif
 ANDROID_CMDLINE_TOOLS_BIN := $(ANDROID_SDK_ROOT)/cmdline-tools/latest/bin
 ANDROID_SDKMANAGER := $(ANDROID_CMDLINE_TOOLS_BIN)/sdkmanager
 ANDROID_LOCAL_PROPERTIES := $(PWD)/app/android/local.properties
+ANDROID_APP_PACKAGE := com.bartmann.noteseditor
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
@@ -187,9 +199,21 @@ build-android:
 	$(ANDROID_GRADLE) --no-daemon -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs= -p $(PWD)/app/android :app:assembleDebug
 
 install-android:
-	$(ANDROID_ADB) wait-for-device
-	$(ANDROID_ADB) install -r \
-	$(PWD)/app/android/app/build/outputs/apk/debug/app-debug.apk
+	@set -e; \
+	APK="$(PWD)/app/android/app/build/outputs/apk/debug/app-debug.apk"; \
+	$(ANDROID_ADB) wait-for-device; \
+	if OUTPUT="$$($(ANDROID_ADB) install -r "$$APK" 2>&1)"; then \
+		printf "%s\n" "$$OUTPUT"; \
+	else \
+		printf "%s\n" "$$OUTPUT"; \
+		if printf "%s" "$$OUTPUT" | grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE"; then \
+			echo "Signature mismatch for $(ANDROID_APP_PACKAGE). Uninstalling old app and reinstalling..."; \
+			$(ANDROID_ADB) uninstall "$(ANDROID_APP_PACKAGE)" || true; \
+			$(ANDROID_ADB) install "$$APK"; \
+		else \
+			exit 1; \
+		fi; \
+	fi
 
 deploy-android: build-android install-android
 
@@ -200,8 +224,7 @@ debug-android:
 	$(ANDROID_ADB) logcat -d *:E
 
 # Android Testing with Maestro
-# Uses ANDROID_HOME if set, otherwise defaults to $HOME/android-sdk
-ANDROID_HOME ?= $(HOME)/android-sdk
+# Uses ANDROID_HOME/ANDROID_SDK_ROOT if set, otherwise defaults to repo-local app/android_sdk
 ANDROID_ADB := $(ANDROID_HOME)/platform-tools/adb
 ANDROID_EMULATOR := $(ANDROID_HOME)/emulator/emulator
 ANDROID_GRADLE := $(PWD)/app/gradle-8.7/bin/gradle
