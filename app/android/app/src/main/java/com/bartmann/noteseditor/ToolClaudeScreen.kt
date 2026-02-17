@@ -57,20 +57,28 @@ fun ToolClaudeScreen(modifier: Modifier) {
     var showSessionsDialog by remember { mutableStateOf(false) }
     var sessions by remember { mutableStateOf<List<AgentSessionSummary>>(emptyList()) }
     var sessionsError by remember { mutableStateOf("") }
+    var sessionsStatus by remember { mutableStateOf("") }
     var sessionsLoading by remember { mutableStateOf(false) }
     var sessionsBusy by remember { mutableStateOf(false) }
     var streamingAssistantText by remember { mutableStateOf("") }
     var lastPerson by remember { mutableStateOf<String?>(null) }
     val messages = ClaudeSessionStore.messages
-    val visibleMessages = if (UserSettings.showAgentToolCalls) {
+    val visibleMessages = if (UserSettings.agentVerboseOutput) {
         messages
     } else {
-        messages.filter { it.type != "tool_call" && it.type != "tool_result" }
+        messages.filter {
+            it.type != "tool_call" &&
+            it.type != "tool_result" &&
+            it.type != "status" &&
+            it.type != "usage"
+        }
     }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val latestUsage = messages.lastOrNull { it.type == "usage" && it.usage != null }?.usage
-    val usageSummary = if (latestUsage?.remainingTokens != null && latestUsage.contextWindow != null && latestUsage.contextWindow > 0) {
+    val usageSummary = if (!UserSettings.agentVerboseOutput) {
+        "Verbose output disabled"
+    } else if (latestUsage?.remainingTokens != null && latestUsage.contextWindow != null && latestUsage.contextWindow > 0) {
         "Context: ${latestUsage.totalTokens ?: 0} used, ${latestUsage.remainingTokens} left of ${latestUsage.contextWindow}"
     } else if (latestUsage != null) {
         "Context: ${latestUsage.totalTokens ?: 0} tokens used"
@@ -108,42 +116,48 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
                         "tool_call" -> {
                             flushStreamingAssistantText()
-                            messages.add(
-                                AgentConversationItem(
-                                    type = "tool_call",
-                                    runId = event.runId,
-                                    seq = event.seq,
-                                    ts = event.ts,
-                                    tool = event.tool,
-                                    args = event.args
+                            if (UserSettings.agentVerboseOutput) {
+                                messages.add(
+                                    AgentConversationItem(
+                                        type = "tool_call",
+                                        runId = event.runId,
+                                        seq = event.seq,
+                                        ts = event.ts,
+                                        tool = event.tool,
+                                        args = event.args
+                                    )
                                 )
-                            )
+                            }
                         }
                         "tool_result" -> {
                             flushStreamingAssistantText()
-                            messages.add(
-                                AgentConversationItem(
-                                    type = "tool_result",
-                                    runId = event.runId,
-                                    seq = event.seq,
-                                    ts = event.ts,
-                                    tool = event.tool,
-                                    ok = event.ok,
-                                    summary = event.summary
+                            if (UserSettings.agentVerboseOutput) {
+                                messages.add(
+                                    AgentConversationItem(
+                                        type = "tool_result",
+                                        runId = event.runId,
+                                        seq = event.seq,
+                                        ts = event.ts,
+                                        tool = event.tool,
+                                        ok = event.ok,
+                                        summary = event.summary
+                                    )
                                 )
-                            )
+                            }
                         }
                         "status" -> {
                             flushStreamingAssistantText()
-                            messages.add(
-                                AgentConversationItem(
-                                    type = "status",
-                                    runId = event.runId,
-                                    seq = event.seq,
-                                    ts = event.ts,
-                                    message = event.message
+                            if (UserSettings.agentVerboseOutput) {
+                                messages.add(
+                                    AgentConversationItem(
+                                        type = "status",
+                                        runId = event.runId,
+                                        seq = event.seq,
+                                        ts = event.ts,
+                                        message = event.message
+                                    )
                                 )
-                            )
+                            }
                         }
                         "done" -> {
                             flushStreamingAssistantText()
@@ -168,15 +182,17 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
                         "usage" -> {
                             flushStreamingAssistantText()
-                            messages.add(
-                                AgentConversationItem(
-                                    type = "usage",
-                                    runId = event.runId,
-                                    seq = event.seq,
-                                    ts = event.ts,
-                                    usage = event.usage
+                            if (UserSettings.agentVerboseOutput) {
+                                messages.add(
+                                    AgentConversationItem(
+                                        type = "usage",
+                                        runId = event.runId,
+                                        seq = event.seq,
+                                        ts = event.ts,
+                                        usage = event.usage
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -225,42 +241,48 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
                         "tool_call" -> {
                             flushStreamingAssistantText()
-                            messages.add(
-                                AgentConversationItem(
-                                    type = "tool_call",
-                                    runId = event.runId,
-                                    seq = event.seq,
-                                    ts = event.ts,
-                                    tool = event.tool,
-                                    args = event.args
+                            if (UserSettings.agentVerboseOutput) {
+                                messages.add(
+                                    AgentConversationItem(
+                                        type = "tool_call",
+                                        runId = event.runId,
+                                        seq = event.seq,
+                                        ts = event.ts,
+                                        tool = event.tool,
+                                        args = event.args
+                                    )
                                 )
-                            )
+                            }
                         }
                         "tool_result" -> {
                             flushStreamingAssistantText()
-                            messages.add(
-                                AgentConversationItem(
-                                    type = "tool_result",
-                                    runId = event.runId,
-                                    seq = event.seq,
-                                    ts = event.ts,
-                                    tool = event.tool,
-                                    ok = event.ok,
-                                    summary = event.summary
+                            if (UserSettings.agentVerboseOutput) {
+                                messages.add(
+                                    AgentConversationItem(
+                                        type = "tool_result",
+                                        runId = event.runId,
+                                        seq = event.seq,
+                                        ts = event.ts,
+                                        tool = event.tool,
+                                        ok = event.ok,
+                                        summary = event.summary
+                                    )
                                 )
-                            )
+                            }
                         }
                         "status" -> {
                             flushStreamingAssistantText()
-                            messages.add(
-                                AgentConversationItem(
-                                    type = "status",
-                                    runId = event.runId,
-                                    seq = event.seq,
-                                    ts = event.ts,
-                                    message = event.message
+                            if (UserSettings.agentVerboseOutput) {
+                                messages.add(
+                                    AgentConversationItem(
+                                        type = "status",
+                                        runId = event.runId,
+                                        seq = event.seq,
+                                        ts = event.ts,
+                                        message = event.message
+                                    )
                                 )
-                            )
+                            }
                         }
                         "done" -> {
                             flushStreamingAssistantText()
@@ -285,15 +307,17 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
                         "usage" -> {
                             flushStreamingAssistantText()
-                            messages.add(
-                                AgentConversationItem(
-                                    type = "usage",
-                                    runId = event.runId,
-                                    seq = event.seq,
-                                    ts = event.ts,
-                                    usage = event.usage
+                            if (UserSettings.agentVerboseOutput) {
+                                messages.add(
+                                    AgentConversationItem(
+                                        type = "usage",
+                                        runId = event.runId,
+                                        seq = event.seq,
+                                        ts = event.ts,
+                                        usage = event.usage
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -337,6 +361,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
     fun openSessions() {
         if (isLoading || person == null) return
         showSessionsDialog = true
+        sessionsStatus = ""
         loadSessions()
     }
 
@@ -345,6 +370,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
         scope.launch {
             sessionsBusy = true
             sessionsError = ""
+            sessionsStatus = ""
             try {
                 val history = ApiClient.fetchAgentSessionHistory(targetSessionId)
                 ClaudeSessionStore.loadSession(targetSessionId, history)
@@ -365,6 +391,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
         scope.launch {
             sessionsBusy = true
             sessionsError = ""
+            sessionsStatus = ""
             try {
                 ApiClient.clearAllAgentSessions()
                 ClaudeSessionStore.clear()
@@ -386,6 +413,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
         scope.launch {
             sessionsBusy = true
             sessionsError = ""
+            sessionsStatus = ""
             try {
                 ApiClient.clearAgentSession(targetSessionId)
                 sessions = sessions.filter { it.sessionId != targetSessionId }
@@ -397,6 +425,24 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 }
             } catch (exc: Exception) {
                 sessionsError = "Failed to delete session: ${exc.message}"
+            } finally {
+                sessionsBusy = false
+            }
+        }
+    }
+
+    fun exportSessionsMarkdown() {
+        if (isLoading || person == null || sessionsBusy) return
+        scope.launch {
+            sessionsBusy = true
+            sessionsError = ""
+            sessionsStatus = ""
+            try {
+                val exported = ApiClient.exportAgentSessionsMarkdown()
+                val sessionCount = (exported.files.size - 1).coerceAtLeast(0)
+                sessionsStatus = "Exported $sessionCount session file(s) to ${exported.directory}"
+            } catch (exc: Exception) {
+                sessionsError = "Failed to export sessions: ${exc.message}"
             } finally {
                 sessionsBusy = false
             }
@@ -579,6 +625,18 @@ fun ToolClaudeScreen(modifier: Modifier) {
                                 color = AppTheme.colors.danger
                             )
                         }
+                        if (sessionsStatus.isNotBlank()) {
+                            SelectableAppText(
+                                text = sessionsStatus,
+                                style = AppTheme.typography.bodySmall,
+                                color = AppTheme.colors.muted
+                            )
+                        }
+
+                        CompactButton(
+                            text = if (sessionsBusy) "Working..." else "Export .md",
+                            onClick = { exportSessionsMarkdown() }
+                        )
 
                         sessions.forEach { session ->
                             SessionRow(

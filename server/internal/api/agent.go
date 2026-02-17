@@ -37,6 +37,13 @@ type AgentToolExecuteResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
+type AgentExportSessionsResponse struct {
+	Success   bool     `json:"success"`
+	Message   string   `json:"message"`
+	Directory string   `json:"directory"`
+	Files     []string `json:"files"`
+}
+
 // handleAgentChat handles non-streaming agent chat requests.
 func (s *Server) handleAgentChat(w http.ResponseWriter, r *http.Request) {
 	person, ok := requirePerson(w, r)
@@ -242,6 +249,33 @@ func (s *Server) handleAgentSessionsClearAll(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeSuccess(w, "All sessions cleared")
+}
+
+// handleAgentSessionsExportMarkdown exports all person sessions to markdown files.
+func (s *Server) handleAgentSessionsExportMarkdown(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	exported, err := agentSvc.ExportSessionsMarkdown(person)
+	if err != nil {
+		writeBadRequest(w, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, AgentExportSessionsResponse{
+		Success:   true,
+		Message:   "Exported sessions to markdown",
+		Directory: exported.Directory,
+		Files:     exported.Files,
+	})
 }
 
 // handleAgentStopRun stops an active streaming run.

@@ -245,6 +245,14 @@ data class AgentSessionsResponse(
 )
 
 @Serializable
+data class AgentSessionsExportResponse(
+    val success: Boolean = true,
+    val message: String = "",
+    val directory: String = "",
+    val files: List<String> = emptyList()
+)
+
+@Serializable
 data class AgentSessionHistoryResponse(
     val items: List<AgentConversationItem> = emptyList(),
     val messages: List<ChatMessage> = emptyList()

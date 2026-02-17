@@ -10,6 +10,7 @@ import type {
   AgentHistoryResponse,
   AgentSessionSummary,
   AgentSessionsResponse,
+  AgentSessionsExportResponse,
   AgentStreamEvent,
   SaveResponse,
 } from './types'
@@ -80,6 +81,13 @@ export async function listAgentSessions(): Promise<AgentSessionSummary[]> {
 
 export async function clearAllAgentSessions(): Promise<SaveResponse> {
   return apiRequest<SaveResponse>('/api/agent/sessions/clear', {
+    method: 'POST',
+    body: {},
+  })
+}
+
+export async function exportAgentSessionsMarkdown(): Promise<AgentSessionsExportResponse> {
+  return apiRequest<AgentSessionsExportResponse>('/api/agent/sessions/export-markdown', {
     method: 'POST',
     body: {},
   })

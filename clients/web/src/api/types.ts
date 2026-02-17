@@ -245,3 +245,10 @@ export interface AgentSessionSummary {
 export interface AgentSessionsResponse {
   sessions: AgentSessionSummary[]
 }
+
+export interface AgentSessionsExportResponse {
+  success: boolean
+  message: string
+  directory: string
+  files: string[]
+}

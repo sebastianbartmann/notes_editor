@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { usePerson } from '../hooks/usePerson'
-import { agentChatStream, clearAgentSession, clearAllAgentSessions, getAgentSessionHistory, listAgentActions, listAgentSessions } from '../api/agent'
+import { agentChatStream, clearAgentSession, clearAllAgentSessions, exportAgentSessionsMarkdown, getAgentSessionHistory, listAgentActions, listAgentSessions } from '../api/agent'
 import { useAgentSession } from '../context/AgentSessionContext'
 import type { AgentAction, AgentChatRequest, AgentConversationItem, AgentSessionSummary } from '../api/types'
 import styles from './ClaudePage.module.css'
 
-const SHOW_TOOL_CALLS_KEY = 'notes_agent_show_tool_calls'
+const VERBOSE_OUTPUT_KEY = 'notes_agent_verbose_output'
+const LEGACY_SHOW_TOOL_CALLS_KEY = 'notes_agent_show_tool_calls'
 
 export default function ClaudePage() {
   const { person } = usePerson()
@@ -20,18 +21,26 @@ export default function ClaudePage() {
   const [sessions, setSessions] = useState<AgentSessionSummary[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionsError, setSessionsError] = useState('')
+  const [sessionsStatus, setSessionsStatus] = useState('')
   const [sessionsBusy, setSessionsBusy] = useState(false)
-  const [showToolCalls, setShowToolCalls] = useState<boolean>(() => {
-    const stored = localStorage.getItem(SHOW_TOOL_CALLS_KEY)
-    return stored !== 'false'
+  const [verboseOutput, setVerboseOutput] = useState<boolean>(() => {
+    const stored = localStorage.getItem(VERBOSE_OUTPUT_KEY)
+    if (stored !== null) return stored !== 'false'
+    const legacy = localStorage.getItem(LEGACY_SHOW_TOOL_CALLS_KEY)
+    return legacy !== 'false'
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const session = person ? getSession(person) : { sessionId: null, messages: [] as AgentConversationItem[] }
   const sessionId = session.sessionId
   const messages = session.messages
-  const visibleMessages = showToolCalls
+  const visibleMessages = verboseOutput
     ? messages
-    : messages.filter(item => item.type !== 'tool_call' && item.type !== 'tool_result')
+    : messages.filter(item =>
+      item.type !== 'tool_call' &&
+      item.type !== 'tool_result' &&
+      item.type !== 'status' &&
+      item.type !== 'usage'
+    )
   const latestUsage = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       const item = messages[i]
@@ -44,8 +53,13 @@ export default function ClaudePage() {
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== SHOW_TOOL_CALLS_KEY) return
-      setShowToolCalls(event.newValue !== 'false')
+      if (event.key !== VERBOSE_OUTPUT_KEY && event.key !== LEGACY_SHOW_TOOL_CALLS_KEY) return
+      const current = localStorage.getItem(VERBOSE_OUTPUT_KEY)
+      if (current !== null) {
+        setVerboseOutput(current !== 'false')
+        return
+      }
+      setVerboseOutput(localStorage.getItem(LEGACY_SHOW_TOOL_CALLS_KEY) !== 'false')
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -105,6 +119,7 @@ export default function ClaudePage() {
   const handleOpenSessions = async () => {
     if (isStreaming || !person) return
     setSessionsOpen(true)
+    setSessionsStatus('')
     await loadSessions()
   }
 
@@ -113,6 +128,7 @@ export default function ClaudePage() {
     setSessionId(person, selectedSessionId)
     setSessionsOpen(false)
     setSessionsError('')
+    setSessionsStatus('')
     setError('')
     setStreamingText('')
   }
@@ -127,6 +143,7 @@ export default function ClaudePage() {
       clearSession(person)
       setSessions([])
       setSessionsOpen(false)
+      setSessionsStatus('')
       setStreamingText('')
       setError('')
     } catch (err) {
@@ -142,6 +159,7 @@ export default function ClaudePage() {
     if (!ok) return
     setSessionsBusy(true)
     setSessionsError('')
+    setSessionsStatus('')
     try {
       await clearAgentSession(targetSessionId)
       setSessions(prev => prev.filter(item => item.session_id !== targetSessionId))
@@ -152,6 +170,22 @@ export default function ClaudePage() {
       }
     } catch (err) {
       setSessionsError(err instanceof Error ? err.message : 'Failed to delete session')
+    } finally {
+      setSessionsBusy(false)
+    }
+  }
+
+  const handleExportSessions = async () => {
+    if (!person || isStreaming || sessionsBusy) return
+    setSessionsBusy(true)
+    setSessionsError('')
+    setSessionsStatus('')
+    try {
+      const resp = await exportAgentSessionsMarkdown()
+      const count = Math.max(0, (resp.files?.length || 0) - 1)
+      setSessionsStatus(`Exported ${count} session file(s) to ${resp.directory}`)
+    } catch (err) {
+      setSessionsError(err instanceof Error ? err.message : 'Failed to export sessions')
     } finally {
       setSessionsBusy(false)
     }
@@ -201,36 +235,42 @@ export default function ClaudePage() {
             break
           case 'tool_call':
             flushBufferedText()
-            appendMessage(person, {
-              type: 'tool_call',
-              tool: event.tool,
-              args: event.args,
-              run_id: event.run_id,
-              seq: event.seq,
-              ts: event.ts,
-            })
+            if (verboseOutput) {
+              appendMessage(person, {
+                type: 'tool_call',
+                tool: event.tool,
+                args: event.args,
+                run_id: event.run_id,
+                seq: event.seq,
+                ts: event.ts,
+              })
+            }
             break
           case 'tool_result':
             flushBufferedText()
-            appendMessage(person, {
-              type: 'tool_result',
-              tool: event.tool,
-              ok: event.ok,
-              summary: event.summary,
-              run_id: event.run_id,
-              seq: event.seq,
-              ts: event.ts,
-            })
+            if (verboseOutput) {
+              appendMessage(person, {
+                type: 'tool_result',
+                tool: event.tool,
+                ok: event.ok,
+                summary: event.summary,
+                run_id: event.run_id,
+                seq: event.seq,
+                ts: event.ts,
+              })
+            }
             break
           case 'status':
             flushBufferedText()
-            appendMessage(person, {
-              type: 'status',
-              message: event.message,
-              run_id: event.run_id,
-              seq: event.seq,
-              ts: event.ts,
-            })
+            if (verboseOutput) {
+              appendMessage(person, {
+                type: 'status',
+                message: event.message,
+                run_id: event.run_id,
+                seq: event.seq,
+                ts: event.ts,
+              })
+            }
             break
           case 'error':
             flushBufferedText()
@@ -245,13 +285,15 @@ export default function ClaudePage() {
             break
           case 'usage':
             flushBufferedText()
-            appendMessage(person, {
-              type: 'usage',
-              usage: event.usage,
-              run_id: event.run_id,
-              seq: event.seq,
-              ts: event.ts,
-            })
+            if (verboseOutput) {
+              appendMessage(person, {
+                type: 'usage',
+                usage: event.usage,
+                run_id: event.run_id,
+                seq: event.seq,
+                ts: event.ts,
+              })
+            }
             break
           case 'done':
             flushBufferedText()
@@ -314,6 +356,9 @@ export default function ClaudePage() {
   }
 
   const formatUsageSummary = () => {
+    if (!verboseOutput) {
+      return 'Verbose output disabled.'
+    }
     if (!latestUsage) {
       return 'Context usage not available yet.'
     }
@@ -495,6 +540,7 @@ export default function ClaudePage() {
             {!sessionsLoading && sessions.length === 0 && !sessionsError && (
               <div className={styles.message}>No sessions yet.</div>
             )}
+            {sessionsStatus && <div className={styles.message}>{sessionsStatus}</div>}
             {sessionsError && <div className={styles.error}>{sessionsError}</div>}
             {!sessionsLoading && sessions.length > 0 && (
               <div className={styles.sessionList}>
@@ -524,11 +570,18 @@ export default function ClaudePage() {
             )}
             <div className={styles.modalFooter}>
               <button
+                className="ghost"
+                onClick={handleExportSessions}
+                disabled={sessionsBusy || isStreaming}
+              >
+                {sessionsBusy ? 'Working...' : 'Export .md'}
+              </button>
+              <button
                 className="danger"
                 onClick={handleDeleteAllSessions}
                 disabled={sessionsBusy || isStreaming}
               >
-                {sessionsBusy ? 'Deleting...' : 'Delete all sessions'}
+                Delete all sessions
               </button>
             </div>
           </div>

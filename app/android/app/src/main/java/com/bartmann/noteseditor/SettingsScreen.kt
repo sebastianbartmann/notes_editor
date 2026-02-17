@@ -224,14 +224,14 @@ fun SettingsScreen(modifier: Modifier) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(AppTheme.colors.input, RoundedCornerShape(6.dp))
-                    .clickable { UserSettings.updateShowAgentToolCalls(!UserSettings.showAgentToolCalls) }
+                    .clickable { UserSettings.updateAgentVerboseOutput(!UserSettings.agentVerboseOutput) }
                     .padding(horizontal = AppTheme.spacing.sm, vertical = AppTheme.spacing.sm),
                 horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AppCheckbox(checked = UserSettings.showAgentToolCalls)
+                AppCheckbox(checked = UserSettings.agentVerboseOutput)
                 AppText(
-                    text = "Show tool call messages in Agent chat",
+                    text = "Enable verbose output (tool calls, gateway status, usage)",
                     style = AppTheme.typography.body,
                     color = AppTheme.colors.text
                 )

@@ -289,6 +289,9 @@ object ApiClient {
     suspend fun fetchAgentSessions(): List<AgentSessionSummary> =
         getJson<AgentSessionsResponse>("/api/agent/sessions").sessions
 
+    suspend fun exportAgentSessionsMarkdown(): AgentSessionsExportResponse =
+        postJson("/api/agent/sessions/export-markdown", mapOf<String, String>())
+
     suspend fun clearAllAgentSessions(): ApiMessage =
         postJson("/api/agent/sessions/clear", mapOf<String, String>())
 

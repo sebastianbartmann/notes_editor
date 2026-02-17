@@ -13,6 +13,7 @@ object UserSettings {
     private const val KEY_THEME = "theme"
     private const val KEY_BOTTOM_NAV = "bottom_nav"
     private const val KEY_TEXT_SCALE = "text_scale"
+    private const val KEY_AGENT_VERBOSE_OUTPUT = "agent_verbose_output"
     private const val KEY_SHOW_AGENT_TOOL_CALLS = "show_agent_tool_calls"
     private lateinit var prefs: SharedPreferences
 
@@ -24,7 +25,7 @@ object UserSettings {
         private set
     var textScale by mutableStateOf(DEFAULT_TEXT_SCALE)
         private set
-    var showAgentToolCalls by mutableStateOf(true)
+    var agentVerboseOutput by mutableStateOf(true)
         private set
 
     fun init(context: Context) {
@@ -36,7 +37,13 @@ object UserSettings {
             storedBottomNav.split(",").map { it.trim() }.filter { it.isNotBlank() }
         )
         textScale = sanitizeTextScale(prefs.getFloat(KEY_TEXT_SCALE, DEFAULT_TEXT_SCALE))
-        showAgentToolCalls = prefs.getBoolean(KEY_SHOW_AGENT_TOOL_CALLS, true)
+        agentVerboseOutput = when {
+            prefs.contains(KEY_AGENT_VERBOSE_OUTPUT) -> prefs.getBoolean(KEY_AGENT_VERBOSE_OUTPUT, true)
+            prefs.contains(KEY_SHOW_AGENT_TOOL_CALLS) -> prefs.getBoolean(KEY_SHOW_AGENT_TOOL_CALLS, true)
+            else -> true
+        }
+        // Migration cleanup for old key name.
+        prefs.edit().remove(KEY_SHOW_AGENT_TOOL_CALLS).apply()
     }
 
     fun updatePerson(value: String) {
@@ -70,9 +77,9 @@ object UserSettings {
         updateTextScale(DEFAULT_TEXT_SCALE)
     }
 
-    fun updateShowAgentToolCalls(value: Boolean) {
-        showAgentToolCalls = value
-        prefs.edit().putBoolean(KEY_SHOW_AGENT_TOOL_CALLS, value).apply()
+    fun updateAgentVerboseOutput(value: Boolean) {
+        agentVerboseOutput = value
+        prefs.edit().putBoolean(KEY_AGENT_VERBOSE_OUTPUT, value).apply()
     }
 }
 

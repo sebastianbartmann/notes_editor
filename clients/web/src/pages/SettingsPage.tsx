@@ -6,7 +6,8 @@ import { downloadVaultBackup, fetchEnv, saveEnv } from '../api/settings'
 import { getAgentConfig, getAgentGatewayHealth, saveAgentConfig } from '../api/agent'
 import styles from './SettingsPage.module.css'
 
-const SHOW_TOOL_CALLS_KEY = 'notes_agent_show_tool_calls'
+const VERBOSE_OUTPUT_KEY = 'notes_agent_verbose_output'
+const LEGACY_SHOW_TOOL_CALLS_KEY = 'notes_agent_show_tool_calls'
 
 export default function SettingsPage() {
   const { person, setPerson } = usePerson()
@@ -22,14 +23,17 @@ export default function SettingsPage() {
   const [isSavingAgent, setIsSavingAgent] = useState(false)
   const [backupStatus, setBackupStatus] = useState('')
   const [isDownloadingBackup, setIsDownloadingBackup] = useState(false)
-  const [showToolCalls, setShowToolCalls] = useState<boolean>(() => {
-    const stored = localStorage.getItem(SHOW_TOOL_CALLS_KEY)
-    return stored !== 'false'
+  const [verboseOutput, setVerboseOutput] = useState<boolean>(() => {
+    const stored = localStorage.getItem(VERBOSE_OUTPUT_KEY)
+    if (stored !== null) return stored !== 'false'
+    const legacy = localStorage.getItem(LEGACY_SHOW_TOOL_CALLS_KEY)
+    return legacy !== 'false'
   })
 
   useEffect(() => {
-    localStorage.setItem(SHOW_TOOL_CALLS_KEY, showToolCalls ? 'true' : 'false')
-  }, [showToolCalls])
+    localStorage.setItem(VERBOSE_OUTPUT_KEY, verboseOutput ? 'true' : 'false')
+    localStorage.removeItem(LEGACY_SHOW_TOOL_CALLS_KEY)
+  }, [verboseOutput])
 
   useEffect(() => {
     fetchEnv()
@@ -202,10 +206,10 @@ export default function SettingsPage() {
         <label className={styles.checkboxRow}>
           <input
             type="checkbox"
-            checked={showToolCalls}
-            onChange={e => setShowToolCalls(e.target.checked)}
+            checked={verboseOutput}
+            onChange={e => setVerboseOutput(e.target.checked)}
           />
-          Show tool call messages in Agent chat
+          Enable verbose output (tool calls, gateway status, usage)
         </label>
         <textarea
           value={agentPrompt}
