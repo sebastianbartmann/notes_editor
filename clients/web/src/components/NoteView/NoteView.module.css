@@ -3,14 +3,14 @@
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: var(--space-2);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   line-height: 1.6;
   max-height: 420px;
   overflow-y: auto;
 }
 
 .noteViewLarge {
-  font-size: 15px;
+  font-size: calc(var(--text-scale) * 15px);
   line-height: 1.75;
   max-height: 52vh;
 }
@@ -28,14 +28,14 @@
 }
 
 .h1 {
-  font-size: 16px;
+  font-size: calc(var(--text-scale) * 16px);
   font-weight: 600;
   color: var(--accent);
   margin-top: var(--space-2);
 }
 
 .h2 {
-  font-size: 14px;
+  font-size: calc(var(--text-scale) * 14px);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -44,26 +44,26 @@
 }
 
 .h3 {
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
   font-weight: 600;
   color: var(--accent);
   margin-top: var(--space-1);
 }
 
 .h4 {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   font-weight: 600;
   color: var(--text);
 }
 
 .h5 {
-  font-size: 11px;
+  font-size: calc(var(--text-scale) * 11px);
   font-weight: 600;
   color: var(--text);
 }
 
 .h6 {
-  font-size: 11px;
+  font-size: calc(var(--text-scale) * 11px);
   font-weight: 600;
   color: var(--muted);
 }
@@ -81,7 +81,7 @@
 }
 
 .unpinBtn {
-  font-size: 11px;
+  font-size: calc(var(--text-scale) * 11px);
   padding: 2px 8px;
   border-radius: 999px;
   border-color: var(--accent-dim);
@@ -116,25 +116,25 @@
 }
 
 .noteViewLarge .h1 {
-  font-size: 24px;
+  font-size: calc(var(--text-scale) * 24px);
 }
 
 .noteViewLarge .h2 {
-  font-size: 20px;
+  font-size: calc(var(--text-scale) * 20px);
 }
 
 .noteViewLarge .h3 {
-  font-size: 18px;
+  font-size: calc(var(--text-scale) * 18px);
 }
 
 .noteViewLarge .h4 {
-  font-size: 17px;
+  font-size: calc(var(--text-scale) * 17px);
 }
 
 .noteViewLarge .h5 {
-  font-size: 16px;
+  font-size: calc(var(--text-scale) * 16px);
 }
 
 .noteViewLarge .h6 {
-  font-size: 15px;
+  font-size: calc(var(--text-scale) * 15px);
 }

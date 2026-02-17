@@ -10,9 +10,13 @@ function TestComponent() {
   return (
     <div>
       <div data-testid="theme">{theme.theme}</div>
+      <div data-testid="text-scale">{theme.textScale}</div>
       <button onClick={() => theme.setTheme('dark')}>Set Dark</button>
       <button onClick={() => theme.setTheme('light')}>Set Light</button>
       <button onClick={theme.toggleTheme}>Toggle</button>
+      <button onClick={() => theme.stepTextScale(-1)}>Scale Down</button>
+      <button onClick={() => theme.stepTextScale(1)}>Scale Up</button>
+      <button onClick={theme.resetTextScale}>Scale Reset</button>
     </div>
   )
 }
@@ -21,6 +25,7 @@ describe('ThemeContext', () => {
   beforeEach(() => {
     localStorage.clear()
     document.body.className = ''
+    document.documentElement.style.removeProperty('--text-scale')
   })
 
   it('defaults to dark theme when localStorage is empty', () => {
@@ -148,5 +153,39 @@ describe('ThemeContext', () => {
 
     // Class removed
     expect(document.body.classList.contains('theme-light')).toBe(false)
+  })
+
+  it('defaults text scale to 1 and persists it', () => {
+    render(
+      <ThemeProvider>
+        <TestComponent />
+      </ThemeProvider>
+    )
+
+    expect(screen.getByTestId('text-scale')).toHaveTextContent('1')
+    expect(localStorage.getItem('notes_text_scale')).toBe('1')
+    expect(document.documentElement.style.getPropertyValue('--text-scale')).toBe('1')
+  })
+
+  it('steps and resets text scale', async () => {
+    render(
+      <ThemeProvider>
+        <TestComponent />
+      </ThemeProvider>
+    )
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Scale Up' }))
+    })
+
+    expect(screen.getByTestId('text-scale')).toHaveTextContent('1.05')
+    expect(localStorage.getItem('notes_text_scale')).toBe('1.05')
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Scale Reset' }))
+    })
+
+    expect(screen.getByTestId('text-scale')).toHaveTextContent('1')
+    expect(localStorage.getItem('notes_text_scale')).toBe('1')
   })
 })

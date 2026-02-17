@@ -4,6 +4,7 @@ import { useTheme } from '../hooks/useTheme'
 import { useAuth } from '../hooks/useAuth'
 import { downloadVaultBackup, fetchEnv, saveEnv } from '../api/settings'
 import { getAgentConfig, getAgentGatewayHealth, saveAgentConfig } from '../api/agent'
+import { MAX_TEXT_SCALE, MIN_TEXT_SCALE, TEXT_SCALE_STEP } from '../context/ThemeContext'
 import styles from './SettingsPage.module.css'
 
 const VERBOSE_OUTPUT_KEY = 'notes_agent_verbose_output'
@@ -11,7 +12,7 @@ const LEGACY_SHOW_TOOL_CALLS_KEY = 'notes_agent_show_tool_calls'
 
 export default function SettingsPage() {
   const { person, setPerson } = usePerson()
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, textScale, stepTextScale, resetTextScale } = useTheme()
   const { logout } = useAuth()
   const [envContent, setEnvContent] = useState('')
   const [envStatus, setEnvStatus] = useState('')
@@ -176,6 +177,23 @@ export default function SettingsPage() {
             Light
           </label>
         </div>
+      </section>
+
+      <section className={styles.section}>
+        <h3>Text size</h3>
+        <p className={styles.hint}>Global reading/editing size for notes, files, and agent chat.</p>
+        <div className={styles.textScaleActions}>
+          <button onClick={() => stepTextScale(-1)} disabled={textScale <= MIN_TEXT_SCALE}>
+            A-
+          </button>
+          <button onClick={resetTextScale}>
+            Reset
+          </button>
+          <button onClick={() => stepTextScale(1)} disabled={textScale >= MAX_TEXT_SCALE}>
+            A+
+          </button>
+        </div>
+        <p className={styles.hint}>Current: {Math.round(textScale * 100)}% (step {Math.round(TEXT_SCALE_STEP * 100)}%)</p>
       </section>
 
       <section className={styles.section}>

@@ -14,7 +14,7 @@
 }
 
 .title {
-  font-size: 14px;
+  font-size: calc(var(--text-scale) * 14px);
   font-weight: 600;
   color: var(--accent);
 }
@@ -26,7 +26,7 @@
 }
 
 .person {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--muted);
   text-transform: capitalize;
 }
@@ -41,7 +41,7 @@
 }
 
 .navLink {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   padding: 4px 10px;
   border-radius: var(--radius);
   color: var(--muted);

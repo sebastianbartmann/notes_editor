@@ -19,13 +19,13 @@
 
 .indexStatus h3 {
   margin: 0 0 var(--space-1) 0;
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
 }
 
 .indexList {
   margin: 0;
   padding-left: 18px;
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   line-height: 1.45;
 }
 
@@ -39,17 +39,17 @@
 .statusText {
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   line-height: 1.45;
   white-space: pre-wrap;
 }
 
 .message {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--muted);
 }
 
 .error {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--danger);
 }

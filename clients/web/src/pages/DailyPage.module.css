@@ -17,7 +17,7 @@
 }
 
 .date {
-  font-size: 14px;
+  font-size: calc(var(--text-scale) * 14px);
   color: var(--muted);
   text-transform: none;
   letter-spacing: normal;
@@ -27,7 +27,7 @@
   background: transparent;
   border: 0;
   padding: 0 6px;
-  font-size: 14px;
+  font-size: calc(var(--text-scale) * 14px);
   color: var(--accent);
   cursor: pointer;
 }
@@ -76,12 +76,12 @@
 
 .error {
   color: var(--danger);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
 }
 
 .dailyEditorTextarea {
   min-height: 380px;
-  font-size: 15px;
+  font-size: calc(var(--text-scale) * 15px);
   line-height: 1.7;
 }
 
@@ -96,7 +96,7 @@
   width: 100%;
   resize: vertical;
   min-height: 96px;
-  font-size: 15px;
+  font-size: calc(var(--text-scale) * 15px);
   line-height: 1.6;
   background: var(--input);
   border: 1px solid var(--panel-border);
@@ -121,7 +121,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--muted);
   cursor: pointer;
 }

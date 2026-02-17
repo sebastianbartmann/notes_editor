@@ -30,14 +30,14 @@
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   background: var(--panel);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--muted);
   display: grid;
   gap: 2px;
 }
 
 .actionButton {
-  font-size: 11px;
+  font-size: calc(var(--text-scale) * 11px);
   padding: 3px 8px;
 }
 
@@ -65,7 +65,7 @@
   box-sizing: border-box;
   padding: var(--space-2);
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -89,7 +89,7 @@
 }
 
 .eventRow {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--muted);
   padding: 6px var(--space-2);
   background: var(--button);
@@ -105,7 +105,7 @@
 }
 
 .eventMeta {
-  font-size: 10px;
+  font-size: calc(var(--text-scale) * 10px);
   margin-top: 3px;
 }
 
@@ -118,7 +118,7 @@
   margin-bottom: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 11px;
+  font-size: calc(var(--text-scale) * 11px);
   line-height: 1.35;
 }
 
@@ -146,7 +146,7 @@
 
 .error {
   color: var(--danger);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   padding: var(--space-1);
 }
 
@@ -239,23 +239,23 @@
   border-radius: 6px;
   width: 38px;
   min-width: 38px;
-  font-size: 16px;
+  font-size: calc(var(--text-scale) * 16px);
   line-height: 1;
 }
 
 .sessionName {
   font-weight: 600;
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
 }
 
 .sessionMeta {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(var(--text-scale) * 11px);
 }
 
 .sessionPreview {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
 }
 
 .modalFooter {

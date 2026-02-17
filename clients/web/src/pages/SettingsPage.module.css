@@ -24,7 +24,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
   cursor: pointer;
 }
 
@@ -33,13 +33,13 @@
   align-items: center;
   gap: var(--space-1);
   margin-top: var(--space-2);
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
   cursor: pointer;
 }
 
 .hint {
   margin-top: var(--space-2);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--muted);
 }
 
@@ -47,7 +47,7 @@
   width: 100%;
   margin-top: var(--space-2);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   resize: vertical;
 }
 
@@ -59,6 +59,13 @@
 }
 
 .envStatus {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--muted);
+}
+
+.textScaleActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }

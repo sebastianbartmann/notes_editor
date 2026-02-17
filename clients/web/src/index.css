@@ -18,6 +18,7 @@
   --space-3: 14px;
   --space-4: 18px;
   --radius: 6px;
+  --text-scale: 1;
 
   --font: "IBM Plex Mono", "Menlo", "Consolas", "Liberation Mono", monospace;
 }
@@ -48,7 +49,7 @@ body.theme-light {
 }
 
 html {
-  font-size: 14px;
+  font-size: calc(var(--text-scale) * 14px);
   line-height: 1.5;
 }
 
@@ -77,23 +78,23 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 h1 {
-  font-size: 16px;
+  font-size: calc(var(--text-scale) * 16px);
 }
 
 h2 {
-  font-size: 14px;
+  font-size: calc(var(--text-scale) * 14px);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
 }
 
 h3 {
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
   color: var(--accent);
 }
 
 h4 {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
 }
 
 a {
@@ -110,7 +111,7 @@ input,
 textarea,
 select {
   font-family: var(--font);
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
   background: var(--input);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
@@ -137,7 +138,7 @@ input[type="checkbox"] {
 /* Buttons */
 button {
   font-family: var(--font);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   background: var(--button);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
@@ -199,7 +200,7 @@ button.active {
 
 .muted {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
 }
 
 /* Scrollbar Styling */

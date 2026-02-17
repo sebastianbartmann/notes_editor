@@ -9,7 +9,7 @@
   min-height: 300px;
   resize: vertical;
   font-family: var(--font);
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
   line-height: 1.6;
   background: var(--input);
   border: 1px solid var(--panel-border);

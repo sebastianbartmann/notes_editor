@@ -6,7 +6,7 @@
 
 .description {
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
 }
 
 .controls {
@@ -20,6 +20,6 @@
 }
 
 .status {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--accent);
 }

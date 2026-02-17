@@ -17,7 +17,7 @@
 }
 
 .title {
-  font-size: 16px;
+  font-size: calc(var(--text-scale) * 16px);
   color: var(--accent);
   text-align: center;
   margin-bottom: var(--space-4);
@@ -36,7 +36,7 @@
 }
 
 .label {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--muted);
 }
 
@@ -45,7 +45,7 @@
 }
 
 .error {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   color: var(--danger);
 }
 
