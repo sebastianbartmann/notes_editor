@@ -60,6 +60,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
     var sessionsStatus by remember { mutableStateOf("") }
     var sessionsLoading by remember { mutableStateOf(false) }
     var sessionsBusy by remember { mutableStateOf(false) }
+    var sessionsView by remember { mutableStateOf("saved") }
     var streamingAssistantText by remember { mutableStateOf("") }
     var lastPerson by remember { mutableStateOf<String?>(null) }
     val messages = ClaudeSessionStore.messages
@@ -375,6 +376,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
     fun openSessions() {
         if (isLoading || person == null) return
         showSessionsDialog = true
+        sessionsView = "saved"
         sessionsStatus = ""
         loadSessions()
         loadActiveRuns()
@@ -697,11 +699,25 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         )
                     }
 
-                    AppText(
-                        "Active runs (${activeRuns.size})",
-                        AppTheme.typography.body,
-                        AppTheme.colors.text
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CompactButton(
+                            text = "Saved (${sessions.size})",
+                            modifier = Modifier.weight(1f),
+                            background = if (sessionsView == "saved") AppTheme.colors.accentDim else AppTheme.colors.button,
+                            border = if (sessionsView == "saved") AppTheme.colors.accent else AppTheme.colors.panelBorder,
+                            onClick = { sessionsView = "saved" }
+                        )
+                        CompactButton(
+                            text = "Active (${activeRuns.size})",
+                            modifier = Modifier.weight(1f),
+                            background = if (sessionsView == "active") AppTheme.colors.accentDim else AppTheme.colors.button,
+                            border = if (sessionsView == "active") AppTheme.colors.accent else AppTheme.colors.panelBorder,
+                            onClick = { sessionsView = "active" }
+                        )
+                    }
                     Panel(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -711,31 +727,38 @@ fun ToolClaudeScreen(modifier: Modifier) {
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.verticalScroll(rememberScrollState())
                         ) {
-                            if (activeRuns.isEmpty()) {
-                                AppText("No active runs.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
-                            }
-                            activeRuns.forEach { run ->
-                                ActiveRunRow(
-                                    run = run,
-                                    onStop = { stopActiveRun(run.runId) }
+                            if (sessionsView == "saved") {
+                                AppText(
+                                    "Saved sessions (${sessions.size})",
+                                    AppTheme.typography.body,
+                                    AppTheme.colors.text
                                 )
-                            }
-
-                            AppText(
-                                "Saved sessions (${sessions.size})",
-                                AppTheme.typography.body,
-                                AppTheme.colors.text
-                            )
-                            if (sessions.isEmpty() && sessionsError.isBlank() && !sessionsLoading) {
-                                AppText("No sessions yet.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
-                            }
-                            sessions.forEach { session ->
-                                SessionRow(
-                                    session = session,
-                                    active = session.sessionId == ClaudeSessionStore.sessionId,
-                                    onClick = { continueSession(session.sessionId) },
-                                    onDelete = { deleteSession(session.sessionId) }
+                                if (sessions.isEmpty() && sessionsError.isBlank() && !sessionsLoading) {
+                                    AppText("No sessions yet.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
+                                }
+                                sessions.forEach { session ->
+                                    SessionRow(
+                                        session = session,
+                                        active = session.sessionId == ClaudeSessionStore.sessionId,
+                                        onClick = { continueSession(session.sessionId) },
+                                        onDelete = { deleteSession(session.sessionId) }
+                                    )
+                                }
+                            } else {
+                                AppText(
+                                    "Active runs (${activeRuns.size})",
+                                    AppTheme.typography.body,
+                                    AppTheme.colors.text
                                 )
+                                if (activeRuns.isEmpty()) {
+                                    AppText("No active runs.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
+                                }
+                                activeRuns.forEach { run ->
+                                    ActiveRunRow(
+                                        run = run,
+                                        onStop = { stopActiveRun(run.runId) }
+                                    )
+                                }
                             }
                         }
                     }
