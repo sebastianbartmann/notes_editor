@@ -259,6 +259,15 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
     let sawAnyText = false;
     let lastRunError = '';
     let sawRunError = false;
+    let lastEmittedError = '';
+
+    const emitRunError = (message: string): void => {
+      const normalized = String(message || '').trim();
+      if (!normalized || normalized === lastEmittedError) return;
+      lastEmittedError = normalized;
+      sawRunError = true;
+      writeEvent(res, { type: 'error', run_id: runId, message: normalized });
+    };
 
     const unsubscribe = pc.client.onEvent((event: any) => {
       if (cancelled) return;
@@ -303,8 +312,7 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
           }
           if (msg?.role === 'assistant' && typeof msg?.errorMessage === 'string' && msg.errorMessage.trim()) {
             lastRunError = msg.errorMessage.trim();
-            sawRunError = true;
-            writeEvent(res, { type: 'error', run_id: runId, message: lastRunError });
+            emitRunError(lastRunError);
           }
           break;
         }
@@ -320,8 +328,7 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
         }
         case 'extension_error': {
           lastRunError = String(event.error || 'extension error');
-          sawRunError = true;
-          writeEvent(res, { type: 'error', run_id: runId, message: lastRunError });
+          emitRunError(lastRunError);
           break;
         }
         case 'auto_retry_start': {
@@ -341,14 +348,14 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
 
       // If Pi ended with an error but didn't stream it (or we missed it), surface it.
       if (!cancelled && !sawAnyText && lastRunError && !sawRunError) {
-        writeEvent(res, { type: 'error', run_id: runId, message: lastRunError });
+        emitRunError(lastRunError);
       }
 
       writeEvent(res, { type: 'done', session_id: runtimeSessionId, run_id: runId });
       res.end();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'pi rpc failed';
-      writeEvent(res, { type: 'error', run_id: runId, message: msg });
+      emitRunError(msg);
       writeEvent(res, { type: 'done', session_id: runtimeSessionId, run_id: runId });
       res.end();
     } finally {
