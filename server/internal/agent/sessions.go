@@ -15,7 +15,6 @@ const (
 	defaultSessionNamePrefix = "Session"
 	maxSessionNameLen        = 72
 	maxSessionPreviewLen     = 140
-	maxRecoveredSessions     = 30
 )
 
 type sessionRecord struct {
@@ -265,9 +264,6 @@ func listGatewayRuntimeSessionFiles(person string) []recoveredRuntimeSession {
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].Timestamp.After(out[j].Timestamp)
 	})
-	if len(out) > maxRecoveredSessions {
-		out = out[:maxRecoveredSessions]
-	}
 	return out
 }
 

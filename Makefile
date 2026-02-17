@@ -1,4 +1,4 @@
-.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd install-pi-gateway-systemd status-pi-gateway-systemd install-qmd-systemd status-qmd-systemd restart-services setup-android-build-toolchain build-android install-android deploy-android debug-android build build-server build-web lint clean build-pi-gateway run-pi-gateway android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-claude-toolcall android-test-settings android-test-nav android-install-debug
+.PHONY: help server client test test-server test-client test-coverage install-client install-systemd status-systemd install-pi-gateway-systemd status-pi-gateway-systemd install-qmd-systemd status-qmd-systemd restart-services setup-android-build-toolchain build-android install-android deploy-android debug-android build build-server build-web lint clean build-pi-gateway run-pi-gateway android-test-setup android-emulator-start android-emulator-stop android-test android-test-report android-test-daily android-test-daily-scroll-focus android-test-files android-test-sleep android-test-claude android-test-claude-toolcall android-test-claude-session-reopen android-test-settings android-test-nav android-install-debug
 
 ANDROID_GRADLE_VERSION := 8.7
 ANDROID_GRADLE_DIR := $(PWD)/app/gradle-$(ANDROID_GRADLE_VERSION)
@@ -88,6 +88,7 @@ help:
 	@echo "    android-test-sleep     Run sleep screen tests only"
 	@echo "    android-test-claude    Run claude screen tests only"
 	@echo "    android-test-claude-toolcall Run claude tool-call integration flow"
+	@echo "    android-test-claude-session-reopen Run claude session create/reopen integration flow"
 	@echo "    android-test-settings  Run settings screen tests only"
 	@echo "    android-test-nav       Run navigation tests only"
 
@@ -321,6 +322,10 @@ android-test-claude: android-emulator-start android-check-maestro
 
 android-test-claude-toolcall: android-emulator-start android-check-maestro android-install-debug
 	@$(MAESTRO_BIN) test $(PWD)/app/android/maestro/integration/claude-toolcall.yaml --output $(MAESTRO_SCREENSHOTS)
+	@echo "Screenshots saved to: app/android/maestro/screenshots/"
+
+android-test-claude-session-reopen: android-emulator-start android-check-maestro android-install-debug
+	@$(MAESTRO_BIN) test $(PWD)/app/android/maestro/integration/claude-session-reopen.yaml --output $(MAESTRO_SCREENSHOTS)
 	@echo "Screenshots saved to: app/android/maestro/screenshots/"
 
 android-test-settings: android-emulator-start android-check-maestro

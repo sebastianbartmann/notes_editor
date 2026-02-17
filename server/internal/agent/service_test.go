@@ -83,6 +83,18 @@ func TestMapClaudeEventToolStatusToToolResult(t *testing.T) {
 	}
 }
 
+func TestShouldSuppressStatusEventGatewayModeBanner(t *testing.T) {
+	if !shouldSuppressStatusEvent(StreamEvent{Type: "status", Message: "gateway mode==subscription"}) {
+		t.Fatal("expected gateway mode banner to be suppressed")
+	}
+	if shouldSuppressStatusEvent(StreamEvent{Type: "status", Message: "Tool read_file executed"}) {
+		t.Fatal("did not expect normal status to be suppressed")
+	}
+	if shouldSuppressStatusEvent(StreamEvent{Type: "text", Message: "gateway mode==subscription"}) {
+		t.Fatal("did not expect non-status event to be suppressed")
+	}
+}
+
 func TestSelectRuntimePiFallbackToAnthropic(t *testing.T) {
 	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
 		RuntimeModeAnthropicAPIKey:     &stubRuntime{mode: RuntimeModeAnthropicAPIKey, available: true},

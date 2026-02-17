@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,6 +47,25 @@ func TestListGatewayRuntimeSessionFiles(t *testing.T) {
 	}
 	if got[0].SessionID != "new-session" && got[1].SessionID != "new-session" {
 		t.Fatalf("missing new-session in %+v", got)
+	}
+}
+
+func TestListGatewayRuntimeSessionFilesReturnsAllMatches(t *testing.T) {
+	t.Setenv("PI_GATEWAY_PI_SESSION_DIR", t.TempDir())
+	dir := os.Getenv("PI_GATEWAY_PI_SESSION_DIR")
+
+	body := "{\"type\":\"message\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}\n"
+	const total = 35
+	for i := 0; i < total; i++ {
+		name := filepath.Join(dir, fmt.Sprintf("petra--session-%02d.jsonl", i))
+		if err := os.WriteFile(name, []byte(body), 0644); err != nil {
+			t.Fatalf("write session file %d: %v", i, err)
+		}
+	}
+
+	got := listGatewayRuntimeSessionFiles("petra")
+	if len(got) != total {
+		t.Fatalf("expected %d recovered sessions, got %d", total, len(got))
 	}
 }
 

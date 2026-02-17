@@ -720,24 +720,13 @@ fun ToolClaudeScreen(modifier: Modifier) {
                                     onStop = { stopActiveRun(run.runId) }
                                 )
                             }
-                        }
-                    }
 
-                    AppText(
-                        "Saved sessions (${sessions.size})",
-                        AppTheme.typography.body,
-                        AppTheme.colors.text
-                    )
-                    Panel(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.verticalScroll(rememberScrollState())
-                        ) {
-                            if (sessions.isEmpty() && sessionsError.isBlank()) {
+                            AppText(
+                                "Saved sessions (${sessions.size})",
+                                AppTheme.typography.body,
+                                AppTheme.colors.text
+                            )
+                            if (sessions.isEmpty() && sessionsError.isBlank() && !sessionsLoading) {
                                 AppText("No sessions yet.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
                             }
                             sessions.forEach { session ->

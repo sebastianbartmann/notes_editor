@@ -1,0 +1,52 @@
+appId: com.bartmann.noteseditor
+---
+- launchApp
+- tapOn:
+    text: "Sebastian"
+    optional: true
+- tapOn:
+    text: "Petra"
+    optional: true
+- waitForAnimationToEnd
+- tapOn: "More"
+- waitForAnimationToEnd
+
+# Navigate to Agent
+- tapOn: "Agent"
+- waitForAnimationToEnd
+- takeScreenshot: "claude-reopen-01-initial"
+
+# Start a fresh session and send a deterministic prompt.
+- tapOn: "New"
+- waitForAnimationToEnd
+- tapOn: "Ask Agent..."
+- inputText: "Respond with exactly REOPEN_TEST_OK and nothing else."
+- tapOn: "Send"
+- hideKeyboard
+- takeScreenshot: "claude-reopen-02-sent"
+
+# Wait for assistant completion so session metadata is persisted.
+- extendedWaitUntil:
+    visible: "REOPEN_TEST_OK"
+    timeout: 35000
+
+- takeScreenshot: "claude-reopen-03-response"
+
+# Open sessions manager and verify the newly created session is listed.
+- tapOn: "Sessions"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Sessions"
+    timeout: 10000
+- scroll
+- scroll
+- scroll
+- extendedWaitUntil:
+    visible: "Respond with exactly REOPEN_TEST_OK and nothing else."
+    timeout: 15000
+- takeScreenshot: "claude-reopen-04-sessions-list"
+
+# Reopen by tapping session entry.
+- tapOn: "Respond with exactly REOPEN_TEST_OK and nothing else."
+- waitForAnimationToEnd
+- takeScreenshot: "claude-reopen-05-reopened"
