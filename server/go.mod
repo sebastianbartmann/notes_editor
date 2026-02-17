@@ -9,4 +9,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 )
 
-require golang.org/x/net v0.24.0
+require (
+	github.com/mattn/go-sqlite3 v1.14.34
+	golang.org/x/net v0.24.0
+)

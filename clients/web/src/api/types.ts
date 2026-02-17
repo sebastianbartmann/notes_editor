@@ -68,11 +68,14 @@ export interface UnpinRequest {
 
 // Sleep API types
 export interface SleepEntry {
+  id: string
   line: number
   date: string
   child: string
   time: string
   status: string
+  notes?: string
+  occurred_at?: string
 }
 
 export interface SleepTimesResponse {
@@ -83,10 +86,47 @@ export interface AppendSleepRequest {
   child: string
   time: string
   status: 'eingeschlafen' | 'aufgewacht'
+  occurred_at?: string
+  notes?: string
+}
+
+export interface UpdateSleepRequest {
+  id: string
+  child: string
+  time: string
+  status: 'eingeschlafen' | 'aufgewacht'
+  occurred_at?: string
+  notes?: string
 }
 
 export interface DeleteSleepRequest {
-  line: number
+  id: string
+}
+
+export interface ExportSleepResponse {
+  success: boolean
+  message: string
+  path: string
+}
+
+export interface SleepNightSummary {
+  night_date: string
+  child: string
+  duration_minutes: number
+  bedtime: string
+  wake_time: string
+}
+
+export interface SleepAverageSummary {
+  days: number
+  child: string
+  average_bedtime: string
+  average_wake_time: string
+}
+
+export interface SleepSummaryResponse {
+  nights: SleepNightSummary[]
+  averages: SleepAverageSummary[]
 }
 
 // Claude API types

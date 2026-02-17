@@ -19,11 +19,50 @@ data class SleepTimesResponse(
 
 @Serializable
 data class SleepEntry(
+    val id: String = "",
     val line: Int,
     val date: String,
     val child: String,
     val time: String,
-    val status: String
+    val status: String,
+    val notes: String? = null,
+    @SerialName("occurred_at")
+    val occurredAt: String? = null
+)
+
+@Serializable
+data class SleepNightSummary(
+    @SerialName("night_date")
+    val nightDate: String,
+    val child: String,
+    @SerialName("duration_minutes")
+    val durationMinutes: Int,
+    val bedtime: String,
+    @SerialName("wake_time")
+    val wakeTime: String
+)
+
+@Serializable
+data class SleepAverageSummary(
+    val days: Int,
+    val child: String,
+    @SerialName("average_bedtime")
+    val averageBedtime: String,
+    @SerialName("average_wake_time")
+    val averageWakeTime: String
+)
+
+@Serializable
+data class SleepSummaryResponse(
+    val nights: List<SleepNightSummary> = emptyList(),
+    val averages: List<SleepAverageSummary> = emptyList()
+)
+
+@Serializable
+data class SleepExportResponse(
+    val success: Boolean = true,
+    val message: String = "",
+    val path: String = ""
 )
 
 @Serializable
@@ -311,12 +350,26 @@ data class ToggleTodoRequest(
 data class AppendSleepRequest(
     val child: String,
     val time: String,
-    val status: String
+    val status: String,
+    @SerialName("occurred_at")
+    val occurredAt: String? = null,
+    val notes: String = ""
+)
+
+@Serializable
+data class UpdateSleepRequest(
+    val id: String,
+    val child: String,
+    val time: String,
+    val status: String,
+    @SerialName("occurred_at")
+    val occurredAt: String? = null,
+    val notes: String = ""
 )
 
 @Serializable
 data class DeleteSleepRequest(
-    val line: Int
+    val id: String
 )
 
 @Serializable

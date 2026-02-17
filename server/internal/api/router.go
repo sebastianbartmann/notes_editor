@@ -15,21 +15,24 @@ import (
 	"notes-editor/internal/claude"
 	"notes-editor/internal/config"
 	"notes-editor/internal/linkedin"
+	"notes-editor/internal/sleep"
 	"notes-editor/internal/vault"
 )
 
 // Server holds all dependencies for the HTTP server.
 type Server struct {
-	mu       sync.RWMutex
-	config   *config.Config
-	store    *vault.Store
-	daily    *vault.Daily
-	git      *vault.Git
-	syncMgr  *SyncManager
-	indexMgr *IndexManager
-	claude   *claude.Service
-	agent    *agent.Service
-	linkedin *linkedin.Service
+	mu            sync.RWMutex
+	config        *config.Config
+	store         *vault.Store
+	daily         *vault.Daily
+	git           *vault.Git
+	syncMgr       *SyncManager
+	indexMgr      *IndexManager
+	claude        *claude.Service
+	agent         *agent.Service
+	linkedin      *linkedin.Service
+	sleepStore    *sleep.Store
+	sleepMigrated bool
 }
 
 // NewServer creates a new server with all dependencies.
@@ -50,6 +53,10 @@ func NewServer(cfg *config.Config) *Server {
 		claude:   claudeSvc,
 		agent:    agentSvc,
 		linkedin: linkedinSvc,
+	}
+
+	if sleepStore, err := sleep.NewStore(sleepDBPath(cfg.NotesRoot)); err == nil {
+		srv.sleepStore = sleepStore
 	}
 
 	// Background git sync (pull/push) for the vault. This avoids doing networked git
@@ -110,8 +117,11 @@ func NewRouter(srv *Server) http.Handler {
 
 		// Sleep times routes
 		r.Get("/sleep-times", srv.handleGetSleepTimes)
+		r.Get("/sleep-times/summary", srv.handleGetSleepSummary)
 		r.Post("/sleep-times/append", srv.handleAppendSleepTime)
+		r.Post("/sleep-times/update", srv.handleUpdateSleepTime)
 		r.Post("/sleep-times/delete", srv.handleDeleteSleepTime)
+		r.Post("/sleep-times/export-markdown", srv.handleExportSleepMarkdown)
 
 		// File routes
 		r.Get("/files/list", srv.handleListFiles)

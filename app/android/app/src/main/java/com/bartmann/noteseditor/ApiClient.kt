@@ -186,16 +186,38 @@ object ApiClient {
         postJson("/api/clear-pinned", ClearPinnedRequest(path = path))
 
     suspend fun fetchSleepTimes(): SleepTimesResponse = getJson("/api/sleep-times")
+    suspend fun fetchSleepSummary(): SleepSummaryResponse = getJson("/api/sleep-times/summary")
 
     suspend fun appendSleepTimes(
         child: String,
         time: String,
-        status: String
+        status: String,
+        occurredAt: String? = null,
+        notes: String = ""
     ): ApiMessage =
-        postJson("/api/sleep-times/append", AppendSleepRequest(child = child, time = time, status = status))
+        postJson(
+            "/api/sleep-times/append",
+            AppendSleepRequest(child = child, time = time, status = status, occurredAt = occurredAt, notes = notes)
+        )
 
-    suspend fun deleteSleepEntry(line: Int): ApiMessage =
-        postJson("/api/sleep-times/delete", DeleteSleepRequest(line = line))
+    suspend fun updateSleepEntry(
+        id: String,
+        child: String,
+        time: String,
+        status: String,
+        occurredAt: String? = null,
+        notes: String = ""
+    ): ApiMessage =
+        postJson(
+            "/api/sleep-times/update",
+            UpdateSleepRequest(id = id, child = child, time = time, status = status, occurredAt = occurredAt, notes = notes)
+        )
+
+    suspend fun deleteSleepEntry(id: String): ApiMessage =
+        postJson("/api/sleep-times/delete", DeleteSleepRequest(id = id))
+
+    suspend fun exportSleepMarkdown(): SleepExportResponse =
+        postJson("/api/sleep-times/export-markdown", mapOf<String, String>())
 
     suspend fun listFiles(path: String): FilesResponse {
         val payload = getJson<FilesResponsePayload>("/api/files/list?path=${URLEncoder.encode(path, "UTF-8")}")

@@ -4,6 +4,27 @@
   gap: var(--space-3);
 }
 
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.tabs button {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+}
+
+.tabActive {
+  border-color: var(--accent) !important;
+}
+
 .form {
   background: var(--panel);
   border: 1px solid var(--panel-border);
@@ -20,12 +41,11 @@
   gap: var(--space-3);
 }
 
-.radio,
-.checkbox {
+.radio {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: 13px;
+  font-size: calc(var(--text-scale) * 13px);
   cursor: pointer;
 }
 
@@ -36,7 +56,16 @@
 
 .timeInput {
   flex: 1;
-  max-width: 150px;
+}
+
+.notes {
+  width: 100%;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-1);
+  justify-content: flex-end;
 }
 
 .history {
@@ -44,10 +73,9 @@
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: var(--space-3);
-}
-
-.history h3 {
-  margin-bottom: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .list {
@@ -64,11 +92,19 @@
   padding: var(--space-1) var(--space-2);
   background: var(--input);
   border-radius: 4px;
+  gap: var(--space-2);
 }
 
 .entryText {
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
   font-family: var(--font);
+}
+
+.editGrid {
+  display: grid;
+  width: 100%;
+  gap: var(--space-1);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .message {
@@ -79,18 +115,25 @@
 
 .error {
   color: var(--danger);
-  font-size: 12px;
+  font-size: calc(var(--text-scale) * 12px);
 }
 
-@media (max-width: 600px) {
+.status {
+  color: var(--accent);
+  font-size: calc(var(--text-scale) * 12px);
+}
+
+@media (max-width: 700px) {
+  .headerRow,
+  .entryRow,
   .childSelect,
-  .statusSelect {
+  .statusSelect,
+  .entry {
     flex-direction: column;
-    gap: var(--space-1);
+    align-items: stretch;
   }
 
-  .entry {
-    flex-wrap: wrap;
-    gap: var(--space-1);
+  .editGrid {
+    grid-template-columns: 1fr;
   }
 }
