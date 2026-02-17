@@ -5,6 +5,8 @@ import { useAgentSession } from '../context/AgentSessionContext'
 import type { AgentAction, AgentChatRequest, AgentConversationItem, AgentSessionSummary } from '../api/types'
 import styles from './ClaudePage.module.css'
 
+const SHOW_TOOL_CALLS_KEY = 'notes_agent_show_tool_calls'
+
 export default function ClaudePage() {
   const { person } = usePerson()
   const { getSession, setSessionId, setMessages, appendMessage, clearSession } = useAgentSession()
@@ -19,10 +21,17 @@ export default function ClaudePage() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionsError, setSessionsError] = useState('')
   const [sessionsBusy, setSessionsBusy] = useState(false)
+  const [showToolCalls, setShowToolCalls] = useState<boolean>(() => {
+    const stored = localStorage.getItem(SHOW_TOOL_CALLS_KEY)
+    return stored !== 'false'
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const session = person ? getSession(person) : { sessionId: null, messages: [] as AgentConversationItem[] }
   const sessionId = session.sessionId
   const messages = session.messages
+  const visibleMessages = showToolCalls
+    ? messages
+    : messages.filter(item => item.type !== 'tool_call' && item.type !== 'tool_result')
   const latestUsage = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       const item = messages[i]
@@ -34,8 +43,17 @@ export default function ClaudePage() {
   }, [messages])
 
   useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== SHOW_TOOL_CALLS_KEY) return
+      setShowToolCalls(event.newValue !== 'false')
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingText])
+  }, [visibleMessages, streamingText])
 
   useEffect(() => {
     if (!person) return
@@ -434,7 +452,7 @@ export default function ClaudePage() {
 
       <div className={styles.chat}>
         <div className={styles.messages}>
-          {messages.map((item, i) => renderInlineItem(item, `${i}`))}
+          {visibleMessages.map((item, i) => renderInlineItem(item, `${i}`))}
           {streamingText && (
             <div className={`${styles.bubble} ${styles.assistantBubble}`}>
               {streamingText}

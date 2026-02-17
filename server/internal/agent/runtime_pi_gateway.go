@@ -355,6 +355,32 @@ func (r *PiGatewayRuntime) setRuntimeSessionID(person, appSessionID, runtimeSess
 	r.persistSessionMap(snapshot)
 }
 
+func (r *PiGatewayRuntime) findAppSessionIDByRuntime(person, runtimeSessionID string) (string, bool) {
+	r.ensureSessionMapLoaded()
+	target := strings.TrimSpace(runtimeSessionID)
+	if target == "" {
+		return "", false
+	}
+	prefix := person + "::"
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for key, value := range r.runtimeSessionByAppSession {
+		if strings.TrimSpace(value) != target {
+			continue
+		}
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		appSessionID := strings.TrimSpace(strings.TrimPrefix(key, prefix))
+		if appSessionID == "" {
+			continue
+		}
+		return appSessionID, true
+	}
+	return "", false
+}
+
 func (r *PiGatewayRuntime) ensureSessionMapLoaded() {
 	r.mu.Lock()
 	if r.sessionMapLoaded || r.store == nil {

@@ -220,6 +220,22 @@ fun SettingsScreen(modifier: Modifier) {
                     onSelect = { runtimeMode = "gateway_subscription" }
                 )
             }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(AppTheme.colors.input, RoundedCornerShape(6.dp))
+                    .clickable { UserSettings.updateShowAgentToolCalls(!UserSettings.showAgentToolCalls) }
+                    .padding(horizontal = AppTheme.spacing.sm, vertical = AppTheme.spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppCheckbox(checked = UserSettings.showAgentToolCalls)
+                AppText(
+                    text = "Show tool call messages in Agent chat",
+                    style = AppTheme.typography.body,
+                    color = AppTheme.colors.text
+                )
+            }
             CompactTextField(
                 value = agentPrompt,
                 onValueChange = { agentPrompt = it },

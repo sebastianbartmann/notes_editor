@@ -62,6 +62,11 @@ fun ToolClaudeScreen(modifier: Modifier) {
     var streamingAssistantText by remember { mutableStateOf("") }
     var lastPerson by remember { mutableStateOf<String?>(null) }
     val messages = ClaudeSessionStore.messages
+    val visibleMessages = if (UserSettings.showAgentToolCalls) {
+        messages
+    } else {
+        messages.filter { it.type != "tool_call" && it.type != "tool_result" }
+    }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val latestUsage = messages.lastOrNull { it.type == "usage" && it.usage != null }?.usage
@@ -398,9 +403,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
     }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    LaunchedEffect(visibleMessages.size, streamingAssistantText) {
+        val totalItems = visibleMessages.size + if (streamingAssistantText.isNotBlank() || isLoading) 1 else 0
+        if (totalItems > 0) {
+            listState.animateScrollToItem(totalItems - 1)
         }
     }
 
@@ -492,7 +498,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(messages) { message ->
+                items(visibleMessages) { message ->
                     ChatBubble(message = message)
                 }
                 if (streamingAssistantText.isNotBlank()) {

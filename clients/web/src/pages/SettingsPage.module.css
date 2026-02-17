@@ -28,6 +28,15 @@
   cursor: pointer;
 }
 
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .hint {
   margin-top: var(--space-2);
   font-size: 12px;

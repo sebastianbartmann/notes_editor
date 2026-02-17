@@ -13,6 +13,7 @@ object UserSettings {
     private const val KEY_THEME = "theme"
     private const val KEY_BOTTOM_NAV = "bottom_nav"
     private const val KEY_TEXT_SCALE = "text_scale"
+    private const val KEY_SHOW_AGENT_TOOL_CALLS = "show_agent_tool_calls"
     private lateinit var prefs: SharedPreferences
 
     var person by mutableStateOf<String?>(null)
@@ -22,6 +23,8 @@ object UserSettings {
     var bottomNavIds by mutableStateOf(defaultBottomNavIds)
         private set
     var textScale by mutableStateOf(DEFAULT_TEXT_SCALE)
+        private set
+    var showAgentToolCalls by mutableStateOf(true)
         private set
 
     fun init(context: Context) {
@@ -33,6 +36,7 @@ object UserSettings {
             storedBottomNav.split(",").map { it.trim() }.filter { it.isNotBlank() }
         )
         textScale = sanitizeTextScale(prefs.getFloat(KEY_TEXT_SCALE, DEFAULT_TEXT_SCALE))
+        showAgentToolCalls = prefs.getBoolean(KEY_SHOW_AGENT_TOOL_CALLS, true)
     }
 
     fun updatePerson(value: String) {
@@ -64,6 +68,11 @@ object UserSettings {
 
     fun resetTextScale() {
         updateTextScale(DEFAULT_TEXT_SCALE)
+    }
+
+    fun updateShowAgentToolCalls(value: Boolean) {
+        showAgentToolCalls = value
+        prefs.edit().putBoolean(KEY_SHOW_AGENT_TOOL_CALLS, value).apply()
     }
 }
 

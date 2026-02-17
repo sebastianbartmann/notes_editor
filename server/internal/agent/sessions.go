@@ -176,6 +176,7 @@ func (s *Service) hydrateGatewayRecoveredSessions(person string) {
 	if runtime == nil || !runtime.Available() {
 		return
 	}
+	piRuntime, _ := runtime.(*PiGatewayRuntime)
 
 	recovered := listGatewayRuntimeSessionFiles(person)
 	if len(recovered) == 0 {
@@ -196,13 +197,19 @@ func (s *Service) hydrateGatewayRecoveredSessions(person string) {
 		if err != nil || len(history) == 0 {
 			continue
 		}
-		if _, exists := personSessions[rec.SessionID]; exists {
+		sessionID := rec.SessionID
+		if piRuntime != nil {
+			if mappedSessionID, ok := piRuntime.findAppSessionIDByRuntime(person, rec.SessionID); ok {
+				sessionID = mappedSessionID
+			}
+		}
+		if _, exists := personSessions[sessionID]; exists {
 			continue
 		}
 		seq := s.sessionSequenceByPerson[person] + 1
 		s.sessionSequenceByPerson[person] = seq
-		personSessions[rec.SessionID] = &sessionRecord{
-			SessionID:   rec.SessionID,
+		personSessions[sessionID] = &sessionRecord{
+			SessionID:   sessionID,
 			Person:      person,
 			Name:        buildSessionName("", seq),
 			RuntimeMode: RuntimeModeGatewaySubscription,

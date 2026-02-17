@@ -6,6 +6,8 @@ import { downloadVaultBackup, fetchEnv, saveEnv } from '../api/settings'
 import { getAgentConfig, getAgentGatewayHealth, saveAgentConfig } from '../api/agent'
 import styles from './SettingsPage.module.css'
 
+const SHOW_TOOL_CALLS_KEY = 'notes_agent_show_tool_calls'
+
 export default function SettingsPage() {
   const { person, setPerson } = usePerson()
   const { theme, setTheme } = useTheme()
@@ -20,6 +22,14 @@ export default function SettingsPage() {
   const [isSavingAgent, setIsSavingAgent] = useState(false)
   const [backupStatus, setBackupStatus] = useState('')
   const [isDownloadingBackup, setIsDownloadingBackup] = useState(false)
+  const [showToolCalls, setShowToolCalls] = useState<boolean>(() => {
+    const stored = localStorage.getItem(SHOW_TOOL_CALLS_KEY)
+    return stored !== 'false'
+  })
+
+  useEffect(() => {
+    localStorage.setItem(SHOW_TOOL_CALLS_KEY, showToolCalls ? 'true' : 'false')
+  }, [showToolCalls])
 
   useEffect(() => {
     fetchEnv()
@@ -189,6 +199,14 @@ export default function SettingsPage() {
             Gateway Subscription (Pi)
           </label>
         </div>
+        <label className={styles.checkboxRow}>
+          <input
+            type="checkbox"
+            checked={showToolCalls}
+            onChange={e => setShowToolCalls(e.target.checked)}
+          />
+          Show tool call messages in Agent chat
+        </label>
         <textarea
           value={agentPrompt}
           onChange={e => setAgentPrompt(e.target.value)}
