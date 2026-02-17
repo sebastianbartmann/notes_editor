@@ -103,3 +103,38 @@ func TestListSessionsDoesNotDuplicateMappedRuntimeSession(t *testing.T) {
 		t.Fatalf("expected app session id app-123, got %q", sessions[0].SessionID)
 	}
 }
+
+func TestClearAllSessionsRemovesGatewayRecoveredSessionFiles(t *testing.T) {
+	t.Setenv("PI_GATEWAY_PI_SESSION_DIR", t.TempDir())
+	dir := os.Getenv("PI_GATEWAY_PI_SESSION_DIR")
+	body := "{\"type\":\"message\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hello\"}]}}\n"
+	sessionFile := filepath.Join(dir, "petra--runtime-123.jsonl")
+	if err := os.WriteFile(sessionFile, []byte(body), 0644); err != nil {
+		t.Fatalf("write session file: %v", err)
+	}
+
+	store := vault.NewStore(t.TempDir())
+	piRuntime := NewPiGatewayRuntime("http://example.local").WithDependencies(store, nil)
+	piRuntime.setRuntimeSessionID("petra", "app-123", "runtime-123")
+
+	svc := NewServiceWithRuntimes(store, map[string]Runtime{
+		RuntimeModeAnthropicAPIKey:     &stubRuntime{mode: RuntimeModeAnthropicAPIKey, available: true},
+		RuntimeModeGatewaySubscription: piRuntime,
+	})
+	svc.touchSession("petra", "app-123", "hello", RuntimeModeGatewaySubscription)
+
+	if err := svc.ClearAllSessions("petra"); err != nil {
+		t.Fatalf("clear all sessions failed: %v", err)
+	}
+
+	sessions, err := svc.ListSessions("petra")
+	if err != nil {
+		t.Fatalf("list sessions failed: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("expected no sessions after clear-all, got %d", len(sessions))
+	}
+	if _, err := os.Stat(sessionFile); !os.IsNotExist(err) {
+		t.Fatalf("expected runtime session file removed, got err=%v", err)
+	}
+}

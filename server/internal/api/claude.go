@@ -99,8 +99,20 @@ func (s *Server) handleClaudeChatStream(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			continue
 		}
-		w.Write(data)
-		w.Write([]byte("\n"))
+		if _, err := w.Write(data); err != nil {
+			go func() {
+				for range run.Events {
+				}
+			}()
+			return
+		}
+		if _, err := w.Write([]byte("\n")); err != nil {
+			go func() {
+				for range run.Events {
+				}
+			}()
+			return
+		}
 		flusher.Flush()
 	}
 }

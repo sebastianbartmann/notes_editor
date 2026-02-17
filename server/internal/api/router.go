@@ -130,6 +130,7 @@ func NewRouter(srv *Server) http.Handler {
 		// Agent routes
 		r.Post("/agent/chat", srv.handleAgentChat)
 		r.Post("/agent/chat-stream", srv.handleAgentChatStream)
+		r.Get("/agent/runs/active", srv.handleAgentActiveRunsList)
 		r.Get("/agent/sessions", srv.handleAgentSessionsList)
 		r.Post("/agent/sessions/export-markdown", srv.handleAgentSessionsExportMarkdown)
 		r.Post("/agent/sessions/clear", srv.handleAgentSessionsClearAll)

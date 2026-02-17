@@ -245,6 +245,23 @@ data class AgentSessionsResponse(
 )
 
 @Serializable
+data class AgentActiveRun(
+    @SerialName("run_id")
+    val runId: String,
+    @SerialName("session_id")
+    val sessionId: String? = null,
+    @SerialName("started_at")
+    val startedAt: String,
+    @SerialName("updated_at")
+    val updatedAt: String
+)
+
+@Serializable
+data class AgentActiveRunsResponse(
+    val runs: List<AgentActiveRun> = emptyList()
+)
+
+@Serializable
 data class AgentSessionsExportResponse(
     val success: Boolean = true,
     val message: String = "",

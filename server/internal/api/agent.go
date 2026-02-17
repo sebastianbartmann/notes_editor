@@ -129,8 +129,20 @@ func (s *Server) handleAgentChatStream(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		_, _ = w.Write(data)
-		_, _ = w.Write([]byte("\n"))
+		if _, err := w.Write(data); err != nil {
+			go func() {
+				for range run.Events {
+				}
+			}()
+			return
+		}
+		if _, err := w.Write([]byte("\n")); err != nil {
+			go func() {
+				for range run.Events {
+				}
+			}()
+			return
+		}
 		flusher.Flush()
 	}
 }
@@ -231,6 +243,24 @@ func (s *Server) handleAgentSessionsList(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// handleAgentActiveRunsList returns person-scoped currently running agent streams.
+func (s *Server) handleAgentActiveRunsList(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
+	agentSvc := s.getAgent()
+	if agentSvc == nil {
+		writeBadRequest(w, "Agent service not configured")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"runs": agentSvc.ListActiveRuns(person),
+	})
+}
+
 // handleAgentSessionsClearAll clears all person-scoped session state.
 func (s *Server) handleAgentSessionsClearAll(w http.ResponseWriter, r *http.Request) {
 	person, ok := requirePerson(w, r)
@@ -269,6 +299,7 @@ func (s *Server) handleAgentSessionsExportMarkdown(w http.ResponseWriter, r *htt
 		writeBadRequest(w, err.Error())
 		return
 	}
+	s.syncMgr.TriggerPush("Export agent sessions markdown")
 
 	writeJSON(w, http.StatusOK, AgentExportSessionsResponse{
 		Success:   true,
@@ -280,6 +311,11 @@ func (s *Server) handleAgentSessionsExportMarkdown(w http.ResponseWriter, r *htt
 
 // handleAgentStopRun stops an active streaming run.
 func (s *Server) handleAgentStopRun(w http.ResponseWriter, r *http.Request) {
+	person, ok := requirePerson(w, r)
+	if !ok {
+		return
+	}
+
 	agentSvc := s.getAgent()
 	if agentSvc == nil {
 		writeBadRequest(w, "Agent service not configured")
@@ -296,7 +332,7 @@ func (s *Server) handleAgentStopRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !agentSvc.StopRun(req.RunID) {
+	if !agentSvc.StopRun(person, req.RunID) {
 		writeNotFound(w, "Run not found")
 		return
 	}

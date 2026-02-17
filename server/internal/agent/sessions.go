@@ -272,6 +272,15 @@ func listGatewayRuntimeSessionFiles(person string) []recoveredRuntimeSession {
 }
 
 func (s *Service) ClearAllSessions(person string) error {
+	var firstErr error
+	if runtime := s.runtimes[RuntimeModeGatewaySubscription]; runtime != nil && runtime.Available() {
+		if piRuntime, ok := runtime.(*PiGatewayRuntime); ok {
+			if err := piRuntime.ClearAllForPerson(person); err != nil {
+				firstErr = err
+			}
+		}
+	}
+
 	s.mu.Lock()
 	personSessions := s.sessionRecordsByPerson[person]
 	records := make([]sessionRecord, 0, len(personSessions))
@@ -282,10 +291,12 @@ func (s *Service) ClearAllSessions(person string) error {
 	delete(s.conversationsByPerson, person)
 	s.mu.Unlock()
 
-	var firstErr error
 	for _, rec := range records {
 		runtime := s.runtimes[rec.RuntimeMode]
 		if runtime == nil || !runtime.Available() {
+			continue
+		}
+		if rec.RuntimeMode == RuntimeModeGatewaySubscription {
 			continue
 		}
 		if err := runtime.ClearSession(rec.SessionID); err != nil && firstErr == nil {

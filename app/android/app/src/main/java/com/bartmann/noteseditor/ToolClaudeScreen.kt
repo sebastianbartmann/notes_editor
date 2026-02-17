@@ -24,10 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -56,6 +55,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
     var pendingConfirmation by remember { mutableStateOf<AgentAction?>(null) }
     var showSessionsDialog by remember { mutableStateOf(false) }
     var sessions by remember { mutableStateOf<List<AgentSessionSummary>>(emptyList()) }
+    var activeRuns by remember { mutableStateOf<List<AgentActiveRun>>(emptyList()) }
     var sessionsError by remember { mutableStateOf("") }
     var sessionsStatus by remember { mutableStateOf("") }
     var sessionsLoading by remember { mutableStateOf(false) }
@@ -358,11 +358,26 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
     }
 
+    fun loadActiveRuns() {
+        if (person == null) return
+        scope.launch {
+            try {
+                activeRuns = ApiClient.fetchActiveAgentRuns()
+            } catch (exc: Exception) {
+                activeRuns = emptyList()
+                if (sessionsError.isBlank()) {
+                    sessionsError = "Failed to load active runs: ${exc.message}"
+                }
+            }
+        }
+    }
+
     fun openSessions() {
         if (isLoading || person == null) return
         showSessionsDialog = true
         sessionsStatus = ""
         loadSessions()
+        loadActiveRuns()
     }
 
     fun continueSession(targetSessionId: String) {
@@ -449,6 +464,39 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
     }
 
+    fun stopActiveRun(runId: String) {
+        if (isLoading || person == null || sessionsBusy) return
+        scope.launch {
+            sessionsBusy = true
+            sessionsError = ""
+            sessionsStatus = ""
+            try {
+                ApiClient.stopAgentRun(runId)
+                sessionsStatus = "Stopped run $runId"
+                activeRuns = ApiClient.fetchActiveAgentRuns()
+            } catch (exc: Exception) {
+                sessionsError = "Failed to stop run: ${exc.message}"
+            } finally {
+                sessionsBusy = false
+            }
+        }
+    }
+
+    fun refreshCurrentSessionHistory() {
+        val currentSessionId = ClaudeSessionStore.sessionId
+        if (person == null || currentSessionId.isNullOrBlank() || isLoading) return
+        scope.launch {
+            try {
+                val history = ApiClient.fetchAgentSessionHistory(currentSessionId)
+                ClaudeSessionStore.loadSession(currentSessionId, history)
+                statusMessage = ""
+                streamingAssistantText = ""
+            } catch (_: Exception) {
+                // Non-fatal refresh: keep currently rendered local state.
+            }
+        }
+    }
+
     LaunchedEffect(visibleMessages.size, streamingAssistantText) {
         val totalItems = visibleMessages.size + if (streamingAssistantText.isNotBlank() || isLoading) 1 else 0
         if (totalItems > 0) {
@@ -471,6 +519,20 @@ fun ToolClaudeScreen(modifier: Modifier) {
         } catch (exc: Exception) {
             actions = emptyList()
             actionsError = "Failed to load actions: ${exc.message}"
+        }
+    }
+
+    LaunchedEffect(person, ClaudeSessionStore.sessionId, isLoading) {
+        if (person == null || isLoading) return@LaunchedEffect
+        if (ClaudeSessionStore.sessionId.isNullOrBlank()) return@LaunchedEffect
+        refreshCurrentSessionHistory()
+    }
+
+    LaunchedEffect(showSessionsDialog, person) {
+        if (!showSessionsDialog || person == null) return@LaunchedEffect
+        while (showSessionsDialog) {
+            loadActiveRuns()
+            delay(2000)
         }
     }
 
@@ -594,82 +656,158 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
 
         if (showSessionsDialog) {
-            AlertDialog(
-                onDismissRequest = {
-                    if (!sessionsBusy) {
-                        showSessionsDialog = false
-                    }
-                },
-                containerColor = AppTheme.colors.panel,
-                iconContentColor = AppTheme.colors.text,
-                titleContentColor = AppTheme.colors.text,
-                textContentColor = AppTheme.colors.text,
-                title = {
-                    AppText("Sessions", AppTheme.typography.title, AppTheme.colors.text)
-                },
-                text = {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.verticalScroll(rememberScrollState())
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(AppTheme.colors.background)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (sessionsLoading) {
-                            AppText("Loading sessions...", AppTheme.typography.bodySmall, AppTheme.colors.muted)
-                        } else if (sessions.isEmpty() && sessionsError.isBlank()) {
-                            AppText("No sessions yet.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
-                        }
+                        AppText("Sessions", AppTheme.typography.title, AppTheme.colors.text)
+                        CompactButton(
+                            text = "Close",
+                            onClick = { if (!sessionsBusy) showSessionsDialog = false }
+                        )
+                    }
 
-                        if (sessionsError.isNotBlank()) {
-                            SelectableAppText(
-                                text = sessionsError,
-                                style = AppTheme.typography.bodySmall,
-                                color = AppTheme.colors.danger
-                            )
-                        }
-                        if (sessionsStatus.isNotBlank()) {
-                            SelectableAppText(
-                                text = sessionsStatus,
-                                style = AppTheme.typography.bodySmall,
-                                color = AppTheme.colors.muted
-                            )
-                        }
+                    if (sessionsLoading) {
+                        AppText("Loading sessions...", AppTheme.typography.bodySmall, AppTheme.colors.muted)
+                    }
+                    if (sessionsError.isNotBlank()) {
+                        SelectableAppText(
+                            text = sessionsError,
+                            style = AppTheme.typography.bodySmall,
+                            color = AppTheme.colors.danger
+                        )
+                    }
+                    if (sessionsStatus.isNotBlank()) {
+                        SelectableAppText(
+                            text = sessionsStatus,
+                            style = AppTheme.typography.bodySmall,
+                            color = AppTheme.colors.muted
+                        )
+                    }
 
+                    AppText(
+                        "Active runs (${activeRuns.size})",
+                        AppTheme.typography.body,
+                        AppTheme.colors.text
+                    )
+                    Panel(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.verticalScroll(rememberScrollState())
+                        ) {
+                            if (activeRuns.isEmpty()) {
+                                AppText("No active runs.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
+                            }
+                            activeRuns.forEach { run ->
+                                ActiveRunRow(
+                                    run = run,
+                                    onStop = { stopActiveRun(run.runId) }
+                                )
+                            }
+                        }
+                    }
+
+                    AppText(
+                        "Saved sessions (${sessions.size})",
+                        AppTheme.typography.body,
+                        AppTheme.colors.text
+                    )
+                    Panel(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.verticalScroll(rememberScrollState())
+                        ) {
+                            if (sessions.isEmpty() && sessionsError.isBlank()) {
+                                AppText("No sessions yet.", AppTheme.typography.bodySmall, AppTheme.colors.muted)
+                            }
+                            sessions.forEach { session ->
+                                SessionRow(
+                                    session = session,
+                                    active = session.sessionId == ClaudeSessionStore.sessionId,
+                                    onClick = { continueSession(session.sessionId) },
+                                    onDelete = { deleteSession(session.sessionId) }
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         CompactButton(
                             text = if (sessionsBusy) "Working..." else "Export .md",
+                            modifier = Modifier.weight(1f),
                             onClick = { exportSessionsMarkdown() }
                         )
-
-                        sessions.forEach { session ->
-                            SessionRow(
-                                session = session,
-                                active = session.sessionId == ClaudeSessionStore.sessionId,
-                                onClick = { continueSession(session.sessionId) },
-                                onDelete = { deleteSession(session.sessionId) }
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        if (!sessionsBusy) {
-                            showSessionsDialog = false
-                        }
-                    }) {
-                        AppText("Close", AppTheme.typography.label, AppTheme.colors.muted)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        if (!sessionsBusy) {
-                            deleteAllSessions()
-                        }
-                    }) {
-                        AppText(
-                            if (sessionsBusy) "Deleting..." else "Delete all",
-                            AppTheme.typography.label,
-                            AppTheme.colors.danger
+                        CompactButton(
+                            text = if (sessionsBusy) "Deleting..." else "Delete all",
+                            modifier = Modifier.weight(1f),
+                            background = AppTheme.colors.button,
+                            border = AppTheme.colors.danger,
+                            textColor = AppTheme.colors.danger,
+                            onClick = { deleteAllSessions() }
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveRunRow(run: AgentActiveRun, onStop: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .background(AppTheme.colors.button)
+            .border(width = 1.dp, color = AppTheme.colors.panelBorder, shape = RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                AppText("Run: ${run.runId}", AppTheme.typography.bodySmall, AppTheme.colors.text)
+                AppText(
+                    "Session: ${run.sessionId ?: "new"}  |  updated ${formatSessionTimestamp(run.updatedAt)}",
+                    AppTheme.typography.label,
+                    AppTheme.colors.muted
+                )
+            }
+            CompactButton(
+                text = "Stop",
+                modifier = Modifier.width(84.dp),
+                background = AppTheme.colors.button,
+                border = AppTheme.colors.danger,
+                textColor = AppTheme.colors.danger,
+                onClick = onStop
             )
         }
     }

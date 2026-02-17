@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -56,13 +57,25 @@ type StreamRun struct {
 }
 
 type runControl struct {
-	cancel chan struct{}
-	once   sync.Once
+	person    string
+	sessionID string
+	startedAt time.Time
+	updatedAt time.Time
+	cancel    chan struct{}
+	once      sync.Once
 }
 
 type resolvedMessage struct {
 	Text           string
 	ActionMaxSteps int
+}
+
+// ActiveRunSummary describes one currently running person-scoped stream run.
+type ActiveRunSummary struct {
+	RunID     string    `json:"run_id"`
+	SessionID string    `json:"session_id,omitempty"`
+	StartedAt time.Time `json:"started_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // Service orchestrates agent requests.
@@ -189,6 +202,7 @@ func (s *Service) Chat(person string, req ChatRequest) (*ChatResponse, error) {
 
 // ChatStream executes a streaming request with v2 event schema.
 func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest) (*StreamRun, error) {
+	_ = ctx
 	resolved, err := s.resolveMessage(person, req)
 	if err != nil {
 		return nil, err
@@ -206,7 +220,10 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 		return nil, err
 	}
 
-	upstream, err := runtime.ChatStream(ctx, person, RuntimeChatRequest{
+	// Run lifecycle is intentionally detached from request context so runs can continue
+	// when a client disconnects or switches views.
+	streamCtx := context.Background()
+	upstream, err := runtime.ChatStream(streamCtx, person, RuntimeChatRequest{
 		SessionID:    req.SessionID,
 		Message:      resolved.Text,
 		MaxToolCalls: toolLimit,
@@ -214,7 +231,7 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 	if err != nil {
 		if s.shouldAttemptPiFallback(selectedMode, err) {
 			anthropic := s.runtimes[RuntimeModeAnthropicAPIKey]
-			upstream, err = anthropic.ChatStream(ctx, person, RuntimeChatRequest{
+			upstream, err = anthropic.ChatStream(streamCtx, person, RuntimeChatRequest{
 				SessionID:    req.SessionID,
 				Message:      resolved.Text,
 				MaxToolCalls: toolLimit,
@@ -230,7 +247,7 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 		}
 	}
 
-	run := s.registerRun(runID)
+	run := s.registerRun(runID, person, req.SessionID)
 	out := make(chan StreamEvent, 100)
 
 	go func() {
@@ -277,6 +294,7 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 					assistantText.Reset()
 				}
 			}
+			s.touchRunEvent(runID)
 			out <- event
 			if item, ok := conversationItemFromStreamEvent(event); ok {
 				runItems = append(runItems, item)
@@ -346,10 +364,6 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 
 		for {
 			select {
-			case <-ctx.Done():
-				emitTerminal("Run cancelled")
-				s.drainStream(upstream.Events)
-				return
 			case <-run.cancel:
 				emitTerminal("Run cancelled")
 				s.drainStream(upstream.Events)
@@ -374,6 +388,7 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 				}
 				if event.SessionID != "" {
 					finalSessionID = event.SessionID
+					s.updateRunSessionID(runID, finalSessionID)
 				}
 				if event.RunID == "" {
 					event.RunID = runID
@@ -471,8 +486,14 @@ func (s *Service) ClearSession(person, sessionID string) error {
 	if err != nil {
 		return err
 	}
-	if err := runtime.ClearSession(sessionID); err != nil {
-		return err
+	if piRuntime, ok := runtime.(*PiGatewayRuntime); ok {
+		if err := piRuntime.ClearSessionForPerson(person, sessionID); err != nil {
+			return err
+		}
+	} else {
+		if err := runtime.ClearSession(sessionID); err != nil {
+			return err
+		}
 	}
 	s.removeSessionRecord(person, sessionID)
 	s.removeStoredConversation(person, sessionID)
@@ -535,17 +556,40 @@ func (s *Service) GetHistory(person, sessionID string) ([]claude.ChatMessage, er
 }
 
 // StopRun stops a currently active streaming run.
-func (s *Service) StopRun(runID string) bool {
+func (s *Service) StopRun(person, runID string) bool {
 	s.mu.Lock()
 	run, ok := s.activeRuns[runID]
 	s.mu.Unlock()
-	if !ok {
+	if !ok || run.person != person {
 		return false
 	}
 	run.once.Do(func() {
 		close(run.cancel)
 	})
 	return true
+}
+
+// ListActiveRuns returns currently running streams for one person.
+func (s *Service) ListActiveRuns(person string) []ActiveRunSummary {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]ActiveRunSummary, 0, len(s.activeRuns))
+	for runID, run := range s.activeRuns {
+		if run.person != person {
+			continue
+		}
+		out = append(out, ActiveRunSummary{
+			RunID:     runID,
+			SessionID: run.sessionID,
+			StartedAt: run.startedAt,
+			UpdatedAt: run.updatedAt,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].StartedAt.After(out[j].StartedAt)
+	})
+	return out
 }
 
 func (s *Service) getStoredConversation(person, sessionID string) []ConversationItem {
@@ -607,10 +651,17 @@ func (s *Service) removeStoredConversation(person, sessionID string) {
 	}
 }
 
-func (s *Service) registerRun(runID string) *runControl {
+func (s *Service) registerRun(runID, person, sessionID string) *runControl {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	run := &runControl{cancel: make(chan struct{})}
+	now := time.Now().UTC()
+	run := &runControl{
+		person:    person,
+		sessionID: strings.TrimSpace(sessionID),
+		startedAt: now,
+		updatedAt: now,
+		cancel:    make(chan struct{}),
+	}
 	s.activeRuns[runID] = run
 	return run
 }
@@ -619,6 +670,31 @@ func (s *Service) unregisterRun(runID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.activeRuns, runID)
+}
+
+func (s *Service) touchRunEvent(runID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	run, ok := s.activeRuns[runID]
+	if !ok {
+		return
+	}
+	run.updatedAt = time.Now().UTC()
+}
+
+func (s *Service) updateRunSessionID(runID, sessionID string) {
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	run, ok := s.activeRuns[runID]
+	if !ok {
+		return
+	}
+	run.sessionID = sid
+	run.updatedAt = time.Now().UTC()
 }
 
 func (s *Service) tryBeginSessionRun(person, sessionID, runID string) error {

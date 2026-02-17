@@ -102,6 +102,39 @@ export default function ClaudePage() {
     }
   }, [person, sessionId, setMessages])
 
+  useEffect(() => {
+    if (!person || !sessionId) return
+    const refresh = () => {
+      if (isStreaming) return
+      getAgentSessionHistory(sessionId)
+        .then((resp) => {
+          if (resp.items && resp.items.length > 0) {
+            setMessages(person, resp.items)
+            return
+          }
+          const legacyItems = (resp.messages || []).map((msg) => ({
+            type: 'message' as const,
+            role: msg.role,
+            content: msg.content,
+          }))
+          setMessages(person, legacyItems)
+        })
+        .catch(() => {})
+    }
+    const onFocus = () => refresh()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refresh()
+      }
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [person, sessionId, isStreaming, setMessages])
+
   const loadSessions = async () => {
     if (!person) return
     setSessionsLoading(true)

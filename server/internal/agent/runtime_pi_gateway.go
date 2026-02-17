@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -284,6 +285,88 @@ func (r *PiGatewayRuntime) ClearSession(sessionID string) error {
 	return nil
 }
 
+// ClearSessionForPerson removes runtime session state and persisted gateway files
+// for one person-scoped app session id.
+func (r *PiGatewayRuntime) ClearSessionForPerson(person, sessionID string) error {
+	if !r.Available() {
+		return &RuntimeUnavailableError{
+			Mode:   RuntimeModeGatewaySubscription,
+			Reason: "Gateway URL not configured",
+		}
+	}
+	person = strings.TrimSpace(person)
+	sessionID = strings.TrimSpace(sessionID)
+	if person == "" || sessionID == "" {
+		return nil
+	}
+
+	r.ensureSessionMapLoaded()
+	r.sessions.Clear(sessionID)
+
+	key := sessionRunKey(person, sessionID)
+	r.mu.Lock()
+	runtimeSessionID := strings.TrimSpace(r.runtimeSessionByAppSession[key])
+	if runtimeSessionID != "" {
+		delete(r.runtimeSessionByAppSession, key)
+	}
+	snapshot := cloneSessionMap(r.runtimeSessionByAppSession)
+	r.mu.Unlock()
+	r.persistSessionMap(snapshot)
+
+	var firstErr error
+	if err := removeGatewaySessionFile(person, sessionID); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	if runtimeSessionID != "" && runtimeSessionID != sessionID {
+		if err := removeGatewaySessionFile(person, runtimeSessionID); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// ClearAllForPerson removes all persisted gateway sessions and person-scoped runtime
+// session mappings for the given person.
+func (r *PiGatewayRuntime) ClearAllForPerson(person string) error {
+	if !r.Available() {
+		return &RuntimeUnavailableError{
+			Mode:   RuntimeModeGatewaySubscription,
+			Reason: "Gateway URL not configured",
+		}
+	}
+	person = strings.TrimSpace(person)
+	if person == "" {
+		return nil
+	}
+
+	r.ensureSessionMapLoaded()
+
+	prefix := person + "::"
+	r.mu.Lock()
+	for key := range r.runtimeSessionByAppSession {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		appSessionID := strings.TrimSpace(strings.TrimPrefix(key, prefix))
+		if appSessionID != "" {
+			r.sessions.Clear(appSessionID)
+		}
+		delete(r.runtimeSessionByAppSession, key)
+	}
+	snapshot := cloneSessionMap(r.runtimeSessionByAppSession)
+	r.mu.Unlock()
+	r.persistSessionMap(snapshot)
+
+	paths := listGatewaySessionPaths(person)
+	var firstErr error
+	for _, path := range paths {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 // GetHistory returns runtime session history.
 func (r *PiGatewayRuntime) GetHistory(sessionID string) ([]claude.ChatMessage, error) {
 	if !r.Available() {
@@ -438,6 +521,34 @@ func cloneSessionMap(input map[string]string) map[string]string {
 		out[key] = value
 	}
 	return out
+}
+
+func listGatewaySessionPaths(person string) []string {
+	person = strings.TrimSpace(person)
+	if person == "" {
+		return nil
+	}
+	sessionDir := gatewaySessionDir()
+	if sessionDir == "" {
+		return nil
+	}
+	pattern := filepath.Join(sessionDir, person+"--*.jsonl")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil
+	}
+	return matches
+}
+
+func removeGatewaySessionFile(person, sessionID string) error {
+	path := gatewaySessionFilePath(person, sessionID)
+	if path == "" {
+		return nil
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func mapPiTransportError(err error) error {

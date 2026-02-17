@@ -248,6 +248,50 @@ func TestChatStreamRegistersNewSessionFromStreamEvent(t *testing.T) {
 	}
 }
 
+func TestListActiveRunsForPerson(t *testing.T) {
+	upstream := make(chan StreamEvent)
+	runtime := &stubRuntime{
+		mode:      RuntimeModeAnthropicAPIKey,
+		available: true,
+		streamResp: &RuntimeStream{
+			Events: upstream,
+		},
+	}
+
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey:     runtime,
+		RuntimeModeGatewaySubscription: &stubRuntime{mode: RuntimeModeGatewaySubscription, available: false},
+	})
+
+	run, err := svc.ChatStream(context.Background(), "sebastian", ChatRequest{
+		SessionID: "s-active",
+		Message:   "hello",
+	})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+
+	runs := svc.ListActiveRuns("sebastian")
+	if len(runs) != 1 {
+		t.Fatalf("expected one active run, got %d", len(runs))
+	}
+	if runs[0].RunID != run.RunID {
+		t.Fatalf("expected run id %q, got %q", run.RunID, runs[0].RunID)
+	}
+	if runs[0].SessionID != "s-active" {
+		t.Fatalf("expected session id s-active, got %q", runs[0].SessionID)
+	}
+
+	close(upstream)
+	for range run.Events {
+	}
+
+	runs = svc.ListActiveRuns("sebastian")
+	if len(runs) != 0 {
+		t.Fatalf("expected zero active runs after completion, got %d", len(runs))
+	}
+}
+
 func TestChatStreamEmitsErrorWhenDoneArrivesWithoutOutput(t *testing.T) {
 	upstream := make(chan StreamEvent, 1)
 	upstream <- StreamEvent{Type: "done", SessionID: "s-empty"}
