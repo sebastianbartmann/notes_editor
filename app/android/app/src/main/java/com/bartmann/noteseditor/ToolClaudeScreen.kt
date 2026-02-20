@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -77,6 +78,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
     }
     val scope = rememberCoroutineScope()
     var refreshJob by remember { mutableStateOf<Job?>(null) }
+    var activeStreamJob by remember { mutableStateOf<Job?>(null) }
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
     val autoScrollThresholdPx = 50
@@ -201,17 +203,20 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
                     }
                 }
+            } catch (_: CancellationException) {
+                // Session switch/new session can cancel the active stream intentionally.
             } catch (exc: Exception) {
                 flushStreamingAssistantText()
                 statusMessage = "Error: ${exc.message}"
             } finally {
                 flushStreamingAssistantText()
                 isLoading = false
+                activeStreamJob = null
                 if (!statusMessage.startsWith("Error")) {
                     statusMessage = ""
                 }
             }
-        }
+        }.also { activeStreamJob = it }
     }
 
     fun runAction(action: AgentAction) {
@@ -326,21 +331,31 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         }
                     }
                 }
+            } catch (_: CancellationException) {
+                // Session switch/new session can cancel the active stream intentionally.
             } catch (exc: Exception) {
                 flushStreamingAssistantText()
                 statusMessage = "Error: ${exc.message}"
             } finally {
                 flushStreamingAssistantText()
                 isLoading = false
+                activeStreamJob = null
                 if (!statusMessage.startsWith("Error")) {
                     statusMessage = ""
                 }
             }
-        }
+        }.also { activeStreamJob = it }
+    }
+
+    fun stopActiveStreamForSessionSwitch() {
+        activeStreamJob?.cancel()
+        activeStreamJob = null
+        flushStreamingAssistantText()
+        isLoading = false
     }
 
     fun startNewSession() {
-        if (isLoading) return
+        stopActiveStreamForSessionSwitch()
         refreshJob?.cancel()
         refreshJob = null
         ClaudeSessionStore.startNew()
@@ -366,14 +381,15 @@ fun ToolClaudeScreen(modifier: Modifier) {
     }
 
     fun openSessions() {
-        if (isLoading || person == null) return
+        if (person == null) return
         showSessionsDialog = true
         sessionsStatus = ""
         loadSessions()
     }
 
     fun continueSession(targetSessionId: String) {
-        if (isLoading || person == null || sessionsBusy) return
+        if (person == null || sessionsBusy) return
+        stopActiveStreamForSessionSwitch()
         if (ClaudeSessionStore.isInCache(targetSessionId)) {
             ClaudeSessionStore.switchTo(targetSessionId)
             statusMessage = ""
