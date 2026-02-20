@@ -70,7 +70,7 @@ const MODE = (process.env.PI_GATEWAY_MODE || 'pi_rpc').trim();
 const DEFAULT_PROVIDER = (process.env.PI_GATEWAY_PI_PROVIDER || 'anthropic').trim();
 const DEFAULT_MODEL = (process.env.PI_GATEWAY_PI_MODEL || '').trim();
 const SESSION_DIR = (process.env.PI_GATEWAY_PI_SESSION_DIR || path.join(process.env.HOME || '/tmp', '.pi', 'notes-editor-sessions')).trim();
-const PI_TIMEOUT_MS = Number(process.env.PI_GATEWAY_PI_TIMEOUT_MS || '120000');
+const PI_TIMEOUT_MS = Number(process.env.PI_GATEWAY_PI_TIMEOUT_MS || '1800000');
 
 // Our Pi extension registers tools and applies system prompt updates.
 const SELF_DIR = path.dirname(fileURLToPath(import.meta.url));

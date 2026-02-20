@@ -31,6 +31,7 @@ export class PiRpcClient {
   private listeners: Array<(event: PiRpcEvent) => void> = [];
   private pending = new Map<string, { resolve: (r: RpcResponse) => void; reject: (e: Error) => void }>();
   private idCounter = 0;
+  private rpcTimeoutMs = Number(process.env.PI_GATEWAY_RPC_TIMEOUT_MS || '30000');
 
   constructor(options: PiRpcClientOptions) {
     this.options = options;
@@ -149,7 +150,7 @@ export class PiRpcClient {
           this.pending.delete(id);
           reject(new Error(`rpc response timeout for ${command.type}. stderr=${this.stderr}`));
         }
-      }, 5000);
+      }, this.rpcTimeoutMs);
     });
   }
 

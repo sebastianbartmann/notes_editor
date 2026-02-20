@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { usePerson } from '../hooks/usePerson'
 import { useTheme } from '../hooks/useTheme'
 import { useAuth } from '../hooks/useAuth'
-import { downloadVaultBackup, fetchEnv, saveEnv } from '../api/settings'
+import { downloadApk, downloadVaultBackup, fetchEnv, saveEnv } from '../api/settings'
 import { getAgentConfig, getAgentGatewayHealth, saveAgentConfig } from '../api/agent'
 import { MAX_TEXT_SCALE, MIN_TEXT_SCALE, TEXT_SCALE_STEP } from '../context/ThemeContext'
 import styles from './SettingsPage.module.css'
@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [isSavingAgent, setIsSavingAgent] = useState(false)
   const [backupStatus, setBackupStatus] = useState('')
   const [isDownloadingBackup, setIsDownloadingBackup] = useState(false)
+  const [apkStatus, setApkStatus] = useState('')
+  const [isDownloadingApk, setIsDownloadingApk] = useState(false)
   const [verboseOutput, setVerboseOutput] = useState<boolean>(() => {
     const stored = localStorage.getItem(VERBOSE_OUTPUT_KEY)
     if (stored !== null) return stored !== 'false'
@@ -115,6 +117,20 @@ export default function SettingsPage() {
       setBackupStatus(`Backup failed: ${err instanceof Error ? err.message : err}`)
     } finally {
       setIsDownloadingBackup(false)
+    }
+  }
+
+  const handleDownloadApk = async () => {
+    if (isDownloadingApk) return
+    setIsDownloadingApk(true)
+    setApkStatus('')
+    try {
+      await downloadApk()
+      setApkStatus('APK download started')
+    } catch (err) {
+      setApkStatus(`APK download failed: ${err instanceof Error ? err.message : err}`)
+    } finally {
+      setIsDownloadingApk(false)
     }
   }
 
@@ -253,6 +269,17 @@ export default function SettingsPage() {
             {isDownloadingBackup ? 'Preparing backup...' : 'Download backup (.zip)'}
           </button>
           {backupStatus && <span className={styles.envStatus}>{backupStatus}</span>}
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <h3>Android APK</h3>
+        <p className={styles.hint}>Download the latest debug APK built on the server.</p>
+        <div className={styles.envActions}>
+          <button onClick={handleDownloadApk} disabled={isDownloadingApk}>
+            {isDownloadingApk ? 'Preparing APK...' : 'Download APK'}
+          </button>
+          {apkStatus && <span className={styles.envStatus}>{apkStatus}</span>}
         </div>
       </section>
 

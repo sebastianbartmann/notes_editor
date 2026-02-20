@@ -38,8 +38,8 @@ const (
 	maxWebSearchDescChars     = 280
 	defaultQMDBinaryPath      = "/home/dev/.bun/bin/qmd"
 	defaultQMDQueryTimeout    = 90 * time.Second
-	defaultBashTimeout        = 10 * time.Second
-	maxBashTimeout            = 60 * time.Second
+	defaultBashTimeout        = 300 * time.Second
+	maxBashTimeout            = 1800 * time.Second
 	maxBashOutputBytes        = 64 * 1024
 )
 
@@ -184,7 +184,7 @@ var ToolDefinitions = []map[string]any{
 				},
 				"timeout_seconds": map[string]any{
 					"type":        "number",
-					"description": "Optional timeout in seconds (default: 10, max: 60)",
+					"description": "Optional timeout in seconds (default: 300, max: 1800)",
 				},
 			},
 			"required": []string{"command"},

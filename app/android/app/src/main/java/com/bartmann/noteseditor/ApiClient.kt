@@ -391,4 +391,51 @@ object ApiClient {
         }
         return "${person ?: "notes"}-vault-backup.zip"
     }
+
+    suspend fun downloadApkTo(output: OutputStream): String = withContext(Dispatchers.IO) {
+        var lastError: IOException? = null
+        for (baseUrl in baseUrls) {
+            val builder = Request.Builder()
+                .url("$baseUrl/api/apk/download")
+                .header("Authorization", authHeader)
+                .header("Accept", "application/vnd.android.package-archive")
+            val person = UserSettings.person
+            if (person != null) {
+                builder.header(PERSON_HEADER, person)
+            }
+
+            val request = builder.get().build()
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        val body = response.body?.string().orEmpty()
+                        throw ApiHttpException("HTTP ${response.code}: $body")
+                    }
+
+                    val body = response.body ?: throw IOException("Empty response body")
+                    val filename = parseApkFilename(response.header("Content-Disposition"))
+
+                    body.byteStream().use { input ->
+                        input.copyTo(output)
+                    }
+                    output.flush()
+                    lastSuccessfulBaseUrl = baseUrl
+                    return@withContext filename
+                }
+            } catch (exc: IOException) {
+                lastError = exc
+            }
+        }
+        throw (lastError ?: IOException("No reachable servers"))
+    }
+
+    private fun parseApkFilename(contentDisposition: String?): String {
+        if (contentDisposition != null) {
+            val match = Regex("filename=\"([^\"]+)\"").find(contentDisposition)
+            if (match != null) {
+                return match.groupValues[1]
+            }
+        }
+        return "app-debug.apk"
+    }
 }

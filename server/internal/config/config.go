@@ -71,7 +71,7 @@ func Load() (*Config, error) {
 		},
 	}
 	cfg.AgentEnablePiFallback = parseBoolEnv("AGENT_ENABLE_PI_FALLBACK", true)
-	cfg.AgentMaxRunDuration = parseDurationEnv("AGENT_MAX_RUN_DURATION", 2*time.Minute)
+	cfg.AgentMaxRunDuration = parseDurationEnv("AGENT_MAX_RUN_DURATION", 45*time.Minute)
 	cfg.AgentMaxToolCallsPerRun = parseIntEnv("AGENT_MAX_TOOL_CALLS_PER_RUN", 40)
 	if cfg.PiGatewayURL == "" {
 		cfg.PiGatewayURL = "http://127.0.0.1:4317"
@@ -126,7 +126,7 @@ func (c *Config) ReloadRuntimeSettings() error {
 		c.PiGatewayURL = "http://127.0.0.1:4317"
 	}
 	c.AgentEnablePiFallback = parseBoolEnv("AGENT_ENABLE_PI_FALLBACK", true)
-	c.AgentMaxRunDuration = parseDurationEnv("AGENT_MAX_RUN_DURATION", 2*time.Minute)
+	c.AgentMaxRunDuration = parseDurationEnv("AGENT_MAX_RUN_DURATION", 45*time.Minute)
 	c.AgentMaxToolCallsPerRun = parseIntEnv("AGENT_MAX_TOOL_CALLS_PER_RUN", 40)
 	c.ValidPersons = parseCSV(os.Getenv("VALID_PERSONS"))
 	if len(c.ValidPersons) == 0 {

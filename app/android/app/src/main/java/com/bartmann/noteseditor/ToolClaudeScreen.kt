@@ -1,5 +1,6 @@
 package com.bartmann.noteseditor
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -74,6 +76,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
     }
     val scope = rememberCoroutineScope()
+    var refreshJob by remember { mutableStateOf<Job?>(null) }
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
     val autoScrollThresholdPx = 50
@@ -338,7 +341,9 @@ fun ToolClaudeScreen(modifier: Modifier) {
 
     fun startNewSession() {
         if (isLoading) return
-        ClaudeSessionStore.clear()
+        refreshJob?.cancel()
+        refreshJob = null
+        ClaudeSessionStore.startNew()
         pendingConfirmation = null
         statusMessage = ""
         streamingAssistantText = ""
@@ -369,13 +374,21 @@ fun ToolClaudeScreen(modifier: Modifier) {
 
     fun continueSession(targetSessionId: String) {
         if (isLoading || person == null || sessionsBusy) return
+        if (ClaudeSessionStore.isInCache(targetSessionId)) {
+            ClaudeSessionStore.switchTo(targetSessionId)
+            statusMessage = ""
+            pendingConfirmation = null
+            streamingAssistantText = ""
+            showSessionsDialog = false
+            return
+        }
         scope.launch {
             sessionsBusy = true
             sessionsError = ""
             sessionsStatus = ""
             try {
                 val history = ApiClient.fetchAgentSessionHistory(targetSessionId)
-                ClaudeSessionStore.loadSession(targetSessionId, history)
+                ClaudeSessionStore.switchTo(targetSessionId, history)
                 statusMessage = ""
                 pendingConfirmation = null
                 streamingAssistantText = ""
@@ -397,6 +410,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
             try {
                 ApiClient.clearAllAgentSessions()
                 ClaudeSessionStore.clear()
+                ClaudeSessionStore.clearCache()
                 sessions = emptyList()
                 statusMessage = ""
                 pendingConfirmation = null
@@ -424,6 +438,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                     pendingConfirmation = null
                     streamingAssistantText = ""
                 }
+                ClaudeSessionStore.removeFromCache(targetSessionId)
             } catch (exc: Exception) {
                 sessionsError = "Failed to delete session: ${exc.message}"
             } finally {
@@ -453,7 +468,8 @@ fun ToolClaudeScreen(modifier: Modifier) {
     fun refreshCurrentSessionHistory() {
         val currentSessionId = ClaudeSessionStore.sessionId
         if (person == null || currentSessionId.isNullOrBlank() || isLoading) return
-        scope.launch {
+        refreshJob?.cancel()
+        refreshJob = scope.launch {
             try {
                 val history = ApiClient.fetchAgentSessionHistory(currentSessionId)
                 ClaudeSessionStore.loadSession(currentSessionId, history)
@@ -463,6 +479,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 // Non-fatal refresh: keep currently rendered local state.
             }
         }
+    }
+
+    BackHandler(enabled = showSessionsDialog && !sessionsBusy) {
+        showSessionsDialog = false
     }
 
     fun isNearBottom(): Boolean {

@@ -60,3 +60,50 @@ export async function downloadVaultBackup(): Promise<void> {
   anchor.remove()
   URL.revokeObjectURL(objectUrl)
 }
+
+export async function downloadApk(): Promise<void> {
+  const token = localStorage.getItem('notes_token')
+  const person = localStorage.getItem('notes_person')
+
+  const headers: Record<string, string> = {
+    'Accept': 'application/vnd.android.package-archive',
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  if (person) {
+    headers['X-Notes-Person'] = person
+  }
+
+  const response = await fetch(`${API_BASE}/api/apk/download`, {
+    method: 'GET',
+    headers,
+  })
+
+  if (!response.ok) {
+    let detail = `Request failed with status ${response.status}`
+    try {
+      const body = await response.json() as { detail?: string }
+      if (body.detail) {
+        detail = body.detail
+      }
+    } catch {
+      // ignore invalid JSON body
+    }
+    throw new Error(detail)
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const filenameMatch = disposition.match(/filename="([^"]+)"/)
+  const filename = filenameMatch?.[1] || 'app-debug.apk'
+
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(objectUrl)
+}

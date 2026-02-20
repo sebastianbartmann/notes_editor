@@ -204,6 +204,7 @@ func TestChatStreamStopsWhenToolCallLimitExceeded(t *testing.T) {
 }
 
 func TestChatStreamRegistersNewSessionFromStreamEvent(t *testing.T) {
+	t.Setenv("PI_GATEWAY_PI_SESSION_DIR", t.TempDir())
 	upstream := make(chan StreamEvent, 3)
 	upstream <- StreamEvent{Type: "start", SessionID: "new-session-1"}
 	upstream <- StreamEvent{Type: "text", Delta: "hello"}

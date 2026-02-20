@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.dp
+import android.content.Intent
 import java.io.IOException
 import kotlinx.coroutines.launch
 
@@ -50,6 +51,8 @@ fun SettingsScreen(modifier: Modifier) {
     var isSavingAgent by remember { mutableStateOf(false) }
     var backupStatus by remember { mutableStateOf("") }
     var isSavingBackup by remember { mutableStateOf(false) }
+    var apkStatus by remember { mutableStateOf("") }
+    var isSavingApk by remember { mutableStateOf(false) }
     var navStatus by remember { mutableStateOf("") }
     val selectedNavIds = UserSettings.bottomNavIds
     val backupLauncher = rememberLauncherForActivityResult(
@@ -72,6 +75,38 @@ fun SettingsScreen(modifier: Modifier) {
                 backupStatus = "Backup failed: ${exc.message}"
             } finally {
                 isSavingBackup = false
+            }
+        }
+    }
+    val apkLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/vnd.android.package-archive")
+    ) { uri ->
+        if (uri == null) {
+            isSavingApk = false
+            apkStatus = "APK download canceled"
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            try {
+                val output = context.contentResolver.openOutputStream(uri)
+                    ?: throw IOException("Unable to open destination file")
+                output.use {
+                    ApiClient.downloadApkTo(it)
+                }
+                apkStatus = "APK saved"
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/vnd.android.package-archive")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(intent)
+                } catch (exc: Exception) {
+                    apkStatus = "APK saved. Open it from Downloads to install."
+                }
+            } catch (exc: Exception) {
+                apkStatus = "APK download failed: ${exc.message}"
+            } finally {
+                isSavingApk = false
             }
         }
     }
@@ -286,6 +321,26 @@ fun SettingsScreen(modifier: Modifier) {
             )
             if (backupStatus.isNotBlank()) {
                 StatusMessage(text = backupStatus, showDivider = false)
+            }
+            CompactDivider()
+            SectionTitle(text = "Android APK")
+            AppText(
+                text = "Download the latest debug APK from the server.",
+                style = AppTheme.typography.bodySmall,
+                color = AppTheme.colors.muted
+            )
+            CompactButton(
+                text = if (isSavingApk) "Preparing APK..." else "Download APK",
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    if (isSavingApk) return@CompactButton
+                    isSavingApk = true
+                    apkStatus = ""
+                    apkLauncher.launch("notes-editor-debug.apk")
+                }
+            )
+            if (apkStatus.isNotBlank()) {
+                StatusMessage(text = apkStatus, showDivider = false)
             }
             CompactDivider()
             SectionTitle(text = "Navigation")

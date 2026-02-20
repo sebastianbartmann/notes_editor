@@ -39,7 +39,8 @@ Optional env vars:
 - `PI_GATEWAY_PI_PROVIDER=anthropic` (default `anthropic`)
 - `PI_GATEWAY_PI_MODEL=...` (optional; default model chosen by Pi)
 - `PI_GATEWAY_PI_SESSION_DIR=...` (default `~/.pi/notes-editor-sessions`)
-- `PI_GATEWAY_PI_TIMEOUT_MS=120000`
+- `PI_GATEWAY_PI_TIMEOUT_MS=1800000`
+- `PI_GATEWAY_RPC_TIMEOUT_MS=30000`
 - `PI_GATEWAY_PI_EXTENSION_PATH=...` (default `pi-gateway/src/pi-notes-editor-extension.ts`)
 - `NOTES_SERVER_URL=http://127.0.0.1:8080` (used by the Pi extension to call back into the Go server)
 - `NOTES_TOKEN=...` (used by the Pi extension; typically comes from `server/.env`)

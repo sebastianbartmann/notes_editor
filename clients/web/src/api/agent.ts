@@ -70,6 +70,13 @@ export async function clearAgentSession(sessionId: string): Promise<SaveResponse
   })
 }
 
+export async function stopAgentRun(runId: string): Promise<SaveResponse> {
+  return apiRequest<SaveResponse>('/api/agent/stop', {
+    method: 'POST',
+    body: { run_id: runId },
+  })
+}
+
 export async function getAgentSessionHistory(sessionId: string): Promise<AgentHistoryResponse> {
   return apiRequest<AgentHistoryResponse>(`/api/agent/session/history?session_id=${sessionId}`)
 }

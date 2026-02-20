@@ -178,7 +178,7 @@ export default function (pi: ExtensionAPI) {
     description: 'Run a bash command from the person vault root.',
     parameters: Type.Object({
       command: Type.String({ description: 'Bash command to execute' }),
-      timeout_seconds: Type.Optional(Type.Number({ description: 'Optional timeout in seconds (default: 10, max: 60)' })),
+      timeout_seconds: Type.Optional(Type.Number({ description: 'Optional timeout in seconds (default: 300, max: 1800)' })),
     }),
     async execute(_toolCallId, params) {
       const content = await callTool('run_bash', params as unknown as Record<string, unknown>);

@@ -8,6 +8,7 @@ import (
 )
 
 func TestExportSessionsMarkdownWritesMarkdownFiles(t *testing.T) {
+	t.Setenv("PI_GATEWAY_PI_SESSION_DIR", t.TempDir())
 	store := vault.NewStore(t.TempDir())
 	svc := NewServiceWithRuntimes(store, map[string]Runtime{})
 
