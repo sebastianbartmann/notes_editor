@@ -1,18 +1,21 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { usePerson } from '../hooks/usePerson'
-import { agentChatStream, clearAgentSession, clearAllAgentSessions, exportAgentSessionsMarkdown, getAgentSessionHistory, listAgentActions, listAgentSessions } from '../api/agent'
+import { agentChatStream, clearAgentSession, clearAllAgentSessions, exportAgentSessionsMarkdown, getAgentSessionHistory, listAgentActions, listAgentSessions, stopAgentRun } from '../api/agent'
 import { useAgentSession } from '../context/AgentSessionContext'
 import type { AgentAction, AgentChatRequest, AgentConversationItem, AgentSessionSummary } from '../api/types'
 import styles from './ClaudePage.module.css'
 
 const VERBOSE_OUTPUT_KEY = 'notes_agent_verbose_output'
 const LEGACY_SHOW_TOOL_CALLS_KEY = 'notes_agent_show_tool_calls'
+const AUTO_SCROLL_THRESHOLD_PX = 50
 
 export default function ClaudePage() {
   const { person } = usePerson()
   const { getSession, setSessionId, setMessages, appendMessage, clearSession } = useAgentSession()
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  const [stopBusy, setStopBusy] = useState(false)
   const [streamingText, setStreamingText] = useState('')
   const [error, setError] = useState('')
   const [actions, setActions] = useState<AgentAction[]>([])
@@ -29,7 +32,8 @@ export default function ClaudePage() {
     const legacy = localStorage.getItem(LEGACY_SHOW_TOOL_CALLS_KEY)
     return legacy !== 'false'
   })
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const shouldAutoScrollRef = useRef(true)
   const session = person ? getSession(person) : { sessionId: null, messages: [] as AgentConversationItem[] }
   const sessionId = session.sessionId
   const messages = session.messages
@@ -65,9 +69,26 @@ export default function ClaudePage() {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
+  const isNearBottom = (el: HTMLDivElement) => {
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    return distanceFromBottom <= AUTO_SCROLL_THRESHOLD_PX
+  }
+
+  const handleMessagesScroll = () => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    shouldAutoScrollRef.current = isNearBottom(el)
+  }
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [visibleMessages, streamingText])
+    const el = messagesContainerRef.current
+    if (!el || !shouldAutoScrollRef.current) return
+    el.scrollTop = el.scrollHeight
+  }, [visibleMessages, streamingText, error])
+
+  useEffect(() => {
+    shouldAutoScrollRef.current = true
+  }, [person, sessionId])
 
   useEffect(() => {
     if (!person) return
@@ -243,6 +264,8 @@ export default function ClaudePage() {
     setIsStreaming(true)
     setStreamingText('')
     setError('')
+    setActiveRunId(null)
+    setStopBusy(false)
 
     let bufferedText = ''
     const flushBufferedText = () => {
@@ -254,10 +277,16 @@ export default function ClaudePage() {
 
     try {
       for await (const event of agentChatStream(request)) {
+        if (event.run_id) {
+          setActiveRunId(event.run_id)
+        }
         switch (event.type) {
           case 'start':
             if (event.session_id) {
               setSessionId(person, event.session_id)
+            }
+            if (event.run_id) {
+              setActiveRunId(event.run_id)
             }
             break
           case 'text':
@@ -333,6 +362,7 @@ export default function ClaudePage() {
             if (event.session_id) {
               setSessionId(person, event.session_id)
             }
+            setActiveRunId(null)
             break
         }
       }
@@ -343,6 +373,21 @@ export default function ClaudePage() {
     } finally {
       setIsStreaming(false)
       setStreamingText('')
+      setActiveRunId(null)
+      setStopBusy(false)
+    }
+  }
+
+  const handleStop = async () => {
+    if (!activeRunId || stopBusy) return
+    setStopBusy(true)
+    setError('')
+    try {
+      await stopAgentRun(activeRunId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to stop run')
+    } finally {
+      setStopBusy(false)
     }
   }
 
@@ -529,7 +574,11 @@ export default function ClaudePage() {
       </div>
 
       <div className={styles.chat}>
-        <div className={styles.messages}>
+        <div
+          ref={messagesContainerRef}
+          className={styles.messages}
+          onScroll={handleMessagesScroll}
+        >
           {visibleMessages.map((item, i) => renderInlineItem(item, `${i}`))}
           {streamingText && (
             <div className={`${styles.bubble} ${styles.assistantBubble}`}>
@@ -538,7 +587,6 @@ export default function ClaudePage() {
             </div>
           )}
           {error && <div className={styles.error}>{error}</div>}
-          <div ref={messagesEndRef} />
         </div>
 
         <div className={styles.inputArea}>
@@ -551,12 +599,19 @@ export default function ClaudePage() {
             disabled={isStreaming}
             className={styles.input}
           />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isStreaming}
-          >
-            {isStreaming ? 'Sending...' : 'Send'}
-          </button>
+          {isStreaming ? (
+            <button
+              onClick={handleStop}
+              disabled={!activeRunId || stopBusy}
+              className="danger"
+            >
+              {stopBusy ? 'Stopping...' : 'Stop'}
+            </button>
+          ) : (
+            <button onClick={handleSend} disabled={!input.trim()}>
+              Send
+            </button>
+          )}
         </div>
       </div>
 

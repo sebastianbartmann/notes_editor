@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +75,8 @@ fun ToolClaudeScreen(modifier: Modifier) {
     }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    var autoScrollEnabled by remember { mutableStateOf(true) }
+    val autoScrollThresholdPx = 50
     val latestUsage = messages.lastOrNull { it.type == "usage" && it.usage != null }?.usage
     val usageSummary = if (!UserSettings.agentVerboseOutput) {
         "Verbose output disabled"
@@ -462,10 +465,31 @@ fun ToolClaudeScreen(modifier: Modifier) {
         }
     }
 
-    LaunchedEffect(visibleMessages.size, streamingAssistantText) {
+    fun isNearBottom(): Boolean {
+        val layoutInfo = listState.layoutInfo
+        val totalItems = layoutInfo.totalItemsCount
+        if (totalItems == 0) return true
+        val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull() ?: return true
+        val lastIndex = totalItems - 1
+        if (lastVisible.index < lastIndex) return false
+        val distanceToBottom = layoutInfo.viewportEndOffset - (lastVisible.offset + lastVisible.size)
+        return distanceToBottom >= -autoScrollThresholdPx
+    }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (scrolling) {
+                autoScrollEnabled = isNearBottom()
+            } else if (isNearBottom()) {
+                autoScrollEnabled = true
+            }
+        }
+    }
+
+    LaunchedEffect(visibleMessages.size, streamingAssistantText, isLoading) {
         val totalItems = visibleMessages.size + if (streamingAssistantText.isNotBlank() || isLoading) 1 else 0
-        if (totalItems > 0) {
-            listState.animateScrollToItem(totalItems - 1)
+        if (totalItems > 0 && autoScrollEnabled) {
+            listState.scrollToItem(totalItems - 1)
         }
     }
 

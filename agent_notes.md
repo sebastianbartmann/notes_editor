@@ -76,3 +76,12 @@
 - Sleep tracking currently uses shared root-level markdown (`sleep_times.md`) and line-number deletes (`/api/sleep-times/delete` with `line`), which is fragile under concurrent writes/sync: line identity shifts, pull/reset can drop local state, and no stable entry IDs/versioning exist.
 - Web now supports global text scaling (local-only) via `ThemeContext` (`notes_text_scale`), with Settings controls (`A-`, `Reset`, `A+`) and CSS-wide `font-size: calc(var(--text-scale) * Npx)` so notes/files/agent/login/settings all scale without per-page logic.
 - Sleep feature refactor (2026-02-17): moved primary sleep storage to SQLite (`sleep.db` under NOTES_ROOT) with Europe/Vienna summaries, while keeping legacy line-delete fallback for backward compatibility with older clients/tests. Added markdown export endpoint (`POST /api/sleep-times/export-markdown`) that fully rewrites `sleep_times.md` from DB and triggers git background push for backup preservation.
+
+## 2026-02-20
+
+- Increased bash tool timeouts: default 120s, max 600s in `server/internal/claude/tools.go`; updated tool schema descriptions in Go + pi-gateway extension, and raised pi-gateway `PI_GATEWAY_PI_TIMEOUT_MS` default to 600000 (10m).
+- Increased bash timeouts again: default 300s, max 1800s; pi-gateway default idle timeout now 1800000ms.
+- Web UI now exposes a Stop button during agent streaming (calls `/api/agent/stop` with run_id).
+- Added APK download to Settings: web button (SettingsPage) and Android settings section; Android uses SAF to save APK then attempts to open installer intent.
+- Increased agent run timeout default to 45m (config default + AGENT_MAX_RUN_DURATION in server/.env) to avoid "Run timed out" for long tool calls.
+- Agent chat auto-scroll behavior (web `ClaudePage` + Android `ToolClaudeScreen`) should track user scroll intent: auto-scroll only when already near bottom (~50px threshold), do not force during streaming if user scrolled up, and resume when user manually returns to bottom.
