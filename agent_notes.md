@@ -87,3 +87,9 @@
 - Agent chat auto-scroll behavior (web `ClaudePage` + Android `ToolClaudeScreen`) should track user scroll intent: auto-scroll only when already near bottom (~50px threshold), do not force during streaming if user scrolled up, and resume when user manually returns to bottom.
 - Android `ToolClaudeScreen` fixes: add `BackHandler(enabled = showSessionsDialog && !sessionsBusy)` so system back closes sessions overlay first, and prevent session-history refresh race by tracking a cancellable `refreshJob` (cancel previous refreshes and cancel on `startNewSession`).
 - Android Claude multi-session cache: `ClaudeSessionStore` now keeps in-memory per-session history snapshots and exposes `saveCurrentToCache`, `switchTo`, `startNew`, `isInCache`, `removeFromCache`, `clearCache`; `ToolClaudeScreen` now switches to cached sessions without API fetch, preserves current session on new session start, and clears/removes cache entries during delete flows.
+
+## 2026-02-21
+
+- Pi gateway runtime now uses session-affine Pi RPC processes (keyed by `person::runtimeSessionId`) instead of one process per person. Each process is started with `--session <person>--<session>.jsonl`, never switches sessions, and is cleaned up after configurable idle TTL (`PI_GATEWAY_SESSION_IDLE_TTL_MS`, default 10m).
+- Gateway `/health` now reports active session clients (person/session/process metadata) rather than person-scoped clients.
+- Agent service stream cancellation now propagates to upstream runtime contexts: `ChatStream` creates a cancellable detached context, stores cancel func per run, and invokes it on `StopRun`, timeout, and tool-call-limit termination paths.

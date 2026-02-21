@@ -42,6 +42,33 @@ func (r *stubRuntime) ClearSession(_ string) error { return nil }
 
 func (r *stubRuntime) GetHistory(_ string) ([]claude.ChatMessage, error) { return nil, nil }
 
+type cancelAwareRuntime struct {
+	mode      string
+	available bool
+	lastCtx   context.Context
+	events    chan StreamEvent
+}
+
+func (r *cancelAwareRuntime) Mode() string { return r.mode }
+
+func (r *cancelAwareRuntime) Available() bool { return r.available }
+
+func (r *cancelAwareRuntime) Chat(_ string, _ RuntimeChatRequest) (*RuntimeChatResponse, error) {
+	return nil, nil
+}
+
+func (r *cancelAwareRuntime) ChatStream(ctx context.Context, _ string, _ RuntimeChatRequest) (*RuntimeStream, error) {
+	r.lastCtx = ctx
+	if r.events == nil {
+		r.events = make(chan StreamEvent)
+	}
+	return &RuntimeStream{Events: r.events}, nil
+}
+
+func (r *cancelAwareRuntime) ClearSession(_ string) error { return nil }
+
+func (r *cancelAwareRuntime) GetHistory(_ string) ([]claude.ChatMessage, error) { return nil, nil }
+
 func TestMapClaudeEventToolUseToToolCall(t *testing.T) {
 	events := mapClaudeEvent(claude.StreamEvent{
 		Type:  "tool_use",
@@ -443,5 +470,78 @@ func TestChatStreamStoresAssistantSegmentsInTimelineOrder(t *testing.T) {
 	}
 	if relevant[4].Type != ConversationItemToolResult {
 		t.Fatalf("expected tool_result at position 5, got %#v", relevant[4])
+	}
+}
+
+func TestStopRunCancelsUpstreamStreamContext(t *testing.T) {
+	runtime := &cancelAwareRuntime{
+		mode:      RuntimeModeAnthropicAPIKey,
+		available: true,
+	}
+
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey:     runtime,
+		RuntimeModeGatewaySubscription: &stubRuntime{mode: RuntimeModeGatewaySubscription, available: false},
+	})
+
+	run, err := svc.ChatStream(context.Background(), "sebastian", ChatRequest{
+		SessionID: "cancel-prop-stop",
+		Message:   "hello",
+	})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+
+	if runtime.lastCtx == nil {
+		t.Fatal("expected runtime stream context to be set")
+	}
+
+	if !svc.StopRun("sebastian", run.RunID) {
+		t.Fatal("StopRun returned false")
+	}
+
+	select {
+	case <-runtime.lastCtx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected upstream stream context to be cancelled")
+	}
+
+	close(runtime.events)
+	for range run.Events {
+	}
+}
+
+func TestChatStreamTimeoutCancelsUpstreamStreamContext(t *testing.T) {
+	runtime := &cancelAwareRuntime{
+		mode:      RuntimeModeAnthropicAPIKey,
+		available: true,
+	}
+
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey:     runtime,
+		RuntimeModeGatewaySubscription: &stubRuntime{mode: RuntimeModeGatewaySubscription, available: false},
+	})
+	svc.maxRunDuration = 50 * time.Millisecond
+
+	run, err := svc.ChatStream(context.Background(), "sebastian", ChatRequest{
+		SessionID: "cancel-prop-timeout",
+		Message:   "hello",
+	})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+
+	if runtime.lastCtx == nil {
+		t.Fatal("expected runtime stream context to be set")
+	}
+
+	select {
+	case <-runtime.lastCtx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected upstream stream context to be cancelled on timeout")
+	}
+
+	close(runtime.events)
+	for range run.Events {
 	}
 }

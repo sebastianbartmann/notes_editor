@@ -57,12 +57,13 @@ type StreamRun struct {
 }
 
 type runControl struct {
-	person    string
-	sessionID string
-	startedAt time.Time
-	updatedAt time.Time
-	cancel    chan struct{}
-	once      sync.Once
+	person       string
+	sessionID    string
+	startedAt    time.Time
+	updatedAt    time.Time
+	cancel       chan struct{}
+	streamCancel context.CancelFunc
+	once         sync.Once
 }
 
 type resolvedMessage struct {
@@ -222,7 +223,7 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 
 	// Run lifecycle is intentionally detached from request context so runs can continue
 	// when a client disconnects or switches views.
-	streamCtx := context.Background()
+	streamCtx, streamCancel := context.WithCancel(context.Background())
 	upstream, err := runtime.ChatStream(streamCtx, person, RuntimeChatRequest{
 		SessionID:    req.SessionID,
 		Message:      resolved.Text,
@@ -242,12 +243,13 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 			}
 		}
 		if err != nil {
+			streamCancel()
 			s.endSessionRun(person, req.SessionID, runID)
 			return nil, err
 		}
 	}
 
-	run := s.registerRun(runID, person, req.SessionID)
+	run := s.registerRun(runID, person, req.SessionID, streamCancel)
 	out := make(chan StreamEvent, 100)
 
 	go func() {
@@ -315,6 +317,7 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 		defer close(out)
 		defer s.unregisterRun(runID)
 		defer s.endSessionRun(person, req.SessionID, runID)
+		defer streamCancel()
 		defer func() {
 			if assistantText.Len() > 0 {
 				runItems = append(runItems, ConversationItem{
@@ -365,10 +368,17 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 		for {
 			select {
 			case <-run.cancel:
+				streamCancel()
 				emitTerminal("Run cancelled")
 				s.drainStream(upstream.Events)
 				return
 			case <-timer.C:
+				run.once.Do(func() {
+					close(run.cancel)
+					if run.streamCancel != nil {
+						run.streamCancel()
+					}
+				})
 				emitTerminal("Run timed out")
 				s.drainStream(upstream.Events)
 				return
@@ -396,6 +406,7 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 				if event.Type == "tool_call" {
 					toolCallsSeen++
 					if toolLimit > 0 && toolCallsSeen > toolLimit {
+						streamCancel()
 						emitTerminal(fmt.Sprintf(toolCallLimitStatusFmt, toolLimit))
 						s.drainStream(upstream.Events)
 						return
@@ -408,18 +419,18 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 				if event.Type == "error" {
 					sawError = true
 				}
-					if event.Type == "done" {
-						if !sawText && !sawError {
-							emitTerminal(emptyStreamStatus)
-							sawDone = true
-							continue
-						}
+				if event.Type == "done" {
+					if !sawText && !sawError {
+						emitTerminal(emptyStreamStatus)
 						sawDone = true
+						continue
 					}
-					emit(event)
+					sawDone = true
 				}
+				emit(event)
 			}
-		}()
+		}
+	}()
 
 	return &StreamRun{
 		RunID:  runID,
@@ -565,6 +576,9 @@ func (s *Service) StopRun(person, runID string) bool {
 	}
 	run.once.Do(func() {
 		close(run.cancel)
+		if run.streamCancel != nil {
+			run.streamCancel()
+		}
 	})
 	return true
 }
@@ -651,16 +665,17 @@ func (s *Service) removeStoredConversation(person, sessionID string) {
 	}
 }
 
-func (s *Service) registerRun(runID, person, sessionID string) *runControl {
+func (s *Service) registerRun(runID, person, sessionID string, streamCancel context.CancelFunc) *runControl {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
 	run := &runControl{
-		person:    person,
-		sessionID: strings.TrimSpace(sessionID),
-		startedAt: now,
-		updatedAt: now,
-		cancel:    make(chan struct{}),
+		person:       person,
+		sessionID:    strings.TrimSpace(sessionID),
+		startedAt:    now,
+		updatedAt:    now,
+		cancel:       make(chan struct{}),
+		streamCancel: streamCancel,
 	}
 	s.activeRuns[runID] = run
 	return run

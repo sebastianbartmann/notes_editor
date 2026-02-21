@@ -71,6 +71,7 @@ const DEFAULT_PROVIDER = (process.env.PI_GATEWAY_PI_PROVIDER || 'anthropic').tri
 const DEFAULT_MODEL = (process.env.PI_GATEWAY_PI_MODEL || '').trim();
 const SESSION_DIR = (process.env.PI_GATEWAY_PI_SESSION_DIR || path.join(process.env.HOME || '/tmp', '.pi', 'notes-editor-sessions')).trim();
 const PI_TIMEOUT_MS = Number(process.env.PI_GATEWAY_PI_TIMEOUT_MS || '1800000');
+const SESSION_IDLE_TTL_MS = Number(process.env.PI_GATEWAY_SESSION_IDLE_TTL_MS || String(10 * 60 * 1000));
 
 // Our Pi extension registers tools and applies system prompt updates.
 const SELF_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -92,14 +93,19 @@ function resolveExtensionPath(): string {
 
 const EXTENSION_PATH = resolveExtensionPath();
 
-type PersonClient = {
+type SessionClient = {
+  key: string;
+  person: string;
+  runtimeSessionId: string;
   client: PiRpcClient;
   provider: string;
   model: string;
-  queue: Promise<void>;
+  lastUsedAt: number;
+  activeRequests: number;
+  idleTimer: ReturnType<typeof setTimeout> | null;
 };
 
-const personClients = new Map<string, PersonClient>();
+const sessionClients = new Map<string, SessionClient>();
 
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
   res.statusCode = status;
@@ -136,14 +142,52 @@ function ensureSessionPath(person: string, sessionId: string): string {
   return filePath;
 }
 
-async function getOrStartPersonClient(person: string): Promise<PersonClient> {
-  const existing = personClients.get(person);
+function sessionClientKey(person: string, runtimeSessionId: string): string {
+  return `${person}::${runtimeSessionId}`;
+}
+
+async function stopAndDeleteSessionClient(sc: SessionClient): Promise<void> {
+  const current = sessionClients.get(sc.key);
+  if (!current || current !== sc) return;
+  if (sc.activeRequests > 0) return;
+  sessionClients.delete(sc.key);
+  if (sc.idleTimer) {
+    clearTimeout(sc.idleTimer);
+    sc.idleTimer = null;
+  }
+  try {
+    await sc.client.stop();
+  } catch {
+    // Best-effort only.
+  }
+}
+
+function scheduleSessionIdleCleanup(sc: SessionClient): void {
+  if (sc.idleTimer) {
+    clearTimeout(sc.idleTimer);
+    sc.idleTimer = null;
+  }
+  sc.idleTimer = setTimeout(() => {
+    if (sc.activeRequests > 0) return;
+    const idleFor = Date.now() - sc.lastUsedAt;
+    if (idleFor < SESSION_IDLE_TTL_MS) {
+      scheduleSessionIdleCleanup(sc);
+      return;
+    }
+    void stopAndDeleteSessionClient(sc);
+  }, SESSION_IDLE_TTL_MS);
+}
+
+async function getOrStartSessionClient(person: string, runtimeSessionId: string): Promise<SessionClient> {
+  const key = sessionClientKey(person, runtimeSessionId);
+  const existing = sessionClients.get(key);
   if (existing) return existing;
 
   const provider = DEFAULT_PROVIDER;
   const model = DEFAULT_MODEL;
+  const sessionPath = ensureSessionPath(person, runtimeSessionId);
 
-  // Run a single Pi process per person to avoid repeated startup overhead.
+  // Run one Pi process per runtime session to avoid cross-session interleaving.
   // Tools and system prompt injection are handled by our extension.
   const rpc = new PiRpcClient({
     nodeBin: process.execPath,
@@ -151,7 +195,7 @@ async function getOrStartPersonClient(person: string): Promise<PersonClient> {
     provider,
     model: model || undefined,
     args: [
-      '--session-dir', SESSION_DIR,
+      '--session', sessionPath,
       '--no-tools',
       '--extension', EXTENSION_PATH,
     ],
@@ -165,16 +209,37 @@ async function getOrStartPersonClient(person: string): Promise<PersonClient> {
 
   await rpc.start();
 
-  const pc: PersonClient = { client: rpc, provider, model: model || '', queue: Promise.resolve() };
-  personClients.set(person, pc);
-  return pc;
+  const sc: SessionClient = {
+    key,
+    person,
+    runtimeSessionId,
+    client: rpc,
+    provider,
+    model: model || '',
+    lastUsedAt: Date.now(),
+    activeRequests: 0,
+    idleTimer: null,
+  };
+  sessionClients.set(key, sc);
+  scheduleSessionIdleCleanup(sc);
+  return sc;
 }
 
-async function runExclusive<T>(pc: PersonClient, fn: () => Promise<T>): Promise<T> {
-  // Serialize access per person so RPC events don't interleave across concurrent HTTP requests.
-  const task = pc.queue.then(fn, fn);
-  pc.queue = task.then(() => {}, () => {});
-  return await task;
+function markSessionClientInUse(sc: SessionClient): void {
+  sc.activeRequests += 1;
+  sc.lastUsedAt = Date.now();
+  if (sc.idleTimer) {
+    clearTimeout(sc.idleTimer);
+    sc.idleTimer = null;
+  }
+}
+
+function releaseSessionClient(sc: SessionClient): void {
+  if (sc.activeRequests > 0) sc.activeRequests -= 1;
+  sc.lastUsedAt = Date.now();
+  if (sc.activeRequests === 0) {
+    scheduleSessionIdleCleanup(sc);
+  }
 }
 
 function buildSystemPromptMarker(systemPrompt: string): string {
@@ -211,9 +276,9 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
 
   writeEvent(res, { type: 'start', session_id: runtimeSessionId, run_id: runId });
 
-  let pc: PersonClient;
+  let sc: SessionClient;
   try {
-    pc = await getOrStartPersonClient(person);
+    sc = await getOrStartSessionClient(person, runtimeSessionId);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'failed to start pi runtime';
     writeEvent(res, { type: 'error', run_id: runId, message: msg });
@@ -222,146 +287,144 @@ async function handlePiRpcChatStream(req: IncomingMessage, res: ServerResponse, 
     return;
   }
 
-  await runExclusive(pc, async () => {
-    const sessionPath = ensureSessionPath(person, runtimeSessionId);
-    await pc.client.switchSession(sessionPath);
-    let contextWindow: number | undefined;
-    try {
-      const state = await pc.client.getState();
-      const cw = Number(state?.model?.contextWindow || 0);
-      if (Number.isFinite(cw) && cw > 0) {
-        contextWindow = cw;
-      }
-    } catch {
-      // Best-effort only.
+  markSessionClientInUse(sc);
+  let contextWindow: number | undefined;
+  try {
+    const state = await sc.client.getState();
+    const cw = Number(state?.model?.contextWindow || 0);
+    if (Number.isFinite(cw) && cw > 0) {
+      contextWindow = cw;
     }
+  } catch {
+    // Best-effort only.
+  }
 
-    writeEvent(res, {
-      type: 'status',
-      message: `gateway mode=pi_rpc provider=${pc.provider} model=${pc.model || 'default'}`,
-      run_id: runId,
-    });
+  writeEvent(res, {
+    type: 'status',
+    message: `gateway mode=pi_rpc provider=${sc.provider} model=${sc.model || 'default'}`,
+    run_id: runId,
+  });
 
-    let cancelled = false;
-    req.on('close', () => {
-      cancelled = true;
-      // Best effort abort.
-      void pc.client.abort().catch(() => {});
-    });
+  let cancelled = false;
+  req.on('close', () => {
+    cancelled = true;
+    // Best effort abort only for this session-bound process.
+    void sc.client.abort().catch(() => {});
+  });
 
-    const systemPrompt = (payload.system_prompt || '').trim();
-    const promptText = systemPrompt
-      ? `${buildSystemPromptMarker(systemPrompt)}\n${userMessage}`
-      : userMessage;
+  const systemPrompt = (payload.system_prompt || '').trim();
+  const promptText = systemPrompt
+    ? `${buildSystemPromptMarker(systemPrompt)}\n${userMessage}`
+    : userMessage;
 
-    // Track whether we streamed any assistant text and capture runtime errors.
-    // These variables must be in the same scope as the event handler.
-    let sawAnyText = false;
-    let lastRunError = '';
-    let sawRunError = false;
-    let lastEmittedError = '';
+  // Track whether we streamed any assistant text and capture runtime errors.
+  // These variables must be in the same scope as the event handler.
+  let sawAnyText = false;
+  let lastRunError = '';
+  let sawRunError = false;
+  let lastEmittedError = '';
 
-    const emitRunError = (message: string): void => {
-      const normalized = String(message || '').trim();
-      if (!normalized || normalized === lastEmittedError) return;
-      lastEmittedError = normalized;
-      sawRunError = true;
-      writeEvent(res, { type: 'error', run_id: runId, message: normalized });
-    };
+  const emitRunError = (message: string): void => {
+    const normalized = String(message || '').trim();
+    if (!normalized || normalized === lastEmittedError) return;
+    lastEmittedError = normalized;
+    sawRunError = true;
+    writeEvent(res, { type: 'error', run_id: runId, message: normalized });
+  };
 
-    const unsubscribe = pc.client.onEvent((event: any) => {
-      if (cancelled) return;
+  const unsubscribe = sc.client.onEvent((event: any) => {
+    if (cancelled) return;
 
-      switch (event?.type) {
-        case 'message_update': {
-          const ev = event.assistantMessageEvent;
-          if (ev?.type === 'text_delta' && typeof ev.delta === 'string' && ev.delta.length > 0) {
-            // Pi models sometimes start with a newline. Strip exactly one leading newline on the first text chunk
-            // so UIs don't render an empty first line.
-            let delta = ev.delta;
-            if (!sawAnyText) {
-              delta = delta.replace(/^\r?\n/, '');
-            }
-            if (!delta) break;
-            sawAnyText = true;
-            writeEvent(res, { type: 'text', run_id: runId, delta });
+    switch (event?.type) {
+      case 'message_update': {
+        const ev = event.assistantMessageEvent;
+        if (ev?.type === 'text_delta' && typeof ev.delta === 'string' && ev.delta.length > 0) {
+          // Pi models sometimes start with a newline. Strip exactly one leading newline on the first text chunk
+          // so UIs don't render an empty first line.
+          let delta = ev.delta;
+          if (!sawAnyText) {
+            delta = delta.replace(/^\r?\n/, '');
           }
-          break;
+          if (!delta) break;
+          sawAnyText = true;
+          writeEvent(res, { type: 'text', run_id: runId, delta });
         }
-        case 'message_end': {
-          const msg = event?.message;
-          const usage = msg?.usage;
-          if (usage && typeof usage === 'object') {
-            const input = Number(usage.input || 0);
-            const output = Number(usage.output || 0);
-            const cacheRead = Number(usage.cacheRead || 0);
-            const cacheWrite = Number(usage.cacheWrite || 0);
-            const total = Number(usage.totalTokens || input + output + cacheRead + cacheWrite);
-            const usagePayload: Record<string, unknown> = {
-              input_tokens: input,
-              output_tokens: output,
-              cache_read_tokens: cacheRead,
-              cache_write_tokens: cacheWrite,
-              total_tokens: total,
-            };
-            if (contextWindow && contextWindow > 0) {
-              usagePayload.context_window = contextWindow;
-              usagePayload.remaining_tokens = Math.max(0, contextWindow - total);
-            }
-            writeEvent(res, { type: 'usage', run_id: runId, usage: usagePayload });
+        break;
+      }
+      case 'message_end': {
+        const msg = event?.message;
+        const usage = msg?.usage;
+        if (usage && typeof usage === 'object') {
+          const input = Number(usage.input || 0);
+          const output = Number(usage.output || 0);
+          const cacheRead = Number(usage.cacheRead || 0);
+          const cacheWrite = Number(usage.cacheWrite || 0);
+          const total = Number(usage.totalTokens || input + output + cacheRead + cacheWrite);
+          const usagePayload: Record<string, unknown> = {
+            input_tokens: input,
+            output_tokens: output,
+            cache_read_tokens: cacheRead,
+            cache_write_tokens: cacheWrite,
+            total_tokens: total,
+          };
+          if (contextWindow && contextWindow > 0) {
+            usagePayload.context_window = contextWindow;
+            usagePayload.remaining_tokens = Math.max(0, contextWindow - total);
           }
-          if (msg?.role === 'assistant' && typeof msg?.errorMessage === 'string' && msg.errorMessage.trim()) {
-            lastRunError = msg.errorMessage.trim();
-            emitRunError(lastRunError);
-          }
-          break;
+          writeEvent(res, { type: 'usage', run_id: runId, usage: usagePayload });
         }
-        case 'tool_execution_start': {
-          writeEvent(res, { type: 'tool_call', run_id: runId, tool: event.toolName, args: event.args || {} });
-          break;
-        }
-        case 'tool_execution_end': {
-          const ok = !event.isError;
-          const summary = ok ? `Tool ${event.toolName} executed` : 'Tool failed';
-          writeEvent(res, { type: 'tool_result', run_id: runId, tool: event.toolName, ok, summary });
-          break;
-        }
-        case 'extension_error': {
-          lastRunError = String(event.error || 'extension error');
+        if (msg?.role === 'assistant' && typeof msg?.errorMessage === 'string' && msg.errorMessage.trim()) {
+          lastRunError = msg.errorMessage.trim();
           emitRunError(lastRunError);
-          break;
         }
-        case 'auto_retry_start': {
-          writeEvent(res, { type: 'status', run_id: runId, message: `Retrying after error: ${String(event.errorMessage || '').slice(0, 200)}` });
-          break;
-        }
-        case 'auto_compaction_start': {
-          writeEvent(res, { type: 'status', run_id: runId, message: `Compacting context (${event.reason || 'unknown'})...` });
-          break;
-        }
+        break;
       }
-    });
-
-    try {
-      await pc.client.prompt(promptText);
-      await pc.client.waitForIdle(PI_TIMEOUT_MS);
-
-      // If Pi ended with an error but didn't stream it (or we missed it), surface it.
-      if (!cancelled && !sawAnyText && lastRunError && !sawRunError) {
+      case 'tool_execution_start': {
+        writeEvent(res, { type: 'tool_call', run_id: runId, tool: event.toolName, args: event.args || {} });
+        break;
+      }
+      case 'tool_execution_end': {
+        const ok = !event.isError;
+        const summary = ok ? `Tool ${event.toolName} executed` : 'Tool failed';
+        writeEvent(res, { type: 'tool_result', run_id: runId, tool: event.toolName, ok, summary });
+        break;
+      }
+      case 'extension_error': {
+        lastRunError = String(event.error || 'extension error');
         emitRunError(lastRunError);
+        break;
       }
-
-      writeEvent(res, { type: 'done', session_id: runtimeSessionId, run_id: runId });
-      res.end();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'pi rpc failed';
-      emitRunError(msg);
-      writeEvent(res, { type: 'done', session_id: runtimeSessionId, run_id: runId });
-      res.end();
-    } finally {
-      unsubscribe();
+      case 'auto_retry_start': {
+        writeEvent(res, { type: 'status', run_id: runId, message: `Retrying after error: ${String(event.errorMessage || '').slice(0, 200)}` });
+        break;
+      }
+      case 'auto_compaction_start': {
+        writeEvent(res, { type: 'status', run_id: runId, message: `Compacting context (${event.reason || 'unknown'})...` });
+        break;
+      }
     }
   });
+
+  try {
+    await sc.client.prompt(promptText);
+    await sc.client.waitForIdle(PI_TIMEOUT_MS);
+
+    // If Pi ended with an error but didn't stream it (or we missed it), surface it.
+    if (!cancelled && !sawAnyText && lastRunError && !sawRunError) {
+      emitRunError(lastRunError);
+    }
+
+    writeEvent(res, { type: 'done', session_id: runtimeSessionId, run_id: runId });
+    res.end();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'pi rpc failed';
+    emitRunError(msg);
+    writeEvent(res, { type: 'done', session_id: runtimeSessionId, run_id: runId });
+    res.end();
+  } finally {
+    unsubscribe();
+    releaseSessionClient(sc);
+  }
 }
 
 async function handleChatStream(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -415,7 +478,16 @@ const server = createServer(async (req, res) => {
           model: DEFAULT_MODEL || 'default',
           session_dir: SESSION_DIR,
           extension: EXTENSION_PATH,
-          persons: [...personClients.keys()],
+          active_sessions: [...sessionClients.values()].map((sc) => ({
+            key: sc.key,
+            person: sc.person,
+            session_id: sc.runtimeSessionId,
+            provider: sc.provider,
+            model: sc.model || 'default',
+            active_requests: sc.activeRequests,
+            idle_ms: Math.max(0, Date.now() - sc.lastUsedAt),
+          })),
+          session_idle_ttl_ms: SESSION_IDLE_TTL_MS,
         },
       });
       return;
