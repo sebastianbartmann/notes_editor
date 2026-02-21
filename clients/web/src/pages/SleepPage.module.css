@@ -95,9 +95,33 @@
   gap: var(--space-2);
 }
 
+.childThomas {
+  border-left: 3px solid var(--child-thomas);
+  padding-left: calc(var(--space-2) - 3px);
+}
+
+.childFabian {
+  border-left: 3px solid var(--child-fabian);
+  padding-left: calc(var(--space-2) - 3px);
+}
+
 .entryText {
   font-size: calc(var(--text-scale) * 12px);
   font-family: var(--font);
+}
+
+.entryTextParts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.childNameThomas {
+  color: var(--child-thomas);
+}
+
+.childNameFabian {
+  color: var(--child-fabian);
 }
 
 .editGrid {

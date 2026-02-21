@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,8 +15,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -61,9 +68,47 @@ private fun entryToLocalDateTime(entry: SleepEntry): LocalDateTime? {
     }.getOrNull()
 }
 
+private fun sleepChildColor(child: String, isLightTheme: Boolean): Color {
+    return when (child) {
+        "Thomas" -> if (isLightTheme) Color(0xFF2A7AB5) else Color(0xFF5B9BD5)
+        "Fabian" -> if (isLightTheme) Color(0xFFC4842A) else Color(0xFFD9A05B)
+        else -> if (isLightTheme) Color(0xFF1A2A2F) else Color(0xFFE6E6E6)
+    }
+}
+
+private fun Modifier.childAccentBorder(color: Color): Modifier {
+    return this
+        .drawBehind {
+            drawRect(color = color, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height))
+        }
+        .padding(start = 10.dp)
+}
+
+@Composable
+private fun ChildStyledSleepText(
+    beforeChild: String,
+    child: String,
+    afterChild: String,
+    childColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val textColor = AppTheme.colors.text
+    BasicText(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(color = textColor)) { append(beforeChild) }
+            withStyle(SpanStyle(color = childColor)) { append(child) }
+            withStyle(SpanStyle(color = textColor)) { append(afterChild) }
+        },
+        style = AppTheme.typography.bodySmall,
+        modifier = modifier
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepTimesScreen(modifier: Modifier) {
+    val isLightTheme = UserSettings.theme == "light"
+
     var tab by remember { mutableStateOf(SleepTab.Log) }
     var entries by remember { mutableStateOf(listOf<SleepEntry>()) }
     var summary by remember { mutableStateOf(SleepSummaryResponse()) }
@@ -356,14 +401,18 @@ fun SleepTimesScreen(modifier: Modifier) {
                                         CompactDivider()
                                     }
                                 } else {
+                                    val childColor = sleepChildColor(entry.child, isLightTheme)
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .childAccentBorder(childColor),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        AppText(
-                                            text = "${entry.date} | ${entry.child} | ${entry.time} | ${entry.status}${if (!entry.notes.isNullOrBlank()) " | ${entry.notes}" else ""}",
-                                            style = AppTheme.typography.bodySmall,
-                                            color = AppTheme.colors.text,
+                                        ChildStyledSleepText(
+                                            beforeChild = "${entry.date} | ",
+                                            child = entry.child,
+                                            afterChild = " | ${entry.time} | ${entry.status}${if (!entry.notes.isNullOrBlank()) " | ${entry.notes}" else ""}",
+                                            childColor = childColor,
                                             modifier = Modifier.weight(1f)
                                         )
                                         CompactButton(
@@ -429,10 +478,15 @@ fun SleepTimesScreen(modifier: Modifier) {
                             )
                         } else {
                             summary.averages.forEach { avg ->
-                                AppText(
-                                    text = "${avg.child} (${avg.days}d): bed ${avg.averageBedtime}, wake ${avg.averageWakeTime}",
-                                    style = AppTheme.typography.bodySmall,
-                                    color = AppTheme.colors.text
+                                val childColor = sleepChildColor(avg.child, isLightTheme)
+                                ChildStyledSleepText(
+                                    beforeChild = "",
+                                    child = avg.child,
+                                    afterChild = " (${avg.days}d): bed ${avg.averageBedtime}, wake ${avg.averageWakeTime}",
+                                    childColor = childColor,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .childAccentBorder(childColor)
                                 )
                             }
                         }
@@ -447,10 +501,15 @@ fun SleepTimesScreen(modifier: Modifier) {
                             )
                         } else {
                             summary.nights.forEach { night ->
-                                AppText(
-                                    text = "${night.nightDate} | ${night.child} | ${night.durationMinutes} min | ${night.bedtime} - ${night.wakeTime}",
-                                    style = AppTheme.typography.bodySmall,
-                                    color = AppTheme.colors.text
+                                val childColor = sleepChildColor(night.child, isLightTheme)
+                                ChildStyledSleepText(
+                                    beforeChild = "${night.nightDate} | ",
+                                    child = night.child,
+                                    afterChild = " | ${night.durationMinutes} min | ${night.bedtime} - ${night.wakeTime}",
+                                    childColor = childColor,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .childAccentBorder(childColor)
                                 )
                             }
                         }

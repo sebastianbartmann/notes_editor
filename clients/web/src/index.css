@@ -12,6 +12,8 @@
   --note: #101317;
   --button: #1e2227;
   --shadow: rgba(0, 0, 0, 0.35);
+  --child-thomas: #5b9bd5;
+  --child-fabian: #d9a05b;
 
   --space-1: 6px;
   --space-2: 10px;
@@ -37,6 +39,8 @@ body.theme-light {
   --note: #f9fdff;
   --button: #e0eff0;
   --shadow: rgba(18, 33, 45, 0.08);
+  --child-thomas: #2a7ab5;
+  --child-fabian: #c4842a;
 }
 
 /* Reset and Base Styles */

@@ -27,6 +27,18 @@ function localDateTimeToIso(value: string): string | undefined {
   return parsed.toISOString()
 }
 
+function childRowClass(childName: string | undefined): string {
+  if (childName === 'Thomas') return styles.childThomas
+  if (childName === 'Fabian') return styles.childFabian
+  return ''
+}
+
+function childNameClass(childName: string | undefined): string {
+  if (childName === 'Thomas') return styles.childNameThomas
+  if (childName === 'Fabian') return styles.childNameFabian
+  return ''
+}
+
 export default function SleepPage() {
   const { person } = usePerson()
   const [tab, setTab] = useState<SleepTab>('log')
@@ -257,7 +269,7 @@ export default function SleepPage() {
           ) : (
             <ul className={styles.list}>
               {entries.map(e => (
-                <li key={e.id} className={styles.entry}>
+                <li key={e.id} className={`${styles.entry} ${childRowClass(e.child)}`}>
                   {editingId === e.id ? (
                     <div className={styles.editGrid}>
                       <select value={editingChild} onChange={ev => setEditingChild(ev.target.value)}>
@@ -287,8 +299,12 @@ export default function SleepPage() {
                   ) : (
                     <>
                       <span className={styles.entryText}>
-                        {e.date} | {e.child} | {e.time || '-'} | {e.status}
-                        {e.notes ? ` | ${e.notes}` : ''}
+                        <span className={styles.entryTextParts}>
+                          <span>{e.date} | </span>
+                          <span className={childNameClass(e.child)}>{e.child}</span>
+                          <span> | {e.time || '-'} | {e.status}</span>
+                          {e.notes ? <span>{` | ${e.notes}`}</span> : null}
+                        </span>
                       </span>
                       <div className={styles.actions}>
                         <button className="ghost" onClick={() => startEdit(e)}>Edit</button>
@@ -319,9 +335,12 @@ export default function SleepPage() {
               ) : (
                 <ul className={styles.list}>
                   {summary.averages.map(avg => (
-                    <li key={`${avg.child}-${avg.days}`} className={styles.entry}>
+                    <li key={`${avg.child}-${avg.days}`} className={`${styles.entry} ${childRowClass(avg.child)}`}>
                       <span className={styles.entryText}>
-                        {avg.child} ({avg.days}d): Bed {avg.average_bedtime} | Wake {avg.average_wake_time}
+                        <span className={styles.entryTextParts}>
+                          <span className={childNameClass(avg.child)}>{avg.child}</span>
+                          <span> ({avg.days}d): Bed {avg.average_bedtime} | Wake {avg.average_wake_time}</span>
+                        </span>
                       </span>
                     </li>
                   ))}
@@ -334,9 +353,13 @@ export default function SleepPage() {
               ) : (
                 <ul className={styles.list}>
                   {summary.nights.map((night, idx) => (
-                    <li key={`${night.child}-${night.night_date}-${idx}`} className={styles.entry}>
+                    <li key={`${night.child}-${night.night_date}-${idx}`} className={`${styles.entry} ${childRowClass(night.child)}`}>
                       <span className={styles.entryText}>
-                        {night.night_date} | {night.child} | {night.duration_minutes} min | {night.bedtime} - {night.wake_time}
+                        <span className={styles.entryTextParts}>
+                          <span>{night.night_date} | </span>
+                          <span className={childNameClass(night.child)}>{night.child}</span>
+                          <span> | {night.duration_minutes} min | {night.bedtime} - {night.wake_time}</span>
+                        </span>
                       </span>
                     </li>
                   ))}
