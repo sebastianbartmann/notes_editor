@@ -298,13 +298,8 @@ object ApiClient {
     suspend fun clearAgentSession(sessionId: String): ApiMessage =
         postJson("/api/agent/session/clear", ClaudeClearRequest(sessionId = sessionId))
 
-    suspend fun fetchAgentSessionHistory(sessionId: String): List<AgentConversationItem> {
-        val resp = getJson<AgentSessionHistoryResponse>("/api/agent/session/history?session_id=${URLEncoder.encode(sessionId, "UTF-8")}")
-        if (resp.items.isNotEmpty()) return resp.items
-        return resp.messages.map { msg ->
-            AgentConversationItem(type = "message", role = msg.role, content = msg.content)
-        }
-    }
+    suspend fun fetchAgentSessionHistory(sessionId: String): AgentSessionHistoryResponse =
+        getJson("/api/agent/session/history?session_id=${URLEncoder.encode(sessionId, "UTF-8")}")
 
     suspend fun fetchAgentSessions(): List<AgentSessionSummary> =
         getJson<AgentSessionsResponse>("/api/agent/sessions").sessions
@@ -435,5 +430,12 @@ object ApiClient {
             }
         }
         return "app-debug.apk"
+    }
+}
+
+fun AgentSessionHistoryResponse.toItems(): List<AgentConversationItem> {
+    if (items.isNotEmpty()) return items
+    return messages.map { msg ->
+        AgentConversationItem(type = "message", role = msg.role, content = msg.content)
     }
 }

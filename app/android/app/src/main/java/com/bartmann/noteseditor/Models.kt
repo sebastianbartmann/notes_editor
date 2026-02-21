@@ -310,7 +310,9 @@ data class AgentSessionsExportResponse(
 @Serializable
 data class AgentSessionHistoryResponse(
     val items: List<AgentConversationItem> = emptyList(),
-    val messages: List<ChatMessage> = emptyList()
+    val messages: List<ChatMessage> = emptyList(),
+    @SerialName("active_run")
+    val activeRun: AgentActiveRun? = null
 )
 
 // Request models for JSON serialization

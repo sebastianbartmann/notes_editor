@@ -53,6 +53,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
     val person = UserSettings.person
     var inputText by remember(person) { mutableStateOf(ClaudeSessionStore.draftInput(person)) }
     var isLoading by remember { mutableStateOf(false) }
+    var activeRemoteRunId by remember { mutableStateOf<String?>(null) }
     var statusMessage by remember { mutableStateOf("") }
     var actions by remember { mutableStateOf<List<AgentAction>>(emptyList()) }
     var actionsError by remember { mutableStateOf("") }
@@ -83,6 +84,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
     val autoScrollThresholdPx = 50
+    val hasActiveRun = isLoading || activeRemoteRunId != null
     val latestUsage = messages.lastOrNull { it.type == "usage" && it.usage != null }?.usage
     val usageSummary = if (!UserSettings.agentVerboseOutput) {
         "Verbose output disabled"
@@ -102,9 +104,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
 
     fun sendMessage() {
         val text = inputText.trim()
-        if (text.isEmpty() || isLoading) return
+        if (text.isEmpty() || hasActiveRun) return
         inputText = ""
         ClaudeSessionStore.updateDraftInput(person, "")
+        activeRemoteRunId = null
         isLoading = true
         statusMessage = "Connecting..."
         streamingAssistantText = ""
@@ -221,13 +224,14 @@ fun ToolClaudeScreen(modifier: Modifier) {
     }
 
     fun runAction(action: AgentAction) {
-        if (isLoading) return
+        if (hasActiveRun) return
         if (action.metadata.requiresConfirmation && pendingConfirmation?.id != action.id) {
             pendingConfirmation = action
             statusMessage = "Confirm action: ${action.label}"
             return
         }
         pendingConfirmation = null
+        activeRemoteRunId = null
         isLoading = true
         statusMessage = "Running ${action.label}..."
         streamingAssistantText = ""
@@ -362,6 +366,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
         postSwitchPollJob?.cancel()
         postSwitchPollJob = null
         ClaudeSessionStore.startNew()
+        activeRemoteRunId = null
         pendingConfirmation = null
         statusMessage = ""
         streamingAssistantText = ""
@@ -398,14 +403,15 @@ fun ToolClaudeScreen(modifier: Modifier) {
             var previousHistory = baseline
             var unchangedCount = 0
             while (unchangedCount < 2) {
-                delay(5000)
+                delay(3000)
                 if (ClaudeSessionStore.sessionId != targetSessionId) break
                 if (isLoading) continue
-                val history = try {
+                val resp = try {
                     ApiClient.fetchAgentSessionHistory(targetSessionId)
                 } catch (_: Exception) {
                     break
                 }
+                val history = resp.toItems()
                 if (history == previousHistory) {
                     unchangedCount += 1
                 } else {
@@ -414,6 +420,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 previousHistory = history
                 if (ClaudeSessionStore.sessionId != targetSessionId) break
                 ClaudeSessionStore.loadSession(targetSessionId, history)
+                activeRemoteRunId = resp.activeRun?.runId
                 statusMessage = ""
                 streamingAssistantText = ""
             }
@@ -451,8 +458,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
             sessionsError = ""
             sessionsStatus = ""
             try {
-                val history = ApiClient.fetchAgentSessionHistory(targetSessionId)
+                val resp = ApiClient.fetchAgentSessionHistory(targetSessionId)
+                val history = resp.toItems()
                 ClaudeSessionStore.switchTo(targetSessionId, history)
+                activeRemoteRunId = resp.activeRun?.runId
                 statusMessage = ""
                 pendingConfirmation = null
                 streamingAssistantText = ""
@@ -536,8 +545,10 @@ fun ToolClaudeScreen(modifier: Modifier) {
         refreshJob?.cancel()
         refreshJob = scope.launch {
             try {
-                val history = ApiClient.fetchAgentSessionHistory(currentSessionId)
+                val resp = ApiClient.fetchAgentSessionHistory(currentSessionId)
+                val history = resp.toItems()
                 ClaudeSessionStore.loadSession(currentSessionId, history)
+                activeRemoteRunId = resp.activeRun?.runId
                 statusMessage = ""
                 streamingAssistantText = ""
             } catch (_: Exception) {
@@ -583,6 +594,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
             postSwitchPollJob?.cancel()
             postSwitchPollJob = null
             ClaudeSessionStore.clear()
+            activeRemoteRunId = null
             pendingConfirmation = null
             statusMessage = ""
             streamingAssistantText = ""
@@ -602,6 +614,28 @@ fun ToolClaudeScreen(modifier: Modifier) {
         if (person == null || isLoading) return@LaunchedEffect
         if (ClaudeSessionStore.sessionId.isNullOrBlank()) return@LaunchedEffect
         refreshCurrentSessionHistory()
+    }
+
+    LaunchedEffect(person, ClaudeSessionStore.sessionId, activeRemoteRunId) {
+        val sid = ClaudeSessionStore.sessionId
+        if (person == null || sid.isNullOrBlank() || activeRemoteRunId == null) return@LaunchedEffect
+        while (true) {
+            delay(3000)
+            if (isLoading) continue
+            if (ClaudeSessionStore.sessionId != sid) break
+            try {
+                val resp = ApiClient.fetchAgentSessionHistory(sid)
+                val history = resp.toItems()
+                ClaudeSessionStore.loadSession(sid, history)
+                if (resp.activeRun == null) {
+                    activeRemoteRunId = null
+                    break
+                }
+                activeRemoteRunId = resp.activeRun.runId
+            } catch (_: Exception) {
+                break
+            }
+        }
     }
 
     ScreenLayout(modifier = modifier) {
@@ -736,7 +770,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
             }
 
             StatusMessage(
-                text = "Session: ${ClaudeSessionStore.sessionId ?: "new"}  |  $usageSummary",
+                text = "Session: ${ClaudeSessionStore.sessionId ?: "new"}${if (activeRemoteRunId != null) "  |  Running..." else ""}  |  $usageSummary",
                 showDivider = false
             )
 
@@ -781,15 +815,17 @@ fun ToolClaudeScreen(modifier: Modifier) {
                         minLines = 2
                     )
                     CompactButton(
-                        text = if (isLoading) "..." else "Send",
+                        text = if (isLoading) "..." else if (activeRemoteRunId != null) "Running" else "Send",
                         modifier = Modifier
                             .fillMaxHeight()
                             .width(84.dp),
-                        onClick = { if (!isLoading && inputText.isNotBlank()) sendMessage() }
+                        onClick = { if (!hasActiveRun && inputText.isNotBlank()) sendMessage() }
                     )
                 }
                 if (isLoading) {
                     StatusMessage(text = "Sending...")
+                } else if (activeRemoteRunId != null) {
+                    StatusMessage(text = "Session is running in background...")
                 } else if (statusMessage.isNotEmpty()) {
                     StatusMessage(text = statusMessage)
                 }
