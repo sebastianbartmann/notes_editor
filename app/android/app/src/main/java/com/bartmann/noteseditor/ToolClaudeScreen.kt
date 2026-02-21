@@ -78,6 +78,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
     }
     val scope = rememberCoroutineScope()
     var refreshJob by remember { mutableStateOf<Job?>(null) }
+    var postSwitchPollJob by remember { mutableStateOf<Job?>(null) }
     var activeStreamJob by remember { mutableStateOf<Job?>(null) }
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
@@ -358,6 +359,8 @@ fun ToolClaudeScreen(modifier: Modifier) {
         stopActiveStreamForSessionSwitch()
         refreshJob?.cancel()
         refreshJob = null
+        postSwitchPollJob?.cancel()
+        postSwitchPollJob = null
         ClaudeSessionStore.startNew()
         pendingConfirmation = null
         statusMessage = ""
@@ -382,20 +385,65 @@ fun ToolClaudeScreen(modifier: Modifier) {
 
     fun openSessions() {
         if (person == null) return
+        ClaudeSessionStore.saveCurrentToCache()
         showSessionsDialog = true
         sessionsStatus = ""
         loadSessions()
     }
 
+    fun startPostSwitchPolling(targetSessionId: String) {
+        postSwitchPollJob?.cancel()
+        val baseline = ClaudeSessionStore.messages.toList()
+        postSwitchPollJob = scope.launch {
+            var previousHistory = baseline
+            var unchangedCount = 0
+            while (unchangedCount < 2) {
+                delay(5000)
+                if (ClaudeSessionStore.sessionId != targetSessionId) break
+                if (isLoading) continue
+                val history = try {
+                    ApiClient.fetchAgentSessionHistory(targetSessionId)
+                } catch (_: Exception) {
+                    break
+                }
+                if (history == previousHistory) {
+                    unchangedCount += 1
+                } else {
+                    unchangedCount = 0
+                }
+                previousHistory = history
+                if (ClaudeSessionStore.sessionId != targetSessionId) break
+                ClaudeSessionStore.loadSession(targetSessionId, history)
+                statusMessage = ""
+                streamingAssistantText = ""
+            }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (postSwitchPollJob == job) {
+                    postSwitchPollJob = null
+                }
+            }
+        }
+    }
+
     fun continueSession(targetSessionId: String) {
         if (person == null || sessionsBusy) return
+        if (targetSessionId == ClaudeSessionStore.sessionId) {
+            showSessionsDialog = false
+            return
+        }
         stopActiveStreamForSessionSwitch()
+        refreshJob?.cancel()
+        refreshJob = null
+        postSwitchPollJob?.cancel()
+        postSwitchPollJob = null
         if (ClaudeSessionStore.isInCache(targetSessionId)) {
             ClaudeSessionStore.switchTo(targetSessionId)
             statusMessage = ""
             pendingConfirmation = null
             streamingAssistantText = ""
             showSessionsDialog = false
+            startPostSwitchPolling(targetSessionId)
             return
         }
         scope.launch {
@@ -409,6 +457,7 @@ fun ToolClaudeScreen(modifier: Modifier) {
                 pendingConfirmation = null
                 streamingAssistantText = ""
                 showSessionsDialog = false
+                startPostSwitchPolling(targetSessionId)
             } catch (exc: Exception) {
                 sessionsError = "Failed to open session: ${exc.message}"
             } finally {
@@ -531,6 +580,8 @@ fun ToolClaudeScreen(modifier: Modifier) {
 
     LaunchedEffect(person) {
         if (lastPerson != null && person != lastPerson) {
+            postSwitchPollJob?.cancel()
+            postSwitchPollJob = null
             ClaudeSessionStore.clear()
             pendingConfirmation = null
             statusMessage = ""
