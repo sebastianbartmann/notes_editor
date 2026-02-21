@@ -271,6 +271,12 @@ export interface AgentGatewayHealth {
 export interface AgentHistoryResponse {
   items?: AgentConversationItem[]
   messages: ChatMessage[]
+  active_run?: {
+    run_id: string
+    session_id?: string
+    started_at: string
+    updated_at: string
+  } | null
 }
 
 export interface AgentSessionSummary {

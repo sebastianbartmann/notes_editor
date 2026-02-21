@@ -15,6 +15,7 @@ export default function ClaudePage() {
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  const [activeRemoteRunId, setActiveRemoteRunId] = useState<string | null>(null)
   const [stopBusy, setStopBusy] = useState(false)
   const [streamingText, setStreamingText] = useState('')
   const [error, setError] = useState('')
@@ -54,6 +55,7 @@ export default function ClaudePage() {
     }
     return null
   }, [messages])
+  const hasActiveRun = isStreaming || !!activeRemoteRunId
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -102,11 +104,10 @@ export default function ClaudePage() {
     let cancelled = false
     getAgentSessionHistory(sessionId)
       .then((resp) => {
-        if (!cancelled) {
-          if (resp.items && resp.items.length > 0) {
-            setMessages(person, resp.items)
-            return
-          }
+        if (cancelled) return
+        if (resp.items && resp.items.length > 0) {
+          setMessages(person, resp.items)
+        } else {
           const legacyItems = (resp.messages || []).map((msg) => ({
             type: 'message' as const,
             role: msg.role,
@@ -114,6 +115,7 @@ export default function ClaudePage() {
           }))
           setMessages(person, legacyItems)
         }
+        setActiveRemoteRunId(resp.active_run ? resp.active_run.run_id : null)
       })
       .catch(() => {
         // Ignore history load errors (e.g. server restart or unknown session)
@@ -124,6 +126,12 @@ export default function ClaudePage() {
   }, [person, sessionId, setMessages])
 
   useEffect(() => {
+    if (!sessionId) {
+      setActiveRemoteRunId(null)
+    }
+  }, [sessionId])
+
+  useEffect(() => {
     if (!person || !sessionId) return
     const refresh = () => {
       if (isStreaming) return
@@ -131,14 +139,15 @@ export default function ClaudePage() {
         .then((resp) => {
           if (resp.items && resp.items.length > 0) {
             setMessages(person, resp.items)
-            return
+          } else {
+            const legacyItems = (resp.messages || []).map((msg) => ({
+              type: 'message' as const,
+              role: msg.role,
+              content: msg.content,
+            }))
+            setMessages(person, legacyItems)
           }
-          const legacyItems = (resp.messages || []).map((msg) => ({
-            type: 'message' as const,
-            role: msg.role,
-            content: msg.content,
-          }))
-          setMessages(person, legacyItems)
+          setActiveRemoteRunId(resp.active_run ? resp.active_run.run_id : null)
         })
         .catch(() => {})
     }
@@ -156,6 +165,29 @@ export default function ClaudePage() {
     }
   }, [person, sessionId, isStreaming, setMessages])
 
+  useEffect(() => {
+    if (!person || !sessionId || !activeRemoteRunId) return
+    const interval = setInterval(async () => {
+      try {
+        const resp = await getAgentSessionHistory(sessionId)
+        if (resp.items && resp.items.length > 0) {
+          setMessages(person, resp.items)
+        } else {
+          const legacyItems = (resp.messages || []).map((msg) => ({
+            type: 'message' as const,
+            role: msg.role,
+            content: msg.content,
+          }))
+          setMessages(person, legacyItems)
+        }
+        if (!resp.active_run) {
+          setActiveRemoteRunId(null)
+        }
+      } catch {}
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [person, sessionId, activeRemoteRunId, setMessages])
+
   const loadSessions = async () => {
     if (!person) return
     setSessionsLoading(true)
@@ -171,7 +203,7 @@ export default function ClaudePage() {
   }
 
   const handleOpenSessions = async () => {
-    if (isStreaming || !person) return
+    if (!person) return
     setSessionsOpen(true)
     setSessionsStatus('')
     await loadSessions()
@@ -188,7 +220,7 @@ export default function ClaudePage() {
   }
 
   const handleDeleteAllSessions = async () => {
-    if (!person || isStreaming || sessionsBusy) return
+    if (!person || hasActiveRun || sessionsBusy) return
     const ok = window.confirm('Delete all sessions for this person? This cannot be undone.')
     if (!ok) return
     setSessionsBusy(true)
@@ -208,7 +240,7 @@ export default function ClaudePage() {
   }
 
   const handleDeleteSession = async (targetSessionId: string) => {
-    if (!person || isStreaming || sessionsBusy) return
+    if (!person || hasActiveRun || sessionsBusy) return
     const ok = window.confirm('Delete this session?')
     if (!ok) return
     setSessionsBusy(true)
@@ -230,7 +262,7 @@ export default function ClaudePage() {
   }
 
   const handleExportSessions = async () => {
-    if (!person || isStreaming || sessionsBusy) return
+    if (!person || hasActiveRun || sessionsBusy) return
     setSessionsBusy(true)
     setSessionsError('')
     setSessionsStatus('')
@@ -246,7 +278,7 @@ export default function ClaudePage() {
   }
 
   const handleSend = async () => {
-    if (!input.trim() || isStreaming) return
+    if (!input.trim() || hasActiveRun) return
     const userMessage = input.trim()
     setInput('')
     await runStream(
@@ -256,7 +288,7 @@ export default function ClaudePage() {
   }
 
   const runStream = async (request: AgentChatRequest, userBubble?: string) => {
-    if (isStreaming || !person) return
+    if (hasActiveRun || !person) return
 
     if (userBubble) {
       appendMessage(person, { type: 'message', role: 'user', content: userBubble })
@@ -265,6 +297,7 @@ export default function ClaudePage() {
     setStreamingText('')
     setError('')
     setActiveRunId(null)
+    setActiveRemoteRunId(null)
     setStopBusy(false)
 
     let bufferedText = ''
@@ -379,11 +412,12 @@ export default function ClaudePage() {
   }
 
   const handleStop = async () => {
-    if (!activeRunId || stopBusy) return
+    const effectiveRunId = activeRunId || activeRemoteRunId
+    if (!effectiveRunId || stopBusy) return
     setStopBusy(true)
     setError('')
     try {
-      await stopAgentRun(activeRunId)
+      await stopAgentRun(effectiveRunId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to stop run')
     } finally {
@@ -392,7 +426,7 @@ export default function ClaudePage() {
   }
 
   const handleActionRun = async (action: AgentAction) => {
-    if (isStreaming) return
+    if (hasActiveRun) return
     if (action.metadata.requires_confirmation) {
       const ok = window.confirm(`Run action "${action.label}"?`)
       if (!ok) return
@@ -414,6 +448,7 @@ export default function ClaudePage() {
     clearSession(person)
     setStreamingText('')
     setError('')
+    setActiveRemoteRunId(null)
   }
 
   const formatSessionMeta = (session: AgentSessionSummary) => {
@@ -545,10 +580,10 @@ export default function ClaudePage() {
       <div className={styles.header}>
         <h2>Claude</h2>
         <div className={styles.headerActions}>
-          <button onClick={handleOpenSessions} className="ghost" disabled={isStreaming}>
+          <button onClick={handleOpenSessions} className="ghost">
             Sessions
           </button>
-          <button onClick={handleNewSession} className="ghost" disabled={isStreaming}>
+          <button onClick={handleNewSession} className="ghost">
             New
           </button>
         </div>
@@ -560,7 +595,7 @@ export default function ClaudePage() {
             key={action.id}
             className={styles.actionButton}
             onClick={() => handleActionRun(action)}
-            disabled={isStreaming}
+            disabled={hasActiveRun}
             title={action.metadata.requires_confirmation ? 'Requires confirmation' : action.path}
           >
             {action.label}
@@ -570,6 +605,7 @@ export default function ClaudePage() {
       {actionsError && <div className={styles.error}>{actionsError}</div>}
       <div className={styles.sessionInfo}>
         <div><strong>Session:</strong> {sessionId || 'new'}</div>
+        {activeRemoteRunId && <div><strong>Run:</strong> Running...</div>}
         <div>{formatUsageSummary()}</div>
       </div>
 
@@ -596,16 +632,16 @@ export default function ClaudePage() {
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             rows={2}
-            disabled={isStreaming}
+            disabled={hasActiveRun}
             className={styles.input}
           />
-          {isStreaming ? (
+          {(isStreaming || activeRemoteRunId) ? (
             <button
               onClick={handleStop}
-              disabled={!activeRunId || stopBusy}
+              disabled={!(activeRunId || activeRemoteRunId) || stopBusy}
               className="danger"
             >
-              {stopBusy ? 'Stopping...' : 'Stop'}
+              {stopBusy ? 'Stopping...' : (isStreaming ? 'Stop' : 'Running...')}
             </button>
           ) : (
             <button onClick={handleSend} disabled={!input.trim()}>
@@ -646,7 +682,7 @@ export default function ClaudePage() {
                     <button
                       className={styles.sessionDelete}
                       onClick={() => handleDeleteSession(item.session_id)}
-                      disabled={sessionsBusy || isStreaming}
+                      disabled={sessionsBusy || hasActiveRun}
                       title="Delete session"
                       aria-label="Delete session"
                     >
@@ -660,14 +696,14 @@ export default function ClaudePage() {
               <button
                 className="ghost"
                 onClick={handleExportSessions}
-                disabled={sessionsBusy || isStreaming}
+                disabled={sessionsBusy || hasActiveRun}
               >
                 {sessionsBusy ? 'Working...' : 'Export .md'}
               </button>
               <button
                 className="danger"
                 onClick={handleDeleteAllSessions}
-                disabled={sessionsBusy || isStreaming}
+                disabled={sessionsBusy || hasActiveRun}
               >
                 Delete all sessions
               </button>

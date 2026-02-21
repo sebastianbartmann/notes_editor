@@ -64,6 +64,10 @@ type runControl struct {
 	cancel       chan struct{}
 	streamCancel context.CancelFunc
 	once         sync.Once
+
+	itemsMu      sync.Mutex
+	runItems     []ConversationItem
+	assistantBuf string
 }
 
 type resolvedMessage struct {
@@ -268,6 +272,9 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 				RunID:   runID,
 				TS:      time.Now().UTC(),
 			})
+			run.itemsMu.Lock()
+			run.runItems = append(run.runItems, runItems[len(runItems)-1])
+			run.itemsMu.Unlock()
 		}
 
 		seq := 0
@@ -294,12 +301,19 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 						TS:        event.TS,
 					})
 					assistantText.Reset()
+					run.itemsMu.Lock()
+					run.assistantBuf = ""
+					run.runItems = append(run.runItems, runItems[len(runItems)-1])
+					run.itemsMu.Unlock()
 				}
 			}
 			s.touchRunEvent(runID)
 			out <- event
 			if item, ok := conversationItemFromStreamEvent(event); ok {
 				runItems = append(runItems, item)
+				run.itemsMu.Lock()
+				run.runItems = append(run.runItems, item)
+				run.itemsMu.Unlock()
 			}
 		}
 
@@ -328,6 +342,10 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 					RunID:     runID,
 					TS:        time.Now().UTC(),
 				})
+				run.itemsMu.Lock()
+				run.assistantBuf = ""
+				run.runItems = append(run.runItems, runItems[len(runItems)-1])
+				run.itemsMu.Unlock()
 			}
 			if finalSessionID != "" && len(runItems) > 0 {
 				for i := range runItems {
@@ -337,6 +355,10 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 				}
 				s.appendStoredConversation(person, finalSessionID, runItems)
 			}
+			run.itemsMu.Lock()
+			run.runItems = nil
+			run.assistantBuf = ""
+			run.itemsMu.Unlock()
 			s.touchSession(person, finalSessionID, req.Message, usedRuntime.Mode())
 		}()
 
@@ -415,6 +437,9 @@ func (s *Service) ChatStream(ctx context.Context, person string, req ChatRequest
 				if event.Type == "text" && event.Delta != "" {
 					sawText = true
 					assistantText.WriteString(event.Delta)
+					run.itemsMu.Lock()
+					run.assistantBuf = assistantText.String()
+					run.itemsMu.Unlock()
 				}
 				if event.Type == "error" {
 					sawError = true
@@ -518,29 +543,52 @@ func (s *Service) GetConversationHistory(person, sessionID string) ([]Conversati
 		return nil, fmt.Errorf("session_id is required")
 	}
 
-	if history := s.getStoredConversation(person, sessionID); len(history) > 0 {
-		return history, nil
+	items := s.getStoredConversation(person, sessionID)
+	if len(items) == 0 {
+		runtime, err := s.runtimeForSession(person, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		var history []claude.ChatMessage
+		if piRuntime, ok := runtime.(*PiGatewayRuntime); ok {
+			history, err = piRuntime.GetHistoryForPerson(person, sessionID)
+		} else {
+			history, err = runtime.GetHistory(sessionID)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		items = chatMessagesToItems(history)
+		if len(items) > 0 {
+			s.replaceStoredConversation(person, sessionID, items)
+		}
+		s.touchSession(person, sessionID, "", runtime.Mode())
 	}
 
-	runtime, err := s.runtimeForSession(person, sessionID)
-	if err != nil {
-		return nil, err
+	s.mu.Lock()
+	activeRunID := s.activeSessionRun[sessionRunKey(person, sessionID)]
+	var run *runControl
+	if activeRunID != "" {
+		run = s.activeRuns[activeRunID]
 	}
-	var history []claude.ChatMessage
-	if piRuntime, ok := runtime.(*PiGatewayRuntime); ok {
-		history, err = piRuntime.GetHistoryForPerson(person, sessionID)
-	} else {
-		history, err = runtime.GetHistory(sessionID)
+	s.mu.Unlock()
+	if run != nil {
+		run.itemsMu.Lock()
+		inFlight := make([]ConversationItem, len(run.runItems))
+		copy(inFlight, run.runItems)
+		if run.assistantBuf != "" {
+			inFlight = append(inFlight, ConversationItem{
+				Type:    ConversationItemMessage,
+				Role:    "assistant",
+				Content: run.assistantBuf,
+				RunID:   activeRunID,
+				TS:      time.Now().UTC(),
+			})
+		}
+		run.itemsMu.Unlock()
+		items = append(items, inFlight...)
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	items := chatMessagesToItems(history)
-	if len(items) > 0 {
-		s.replaceStoredConversation(person, sessionID, items)
-	}
-	s.touchSession(person, sessionID, "", runtime.Mode())
 	return items, nil
 }
 

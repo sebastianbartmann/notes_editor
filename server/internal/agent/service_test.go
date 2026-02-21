@@ -473,6 +473,86 @@ func TestChatStreamStoresAssistantSegmentsInTimelineOrder(t *testing.T) {
 	}
 }
 
+func TestGetConversationHistoryIncludesInFlightItems(t *testing.T) {
+	upstream := make(chan StreamEvent, 8)
+	runtime := &stubRuntime{
+		mode:      RuntimeModeAnthropicAPIKey,
+		available: true,
+		streamResp: &RuntimeStream{
+			Events: upstream,
+		},
+	}
+
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey:     runtime,
+		RuntimeModeGatewaySubscription: &stubRuntime{mode: RuntimeModeGatewaySubscription, available: false},
+	})
+
+	run, err := svc.ChatStream(context.Background(), "sebastian", ChatRequest{
+		SessionID: "s-inflight",
+		Message:   "in flight user",
+	})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+
+	readEvent := func() StreamEvent {
+		t.Helper()
+		select {
+		case event := <-run.Events:
+			return event
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for stream event")
+			return StreamEvent{}
+		}
+	}
+
+	if got := readEvent(); got.Type != "start" {
+		t.Fatalf("expected start event, got %#v", got)
+	}
+
+	upstream <- StreamEvent{Type: "text", Delta: "Assistant in flight. "}
+	upstream <- StreamEvent{Type: "tool_call", Tool: "read_file", Args: map[string]any{"path": "daily.md"}}
+	_ = readEvent() // text
+	_ = readEvent() // tool_call
+
+	history, err := svc.GetConversationHistory("sebastian", "s-inflight")
+	if err != nil {
+		t.Fatalf("failed to fetch in-flight history: %v", err)
+	}
+
+	var sawUser bool
+	var sawAssistant bool
+	var sawToolCall bool
+	for _, item := range history {
+		if item.Type == ConversationItemMessage && item.Role == "user" && item.Content == "in flight user" {
+			sawUser = true
+		}
+		if item.Type == ConversationItemMessage && item.Role == "assistant" && strings.Contains(item.Content, "Assistant in flight.") {
+			sawAssistant = true
+		}
+		if item.Type == ConversationItemToolCall && item.Tool == "read_file" {
+			sawToolCall = true
+		}
+	}
+	if !sawUser || !sawAssistant || !sawToolCall {
+		t.Fatalf("expected in-flight history to include user/assistant/tool_call, got %#v", history)
+	}
+
+	upstream <- StreamEvent{Type: "done", SessionID: "s-inflight"}
+	close(upstream)
+	for range run.Events {
+	}
+
+	finalHistory, err := svc.GetConversationHistory("sebastian", "s-inflight")
+	if err != nil {
+		t.Fatalf("failed to fetch final history: %v", err)
+	}
+	if len(finalHistory) < len(history) {
+		t.Fatalf("expected final history to include in-flight timeline, before=%d after=%d", len(history), len(finalHistory))
+	}
+}
+
 func TestStopRunCancelsUpstreamStreamContext(t *testing.T) {
 	runtime := &cancelAwareRuntime{
 		mode:      RuntimeModeAnthropicAPIKey,

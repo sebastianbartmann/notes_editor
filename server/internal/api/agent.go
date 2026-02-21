@@ -213,9 +213,19 @@ func (s *Server) handleAgentSessionHistory(w http.ResponseWriter, r *http.Reques
 		messages = append(messages, claude.ChatMessage{Role: item.Role, Content: item.Content})
 	}
 
+	activeRuns := agentSvc.ListActiveRuns(person)
+	var activeRun *agent.ActiveRunSummary
+	for i := range activeRuns {
+		if activeRuns[i].SessionID == sessionID {
+			activeRun = &activeRuns[i]
+			break
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items":    items,
-		"messages": messages,
+		"items":      items,
+		"messages":   messages,
+		"active_run": activeRun,
 	})
 }
 
