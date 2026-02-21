@@ -16,7 +16,7 @@ import (
 const (
 	anthropicAPIURL     = "https://api.anthropic.com/v1/messages"
 	anthropicAPIVersion = "2023-06-01"
-	defaultModel        = "claude-sonnet-4-20250514"
+	defaultModel        = "claude-sonnet-4-6"
 	maxTokens           = 4096
 )
 
@@ -41,15 +41,17 @@ Provide helpful, concise responses and use tools when they would help accomplish
 // Service provides Claude AI chat functionality.
 type Service struct {
 	apiKey   string
+	model    string
 	store    *vault.Store
 	linkedin *linkedin.Service
 	sessions *SessionStore
 }
 
 // NewService creates a new Claude service.
-func NewService(apiKey string, store *vault.Store, linkedin *linkedin.Service) *Service {
+func NewService(apiKey string, model string, store *vault.Store, linkedin *linkedin.Service) *Service {
 	return &Service{
 		apiKey:   apiKey,
+		model:    model,
 		store:    store,
 		linkedin: linkedin,
 		sessions: NewSessionStore(),
@@ -214,7 +216,7 @@ func (s *Service) callWithToolLoop(messages []anthropicMsg, toolExec *ToolExecut
 // callAPI makes a single call to the Anthropic API.
 func (s *Service) callAPI(messages []anthropicMsg, includeTools bool, systemPrompt string) (*anthropicResponse, error) {
 	reqBody := anthropicRequest{
-		Model:     defaultModel,
+		Model:     s.resolvedModel(),
 		MaxTokens: maxTokens,
 		System:    systemPrompt,
 		Messages:  messages,
@@ -260,6 +262,14 @@ func (s *Service) callAPI(messages []anthropicMsg, includeTools bool, systemProm
 	}
 
 	return &apiResp, nil
+}
+
+func (s *Service) resolvedModel() string {
+	model := strings.TrimSpace(s.model)
+	if model == "" {
+		return defaultModel
+	}
+	return model
 }
 
 // buildAnthropicMessages converts session messages to Anthropic format.

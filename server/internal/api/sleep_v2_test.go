@@ -57,7 +57,7 @@ func TestSleepV2MigrationAndIDCrud(t *testing.T) {
 	}
 
 	// Create a new entry.
-	appendBody := `{"child":"Thomas","time":"20:10","status":"eingeschlafen"}`
+	appendBody := `{"child":"Thomas","status":"eingeschlafen","occurred_at":"2026-02-20T19:10:00Z"}`
 	req = makeRequest(t, "POST", "/api/sleep-times/append", appendBody, "sebastian")
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -72,13 +72,16 @@ func TestSleepV2MigrationAndIDCrud(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET sleep-times status=%d body=%s", rec.Code, rec.Body.String())
 	}
+	if strings.Contains(rec.Body.String(), `"line"`) {
+		t.Fatalf("response should not contain legacy line field: %s", rec.Body.String())
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 
 	var target SleepEntry
 	for _, e := range got.Entries {
-		if e.Child == "Thomas" && e.Time == "20:10" && e.Status == "eingeschlafen" {
+		if e.Child == "Thomas" && e.OccurredAt == "2026-02-20T19:10:00Z" && e.Status == "eingeschlafen" {
 			target = e
 			break
 		}
@@ -88,7 +91,7 @@ func TestSleepV2MigrationAndIDCrud(t *testing.T) {
 	}
 
 	// Update by ID.
-	updateBody := `{"id":"` + target.ID + `","child":"Thomas","time":"20:15","status":"eingeschlafen","notes":"updated"}`
+	updateBody := `{"id":"` + target.ID + `","child":"Thomas","status":"eingeschlafen","occurred_at":"2026-02-20T19:15:00Z","notes":"updated"}`
 	req = makeRequest(t, "POST", "/api/sleep-times/update", updateBody, "sebastian")
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -112,7 +115,7 @@ func TestSleepV2SummaryAndExport(t *testing.T) {
 	router := NewRouter(srv)
 
 	// Two events to form one completed night.
-	appendAsleep := `{"child":"Fabian","time":"20:00","status":"eingeschlafen","occurred_at":"2026-02-16T19:00:00Z"}`
+	appendAsleep := `{"child":"Fabian","status":"eingeschlafen","occurred_at":"2026-02-16T19:00:00Z"}`
 	req := makeRequest(t, "POST", "/api/sleep-times/append", appendAsleep, "sebastian")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -120,7 +123,7 @@ func TestSleepV2SummaryAndExport(t *testing.T) {
 		t.Fatalf("append asleep status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
-	appendAwake := `{"child":"Fabian","time":"06:30","status":"aufgewacht","occurred_at":"2026-02-17T05:30:00Z"}`
+	appendAwake := `{"child":"Fabian","status":"aufgewacht","occurred_at":"2026-02-17T05:30:00Z"}`
 	req = makeRequest(t, "POST", "/api/sleep-times/append", appendAwake, "sebastian")
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -162,5 +165,26 @@ func TestSleepV2SummaryAndExport(t *testing.T) {
 	}
 	if !strings.Contains(text, "Fabian") {
 		t.Fatalf("export missing expected entry content")
+	}
+}
+
+func TestSleepV2AppendMissingOccurredAtReturns400(t *testing.T) {
+	srv, _, cleanup := setupTestServer(t)
+	defer cleanup()
+	router := NewRouter(srv)
+
+	req := makeRequest(t, "POST", "/api/sleep-times/append", `{"child":"Thomas","status":"eingeschlafen"}`, "sebastian")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("append status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var errResp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if errResp.Detail != "occurred_at is required" {
+		t.Fatalf("error detail=%q", errResp.Detail)
 	}
 }

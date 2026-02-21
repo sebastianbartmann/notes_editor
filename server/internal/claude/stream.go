@@ -167,7 +167,7 @@ func (s *Service) streamAPI(messages []anthropicMsg, events chan<- StreamEvent, 
 		Tools     []map[string]any `json:"tools,omitempty"`
 		Stream    bool             `json:"stream"`
 	}{
-		Model:     defaultModel,
+		Model:     s.resolvedModel(),
 		MaxTokens: maxTokens,
 		System:    systemPrompt,
 		Messages:  messages,

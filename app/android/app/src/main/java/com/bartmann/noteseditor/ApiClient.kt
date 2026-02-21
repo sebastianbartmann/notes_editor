@@ -190,27 +190,25 @@ object ApiClient {
 
     suspend fun appendSleepTimes(
         child: String,
-        time: String,
         status: String,
-        occurredAt: String? = null,
+        occurredAt: String,
         notes: String = ""
     ): ApiMessage =
         postJson(
             "/api/sleep-times/append",
-            AppendSleepRequest(child = child, time = time, status = status, occurredAt = occurredAt, notes = notes)
+            AppendSleepRequest(child = child, status = status, occurredAt = occurredAt, notes = notes)
         )
 
     suspend fun updateSleepEntry(
         id: String,
         child: String,
-        time: String,
         status: String,
-        occurredAt: String? = null,
+        occurredAt: String,
         notes: String = ""
     ): ApiMessage =
         postJson(
             "/api/sleep-times/update",
-            UpdateSleepRequest(id = id, child = child, time = time, status = status, occurredAt = occurredAt, notes = notes)
+            UpdateSleepRequest(id = id, child = child, status = status, occurredAt = occurredAt, notes = notes)
         )
 
     suspend fun deleteSleepEntry(id: String): ApiMessage =

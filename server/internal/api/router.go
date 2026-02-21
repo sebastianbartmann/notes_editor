@@ -183,7 +183,7 @@ func buildRuntimeServices(cfg *config.Config, store *vault.Store) (*linkedin.Ser
 
 	var claudeSvc *claude.Service
 	if cfg.AnthropicKey != "" {
-		claudeSvc = claude.NewService(cfg.AnthropicKey, store, linkedinSvc)
+		claudeSvc = claude.NewService(cfg.AnthropicKey, cfg.ClaudeModel, store, linkedinSvc)
 	}
 	fallback := cfg.AgentEnablePiFallback
 	options := agent.ServiceOptions{

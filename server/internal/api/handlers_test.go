@@ -701,7 +701,7 @@ func TestSleepHandlers(t *testing.T) {
 		defer cleanup()
 		router := NewRouter(srv)
 
-		body := `{"child":"Thomas","time":"20:00","status":"eingeschlafen"}`
+		body := `{"child":"Thomas","status":"eingeschlafen","occurred_at":"2026-01-15T19:00:00Z"}`
 		req := makeRequest(t, "POST", "/api/sleep-times/append", body, "sebastian")
 		rec := httptest.NewRecorder()
 
@@ -723,7 +723,7 @@ func TestSleepHandlers(t *testing.T) {
 		defer cleanup()
 		router := NewRouter(srv)
 
-		body := `{"time":"20:00","status":"eingeschlafen"}`
+		body := `{"status":"eingeschlafen","occurred_at":"2026-01-15T19:00:00Z"}`
 		req := makeRequest(t, "POST", "/api/sleep-times/append", body, "sebastian")
 		rec := httptest.NewRecorder()
 
@@ -740,7 +740,7 @@ func TestSleepHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("POST /api/sleep-times/append missing time returns 400", func(t *testing.T) {
+	t.Run("POST /api/sleep-times/append missing occurred_at returns 400", func(t *testing.T) {
 		srv, _, cleanup := setupTestServer(t)
 		defer cleanup()
 		router := NewRouter(srv)
@@ -757,8 +757,8 @@ func TestSleepHandlers(t *testing.T) {
 
 		var errResp ErrorResponse
 		json.Unmarshal(rec.Body.Bytes(), &errResp)
-		if errResp.Detail != "Time is required" {
-			t.Errorf("error detail = %q, want %q", errResp.Detail, "Time is required")
+		if errResp.Detail != "occurred_at is required" {
+			t.Errorf("error detail = %q, want %q", errResp.Detail, "occurred_at is required")
 		}
 	})
 
@@ -767,7 +767,7 @@ func TestSleepHandlers(t *testing.T) {
 		defer cleanup()
 		router := NewRouter(srv)
 
-		body := `{"child":"Thomas","time":"20:00"}`
+		body := `{"child":"Thomas","occurred_at":"2026-01-15T19:00:00Z"}`
 		req := makeRequest(t, "POST", "/api/sleep-times/append", body, "sebastian")
 		rec := httptest.NewRecorder()
 
@@ -789,7 +789,7 @@ func TestSleepHandlers(t *testing.T) {
 		defer cleanup()
 		router := NewRouter(srv)
 
-		body := `{"child":"Unknown","time":"20:00","status":"eingeschlafen"}`
+		body := `{"child":"Unknown","status":"eingeschlafen","occurred_at":"2026-01-15T19:00:00Z"}`
 		req := makeRequest(t, "POST", "/api/sleep-times/append", body, "sebastian")
 		rec := httptest.NewRecorder()
 
@@ -811,7 +811,7 @@ func TestSleepHandlers(t *testing.T) {
 		defer cleanup()
 		router := NewRouter(srv)
 
-		body := `{"child":"Thomas","time":"20:00","status":"invalid"}`
+		body := `{"child":"Thomas","status":"invalid","occurred_at":"2026-01-15T19:00:00Z"}`
 		req := makeRequest(t, "POST", "/api/sleep-times/append", body, "sebastian")
 		rec := httptest.NewRecorder()
 
@@ -829,37 +829,51 @@ func TestSleepHandlers(t *testing.T) {
 	})
 
 	t.Run("POST /api/sleep-times/delete deletes entry", func(t *testing.T) {
-		srv, vaultRoot, cleanup := setupTestServer(t)
+		srv, _, cleanup := setupTestServer(t)
 		defer cleanup()
 		router := NewRouter(srv)
 
-		// Create sleep times file
-		content := "2024-01-15 | Thomas | 19:30 | eingeschlafen\n2024-01-15 | Thomas | 07:00 | aufgewacht\n"
-		os.WriteFile(filepath.Join(vaultRoot, "sleep_times.md"), []byte(content), 0644)
-
-		body := `{"line":1}`
-		req := makeRequest(t, "POST", "/api/sleep-times/delete", body, "sebastian")
+		appendBody := `{"child":"Thomas","status":"eingeschlafen","occurred_at":"2026-01-15T19:00:00Z"}`
+		req := makeRequest(t, "POST", "/api/sleep-times/append", appendBody, "sebastian")
 		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("append status = %d body=%s", rec.Code, rec.Body.String())
+		}
 
+		req = makeRequest(t, "GET", "/api/sleep-times", "", "sebastian")
+		rec = httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("get status = %d body=%s", rec.Code, rec.Body.String())
+		}
+
+		var listResp struct {
+			Entries []SleepEntry `json:"entries"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &listResp); err != nil {
+			t.Fatalf("decode sleep entries: %v", err)
+		}
+		if len(listResp.Entries) == 0 {
+			t.Fatalf("expected at least one sleep entry")
+		}
+
+		deleteBody := `{"id":"` + listResp.Entries[0].ID + `"}`
+		req = makeRequest(t, "POST", "/api/sleep-times/delete", deleteBody, "sebastian")
+		rec = httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Errorf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
 		}
-
-		// Verify line was deleted
-		newContent, _ := os.ReadFile(filepath.Join(vaultRoot, "sleep_times.md"))
-		if strings.Contains(string(newContent), "19:30") {
-			t.Error("entry was not deleted")
-		}
 	})
 
-	t.Run("POST /api/sleep-times/delete invalid line returns 400", func(t *testing.T) {
+	t.Run("POST /api/sleep-times/delete missing id returns 400", func(t *testing.T) {
 		srv, _, cleanup := setupTestServer(t)
 		defer cleanup()
 		router := NewRouter(srv)
 
-		body := `{"line":0}`
+		body := `{}`
 		req := makeRequest(t, "POST", "/api/sleep-times/delete", body, "sebastian")
 		rec := httptest.NewRecorder()
 
@@ -871,59 +885,8 @@ func TestSleepHandlers(t *testing.T) {
 
 		var errResp ErrorResponse
 		json.Unmarshal(rec.Body.Bytes(), &errResp)
-		if errResp.Detail != "Line must be positive" {
-			t.Errorf("error detail = %q, want %q", errResp.Detail, "Line must be positive")
-		}
-	})
-
-	t.Run("POST /api/sleep-times/delete line out of range returns 400", func(t *testing.T) {
-		srv, vaultRoot, cleanup := setupTestServer(t)
-		defer cleanup()
-		router := NewRouter(srv)
-
-		// Create sleep times file with 1 entry
-		content := "2024-01-15 | Thomas | 19:30 | eingeschlafen\n"
-		os.WriteFile(filepath.Join(vaultRoot, "sleep_times.md"), []byte(content), 0644)
-
-		body := `{"line":999}`
-		req := makeRequest(t, "POST", "/api/sleep-times/delete", body, "sebastian")
-		rec := httptest.NewRecorder()
-
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
-		}
-
-		var errResp ErrorResponse
-		json.Unmarshal(rec.Body.Bytes(), &errResp)
-		if errResp.Detail != "Line number out of range" {
-			t.Errorf("error detail = %q, want %q", errResp.Detail, "Line number out of range")
-		}
-	})
-
-	t.Run("POST /api/sleep-times/delete no file returns 404", func(t *testing.T) {
-		srv, vaultRoot, cleanup := setupTestServer(t)
-		defer cleanup()
-		router := NewRouter(srv)
-
-		// Remove the sleep_times.md file
-		os.Remove(filepath.Join(vaultRoot, "sleep_times.md"))
-
-		body := `{"line":1}`
-		req := makeRequest(t, "POST", "/api/sleep-times/delete", body, "sebastian")
-		rec := httptest.NewRecorder()
-
-		router.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusNotFound {
-			t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
-		}
-
-		var errResp ErrorResponse
-		json.Unmarshal(rec.Body.Bytes(), &errResp)
-		if errResp.Detail != "Sleep times file not found" {
-			t.Errorf("error detail = %q, want %q", errResp.Detail, "Sleep times file not found")
+		if errResp.Detail != "ID is required" {
+			t.Errorf("error detail = %q, want %q", errResp.Detail, "ID is required")
 		}
 	})
 }
@@ -1048,7 +1011,7 @@ func TestContentTypeJSON(t *testing.T) {
 		defer cleanup()
 		router := NewRouter(srv)
 
-		body := `{"child":"Thomas","time":"20:00","status":"eingeschlafen"}`
+		body := `{"child":"Thomas","status":"eingeschlafen","occurred_at":"2026-01-15T19:00:00Z"}`
 		req := makeRequest(t, "POST", "/api/sleep-times/append", body, "sebastian")
 		rec := httptest.NewRecorder()
 
@@ -1084,7 +1047,7 @@ func TestSuccessResponseFormat(t *testing.T) {
 		defer cleanup()
 		router := NewRouter(srv)
 
-		body := `{"child":"Thomas","time":"20:00","status":"eingeschlafen"}`
+		body := `{"child":"Thomas","status":"eingeschlafen","occurred_at":"2026-01-15T19:00:00Z"}`
 		req := makeRequest(t, "POST", "/api/sleep-times/append", body, "sebastian")
 		rec := httptest.NewRecorder()
 

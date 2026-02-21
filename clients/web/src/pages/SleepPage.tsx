@@ -36,14 +36,14 @@ export default function SleepPage() {
 
   const [child, setChild] = useState('Fabian')
   const [status, setStatus] = useState<SleepStatus>('eingeschlafen')
-  const [timeText, setTimeText] = useState('')
   const [occurredAtLocal, setOccurredAtLocal] = useState(currentLocalDateTimeValue())
+  const [notes, setNotes] = useState('')
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingChild, setEditingChild] = useState('Fabian')
   const [editingStatus, setEditingStatus] = useState<SleepStatus>('eingeschlafen')
-  const [editingTimeText, setEditingTimeText] = useState('')
   const [editingOccurredAtLocal, setEditingOccurredAtLocal] = useState('')
+  const [editingNotes, setEditingNotes] = useState('')
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -70,17 +70,21 @@ export default function SleepPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!timeText.trim() && !occurredAtLocal.trim()) return
+    const occurredAtIso = localDateTimeToIso(occurredAtLocal)
+    if (!occurredAtIso) {
+      setError('Please choose a valid date and time')
+      return
+    }
 
     try {
       await appendSleepTime({
         child,
-        time: timeText,
         status,
-        occurred_at: localDateTimeToIso(occurredAtLocal),
+        occurred_at: occurredAtIso,
+        notes: notes.trim(),
       })
-      setTimeText('')
       setOccurredAtLocal(currentLocalDateTimeValue())
+      setNotes('')
       await loadAll()
       setTab('history')
     } catch (err) {
@@ -101,7 +105,6 @@ export default function SleepPage() {
     setEditingId(entry.id)
     setEditingChild(entry.child)
     setEditingStatus((entry.status === 'aufgewacht' ? 'aufgewacht' : 'eingeschlafen'))
-    setEditingTimeText(entry.time || '')
 
     if (entry.occurred_at) {
       const parsed = new Date(entry.occurred_at)
@@ -114,18 +117,20 @@ export default function SleepPage() {
     } else {
       setEditingOccurredAtLocal('')
     }
+    setEditingNotes(entry.notes ?? '')
   }
 
   const cancelEdit = () => {
     setEditingId(null)
-    setEditingTimeText('')
     setEditingOccurredAtLocal('')
+    setEditingNotes('')
   }
 
   const saveEdit = async () => {
     if (!editingId) return
-    if (!editingTimeText.trim() && !editingOccurredAtLocal.trim()) {
-      setError('Time is required')
+    const editingOccurredAtIso = localDateTimeToIso(editingOccurredAtLocal)
+    if (!editingOccurredAtIso) {
+      setError('Please choose a valid date and time')
       return
     }
 
@@ -133,9 +138,9 @@ export default function SleepPage() {
       await updateSleepTime({
         id: editingId,
         child: editingChild,
-        time: editingTimeText,
         status: editingStatus,
-        occurred_at: localDateTimeToIso(editingOccurredAtLocal),
+        occurred_at: editingOccurredAtIso,
+        notes: editingNotes.trim(),
       })
       cancelEdit()
       await loadAll()
@@ -162,7 +167,6 @@ export default function SleepPage() {
     <div className={styles.page}>
       <div className={styles.headerRow}>
         <h2>Sleep Tracking</h2>
-        <button onClick={handleExportMarkdown}>Export sleep data to markdown</button>
       </div>
 
       <div className={styles.tabs}>
@@ -227,19 +231,18 @@ export default function SleepPage() {
               onChange={e => setOccurredAtLocal(e.target.value)}
               className={styles.timeInput}
             />
-            <input
-              type="text"
-              value={timeText}
-              onChange={e => setTimeText(e.target.value)}
-              placeholder="Legacy time/raw note"
-              className={styles.timeInput}
-            />
           </div>
 
+          <input
+            type="text"
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Optional notes"
+            className={styles.notes}
+          />
+
           <div className={styles.actions}>
-            <button type="submit" disabled={!timeText.trim() && !occurredAtLocal.trim()}>
-              Add
-            </button>
+            <button type="submit">Add</button>
           </div>
         </form>
       )}
@@ -272,8 +275,9 @@ export default function SleepPage() {
                       />
                       <input
                         type="text"
-                        value={editingTimeText}
-                        onChange={ev => setEditingTimeText(ev.target.value)}
+                        value={editingNotes}
+                        onChange={ev => setEditingNotes(ev.target.value)}
+                        placeholder="Optional notes"
                       />
                       <div className={styles.actions}>
                         <button onClick={saveEdit}>Save</button>
@@ -301,7 +305,10 @@ export default function SleepPage() {
 
       {tab === 'summary' && (
         <div className={styles.history}>
-          <h3>Summary</h3>
+          <div className={styles.headerRow}>
+            <h3>Summary</h3>
+            <button onClick={handleExportMarkdown}>Export sleep data to markdown</button>
+          </div>
           {loading ? (
             <div className={styles.message}>Loading...</div>
           ) : (

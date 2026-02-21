@@ -20,6 +20,8 @@ type Config struct {
 	NotesRoot string
 	// AnthropicKey is the API key for Claude AI service.
 	AnthropicKey string
+	// ClaudeModel is the Anthropic model name used for Claude requests.
+	ClaudeModel string
 	// StaticDir is the directory for serving static web UI files.
 	StaticDir string
 	// ServerAddr is the HTTP listen address (e.g., :80, :8080).
@@ -58,6 +60,7 @@ func Load() (*Config, error) {
 		NotesToken:   os.Getenv("NOTES_TOKEN"),
 		NotesRoot:    os.Getenv("NOTES_ROOT"),
 		AnthropicKey: os.Getenv("ANTHROPIC_API_KEY"),
+		ClaudeModel:  strings.TrimSpace(os.Getenv("CLAUDE_MODEL")),
 		StaticDir:    os.Getenv("STATIC_DIR"),
 		ServerAddr:   os.Getenv("SERVER_ADDR"),
 		ValidPersons: parseCSV(os.Getenv("VALID_PERSONS")),
@@ -69,6 +72,9 @@ func Load() (*Config, error) {
 			AccessToken:  os.Getenv("LINKEDIN_ACCESS_TOKEN"),
 			TokenURL:     os.Getenv("LINKEDIN_TOKEN_URL"),
 		},
+	}
+	if cfg.ClaudeModel == "" {
+		cfg.ClaudeModel = "claude-sonnet-4-6"
 	}
 	cfg.AgentEnablePiFallback = parseBoolEnv("AGENT_ENABLE_PI_FALLBACK", true)
 	cfg.AgentMaxRunDuration = parseDurationEnv("AGENT_MAX_RUN_DURATION", 45*time.Minute)
@@ -121,6 +127,10 @@ func (c *Config) ReloadRuntimeSettings() error {
 	}
 
 	c.AnthropicKey = os.Getenv("ANTHROPIC_API_KEY")
+	c.ClaudeModel = strings.TrimSpace(os.Getenv("CLAUDE_MODEL"))
+	if c.ClaudeModel == "" {
+		c.ClaudeModel = "claude-sonnet-4-6"
+	}
 	c.PiGatewayURL = strings.TrimSpace(os.Getenv("PI_GATEWAY_URL"))
 	if c.PiGatewayURL == "" {
 		c.PiGatewayURL = "http://127.0.0.1:4317"

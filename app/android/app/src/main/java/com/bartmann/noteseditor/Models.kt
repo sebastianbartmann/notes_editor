@@ -20,7 +20,6 @@ data class SleepTimesResponse(
 @Serializable
 data class SleepEntry(
     val id: String = "",
-    val line: Int,
     val date: String,
     val child: String,
     val time: String,
@@ -349,10 +348,9 @@ data class ToggleTodoRequest(
 @Serializable
 data class AppendSleepRequest(
     val child: String,
-    val time: String,
     val status: String,
     @SerialName("occurred_at")
-    val occurredAt: String? = null,
+    val occurredAt: String,
     val notes: String = ""
 )
 
@@ -360,10 +358,9 @@ data class AppendSleepRequest(
 data class UpdateSleepRequest(
     val id: String,
     val child: String,
-    val time: String,
     val status: String,
     @SerialName("occurred_at")
-    val occurredAt: String? = null,
+    val occurredAt: String,
     val notes: String = ""
 )
 

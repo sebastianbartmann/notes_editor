@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,10 +18,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -30,14 +37,29 @@ import kotlinx.coroutines.launch
 
 private enum class SleepTab { Log, History, Summary }
 
-private fun localNowInputValue(): String =
-    LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
+private val dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
-private fun localInputToIso(value: String): String? =
-    runCatching {
-        val dt = LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
-        dt.atZone(ZoneId.systemDefault()).toInstant().toString()
+private fun localDateTimeToIso(value: LocalDateTime): String =
+    value.atZone(ZoneId.systemDefault()).toInstant().toString()
+
+private fun entryToLocalDateTime(entry: SleepEntry): LocalDateTime? {
+    val zone = ZoneId.systemDefault()
+    val occurredAt = entry.occurredAt
+    if (!occurredAt.isNullOrBlank()) {
+        return runCatching {
+            Instant.parse(occurredAt).atZone(zone).toLocalDateTime()
+        }.getOrNull()
+    }
+
+    if (entry.time.isBlank() || entry.time == "-") {
+        return null
+    }
+
+    return runCatching {
+        LocalDateTime.parse("${entry.date}T${entry.time}", DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
     }.getOrNull()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,14 +70,19 @@ fun SleepTimesScreen(modifier: Modifier) {
 
     var child by remember { mutableStateOf("Fabian") }
     var status by remember { mutableStateOf("eingeschlafen") }
-    var entryText by remember { mutableStateOf("") }
-    var occurredAtInput by remember { mutableStateOf(localNowInputValue()) }
+    var occurredAt by remember { mutableStateOf(LocalDateTime.now().withSecond(0).withNano(0)) }
+    var notes by remember { mutableStateOf("") }
 
     var editingId by remember { mutableStateOf<String?>(null) }
     var editingChild by remember { mutableStateOf("Fabian") }
     var editingStatus by remember { mutableStateOf("eingeschlafen") }
-    var editingTime by remember { mutableStateOf("") }
-    var editingOccurredAt by remember { mutableStateOf("") }
+    var editingOccurredAt by remember { mutableStateOf(LocalDateTime.now().withSecond(0).withNano(0)) }
+    var editingNotes by remember { mutableStateOf("") }
+
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var showEditingDatePicker by remember { mutableStateOf(false) }
+    var showEditingTimePicker by remember { mutableStateOf(false) }
 
     var message by remember { mutableStateOf("") }
     var isRefreshing by remember { mutableStateOf(false) }
@@ -116,21 +143,6 @@ fun SleepTimesScreen(modifier: Modifier) {
                     CompactButton(text = "Summary", modifier = Modifier.weight(1f), onClick = { tab = SleepTab.Summary })
                 }
 
-                CompactButton(
-                    text = "Export sleep data to markdown",
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        scope.launch {
-                            try {
-                                val resp = ApiClient.exportSleepMarkdown()
-                                message = resp.message
-                            } catch (exc: Exception) {
-                                message = "Export failed: ${exc.message}"
-                            }
-                        }
-                    }
-                )
-
                 when (tab) {
                     SleepTab.Log -> {
                         SectionTitle(text = "Log")
@@ -178,16 +190,26 @@ fun SleepTimesScreen(modifier: Modifier) {
                             }
                         }
 
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm)
+                        ) {
+                            CompactButton(
+                                text = occurredAt.format(dateFormatter),
+                                modifier = Modifier.weight(1f),
+                                onClick = { showDatePicker = true }
+                            )
+                            CompactButton(
+                                text = occurredAt.format(timeFormatter),
+                                modifier = Modifier.weight(1f),
+                                onClick = { showTimePicker = true }
+                            )
+                        }
+
                         CompactTextField(
-                            value = occurredAtInput,
-                            onValueChange = { occurredAtInput = it },
-                            placeholder = "When (yyyy-MM-ddTHH:mm)",
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        CompactTextField(
-                            value = entryText,
-                            onValueChange = { entryText = it },
-                            placeholder = "Legacy time/raw note",
+                            value = notes,
+                            onValueChange = { notes = it },
+                            placeholder = "Optional notes",
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -198,21 +220,17 @@ fun SleepTimesScreen(modifier: Modifier) {
                             CompactButton(
                                 text = "Add",
                                 onClick = {
-                                    if (entryText.isBlank() && occurredAtInput.isBlank()) {
-                                        message = "Time is required"
-                                        return@CompactButton
-                                    }
                                     scope.launch {
                                         try {
                                             val response = ApiClient.appendSleepTimes(
                                                 child = child,
-                                                time = entryText,
                                                 status = status,
-                                                occurredAt = localInputToIso(occurredAtInput)
+                                                occurredAt = localDateTimeToIso(occurredAt),
+                                                notes = notes.trim()
                                             )
                                             message = response.message
-                                            entryText = ""
-                                            occurredAtInput = localNowInputValue()
+                                            notes = ""
+                                            occurredAt = LocalDateTime.now().withSecond(0).withNano(0)
                                             refresh()
                                             tab = SleepTab.History
                                         } catch (exc: Exception) {
@@ -236,30 +254,73 @@ fun SleepTimesScreen(modifier: Modifier) {
                             entries.forEach { entry ->
                                 if (editingId == entry.id) {
                                     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.lg)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.clickable { editingChild = "Thomas" }
+                                                ) {
+                                                    AppCheckbox(checked = editingChild == "Thomas", size = 18)
+                                                    AppText(text = "Thomas", style = AppTheme.typography.body, color = AppTheme.colors.text)
+                                                }
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.clickable { editingStatus = "eingeschlafen" }
+                                                ) {
+                                                    AppCheckbox(checked = editingStatus == "eingeschlafen", size = 18)
+                                                    AppText(text = "Eingeschlafen", style = AppTheme.typography.body, color = AppTheme.colors.text)
+                                                }
+                                            }
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.clickable { editingChild = "Fabian" }
+                                                ) {
+                                                    AppCheckbox(checked = editingChild == "Fabian", size = 18)
+                                                    AppText(text = "Fabian", style = AppTheme.typography.body, color = AppTheme.colors.text)
+                                                }
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.clickable { editingStatus = "aufgewacht" }
+                                                ) {
+                                                    AppCheckbox(checked = editingStatus == "aufgewacht", size = 18)
+                                                    AppText(text = "Aufgewacht", style = AppTheme.typography.body, color = AppTheme.colors.text)
+                                                }
+                                            }
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.sm)
+                                        ) {
+                                            CompactButton(
+                                                text = editingOccurredAt.format(dateFormatter),
+                                                modifier = Modifier.weight(1f),
+                                                onClick = { showEditingDatePicker = true }
+                                            )
+                                            CompactButton(
+                                                text = editingOccurredAt.format(timeFormatter),
+                                                modifier = Modifier.weight(1f),
+                                                onClick = { showEditingTimePicker = true }
+                                            )
+                                        }
+
                                         CompactTextField(
-                                            value = editingChild,
-                                            onValueChange = { editingChild = it },
-                                            placeholder = "Child",
+                                            value = editingNotes,
+                                            onValueChange = { editingNotes = it },
+                                            placeholder = "Optional notes",
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                        CompactTextField(
-                                            value = editingStatus,
-                                            onValueChange = { editingStatus = it },
-                                            placeholder = "Status",
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        CompactTextField(
-                                            value = editingOccurredAt,
-                                            onValueChange = { editingOccurredAt = it },
-                                            placeholder = "When (yyyy-MM-ddTHH:mm)",
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        CompactTextField(
-                                            value = editingTime,
-                                            onValueChange = { editingTime = it },
-                                            placeholder = "Time",
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
+
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
@@ -279,9 +340,9 @@ fun SleepTimesScreen(modifier: Modifier) {
                                                             ApiClient.updateSleepEntry(
                                                                 id = id,
                                                                 child = editingChild,
-                                                                time = editingTime,
                                                                 status = editingStatus,
-                                                                occurredAt = localInputToIso(editingOccurredAt)
+                                                                occurredAt = localDateTimeToIso(editingOccurredAt),
+                                                                notes = editingNotes.trim()
                                                             )
                                                             editingId = null
                                                             refresh()
@@ -309,10 +370,10 @@ fun SleepTimesScreen(modifier: Modifier) {
                                             text = "Edit",
                                             onClick = {
                                                 editingId = entry.id
-                                                editingChild = entry.child
-                                                editingStatus = entry.status
-                                                editingTime = entry.time
-                                                editingOccurredAt = ""
+                                                editingChild = if (entry.child == "Thomas") "Thomas" else "Fabian"
+                                                editingStatus = if (entry.status == "aufgewacht") "aufgewacht" else "eingeschlafen"
+                                                editingOccurredAt = entryToLocalDateTime(entry) ?: LocalDateTime.now().withSecond(0).withNano(0)
+                                                editingNotes = entry.notes ?: ""
                                             }
                                         )
                                         CompactButton(
@@ -339,7 +400,27 @@ fun SleepTimesScreen(modifier: Modifier) {
                     }
 
                     SleepTab.Summary -> {
-                        SectionTitle(text = "Average bed/wake")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SectionTitle(text = "Average bed/wake")
+                            CompactButton(
+                                text = "Export",
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            val resp = ApiClient.exportSleepMarkdown()
+                                            message = resp.message
+                                        } catch (exc: Exception) {
+                                            message = "Export failed: ${exc.message}"
+                                        }
+                                    }
+                                }
+                            )
+                        }
+
                         if (summary.averages.isEmpty()) {
                             AppText(
                                 text = "Not enough paired data yet.",
@@ -379,5 +460,125 @@ fun SleepTimesScreen(modifier: Modifier) {
                 StatusMessage(text = message)
             }
         }
+    }
+
+    if (showDatePicker) {
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = occurredAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val selectedMillis = dateState.selectedDateMillis
+                    if (selectedMillis != null) {
+                        val selectedDate = Instant.ofEpochMilli(selectedMillis)
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDate()
+                        occurredAt = occurredAt
+                            .withYear(selectedDate.year)
+                            .withMonth(selectedDate.monthValue)
+                            .withDayOfMonth(selectedDate.dayOfMonth)
+                    }
+                    showDatePicker = false
+                }) {
+                    AppText(text = "OK", style = AppTheme.typography.label, color = AppTheme.colors.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    AppText(text = "Cancel", style = AppTheme.typography.label, color = AppTheme.colors.muted)
+                }
+            }
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
+
+    if (showTimePicker) {
+        val timeState = rememberTimePickerState(
+            initialHour = occurredAt.hour,
+            initialMinute = occurredAt.minute,
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    occurredAt = occurredAt.withHour(timeState.hour).withMinute(timeState.minute)
+                    showTimePicker = false
+                }) {
+                    AppText(text = "OK", style = AppTheme.typography.label, color = AppTheme.colors.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) {
+                    AppText(text = "Cancel", style = AppTheme.typography.label, color = AppTheme.colors.muted)
+                }
+            },
+            text = {
+                TimePicker(state = timeState)
+            }
+        )
+    }
+
+    if (showEditingDatePicker) {
+        val dateState = rememberDatePickerState(
+            initialSelectedDateMillis = editingOccurredAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showEditingDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val selectedMillis = dateState.selectedDateMillis
+                    if (selectedMillis != null) {
+                        val selectedDate = Instant.ofEpochMilli(selectedMillis)
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDate()
+                        editingOccurredAt = editingOccurredAt
+                            .withYear(selectedDate.year)
+                            .withMonth(selectedDate.monthValue)
+                            .withDayOfMonth(selectedDate.dayOfMonth)
+                    }
+                    showEditingDatePicker = false
+                }) {
+                    AppText(text = "OK", style = AppTheme.typography.label, color = AppTheme.colors.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditingDatePicker = false }) {
+                    AppText(text = "Cancel", style = AppTheme.typography.label, color = AppTheme.colors.muted)
+                }
+            }
+        ) {
+            DatePicker(state = dateState)
+        }
+    }
+
+    if (showEditingTimePicker) {
+        val timeState = rememberTimePickerState(
+            initialHour = editingOccurredAt.hour,
+            initialMinute = editingOccurredAt.minute,
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showEditingTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    editingOccurredAt = editingOccurredAt.withHour(timeState.hour).withMinute(timeState.minute)
+                    showEditingTimePicker = false
+                }) {
+                    AppText(text = "OK", style = AppTheme.typography.label, color = AppTheme.colors.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditingTimePicker = false }) {
+                    AppText(text = "Cancel", style = AppTheme.typography.label, color = AppTheme.colors.muted)
+                }
+            },
+            text = {
+                TimePicker(state = timeState)
+            }
+        )
     }
 }

@@ -60,6 +60,13 @@ type Store struct {
 	location *time.Location
 }
 
+func deriveTimeText(occurredAt *time.Time, loc *time.Location) string {
+	if occurredAt == nil || loc == nil {
+		return ""
+	}
+	return occurredAt.In(loc).Format("15:04")
+}
+
 func NewStore(dbPath string) (*Store, error) {
 	if dbPath == "" {
 		return nil, errors.New("sleep db path is required")
@@ -301,10 +308,11 @@ func (s *Store) ListEntries(limit int) ([]Entry, error) {
 	return entries, nil
 }
 
-func (s *Store) CreateEntry(child, status string, occurredAt *time.Time, timeText, notes string) (Entry, error) {
+func (s *Store) CreateEntry(child, status string, occurredAt *time.Time, notes string) (Entry, error) {
 	now := time.Now().UTC()
 	id := uuid.NewString()
 	var occurredAny any
+	timeText := deriveTimeText(occurredAt, s.location)
 	if occurredAt != nil {
 		occurredAny = occurredAt.Format(time.RFC3339)
 	}
@@ -312,7 +320,7 @@ func (s *Store) CreateEntry(child, status string, occurredAt *time.Time, timeTex
 	_, err := s.db.Exec(
 		`INSERT INTO sleep_events (id, child, status, occurred_at_utc, time_text, notes, created_at_utc, updated_at_utc, deleted_at_utc)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-		id, child, status, occurredAny, strings.TrimSpace(timeText), strings.TrimSpace(notes), now.Format(time.RFC3339), now.Format(time.RFC3339),
+		id, child, status, occurredAny, timeText, strings.TrimSpace(notes), now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
 	if err != nil {
 		return Entry{}, err
@@ -323,16 +331,17 @@ func (s *Store) CreateEntry(child, status string, occurredAt *time.Time, timeTex
 		Child:      child,
 		Status:     status,
 		OccurredAt: occurredAt,
-		TimeText:   strings.TrimSpace(timeText),
+		TimeText:   timeText,
 		Notes:      strings.TrimSpace(notes),
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}, nil
 }
 
-func (s *Store) UpdateEntry(id, child, status string, occurredAt *time.Time, timeText, notes string) error {
+func (s *Store) UpdateEntry(id, child, status string, occurredAt *time.Time, notes string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	var occurredAny any
+	timeText := deriveTimeText(occurredAt, s.location)
 	if occurredAt != nil {
 		occurredAny = occurredAt.Format(time.RFC3339)
 	}
@@ -340,7 +349,7 @@ func (s *Store) UpdateEntry(id, child, status string, occurredAt *time.Time, tim
 	res, err := s.db.Exec(`UPDATE sleep_events
 		SET child=?, status=?, occurred_at_utc=?, time_text=?, notes=?, updated_at_utc=?
 		WHERE id=? AND deleted_at_utc IS NULL`,
-		child, status, occurredAny, strings.TrimSpace(timeText), strings.TrimSpace(notes), now, id,
+		child, status, occurredAny, timeText, strings.TrimSpace(notes), now, id,
 	)
 	if err != nil {
 		return err
