@@ -1,7 +1,40 @@
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+
 plugins {
     id("com.android.application")
     kotlin("android")
     kotlin("plugin.serialization")
+}
+
+fun generateVersionName(): String {
+    val today = LocalDate.now()
+    val dateStr = today.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))
+    val commitsToday = try {
+        val process = ProcessBuilder("git", "log", "--oneline", "--since=midnight")
+            .directory(rootProject.projectDir)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readLines()
+        process.waitFor()
+        output.size
+    } catch (_: Exception) { 0 }
+    return "$dateStr.${commitsToday + 1}"
+}
+
+fun generateVersionCode(): Int {
+    val today = LocalDate.now()
+    // YYYYMMDD * 10 + sequence (capped at 9 per day, plenty)
+    val commitsToday = try {
+        val process = ProcessBuilder("git", "log", "--oneline", "--since=midnight")
+            .directory(rootProject.projectDir)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readLines()
+        process.waitFor()
+        output.size
+    } catch (_: Exception) { 0 }
+    return today.year * 10000 + today.monthValue * 100 + today.dayOfMonth
 }
 
 android {
@@ -12,8 +45,8 @@ android {
         applicationId = "com.bartmann.noteseditor"
         minSdk = 31
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = generateVersionCode()
+        versionName = generateVersionName()
     }
 
     buildTypes {
@@ -37,6 +70,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

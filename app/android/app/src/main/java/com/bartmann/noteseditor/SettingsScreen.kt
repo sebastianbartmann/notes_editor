@@ -464,6 +464,11 @@ fun SettingsScreen(modifier: Modifier) {
                 StatusMessage(text = envStatus, showDivider = false)
             }
         }
+        AppText(
+            text = "v${BuildConfig.VERSION_NAME}",
+            style = AppTheme.typography.label,
+            color = AppTheme.colors.muted
+        )
     }
 }
 
