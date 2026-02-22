@@ -98,3 +98,9 @@
 - In this sandbox, full `make test` still fails in unrelated packages that use `httptest.NewServer` because binding localhost sockets is not permitted (`listen tcp6 [::1]:0: socket: operation not permitted`). Sleep-focused API tests pass when run selectively.
 - Claude backend model selection is now runtime-configurable via `CLAUDE_MODEL` (`server/internal/config` + `ReloadRuntimeSettings`), with fallback default `claude-sonnet-4-6`; both non-streaming and streaming Anthropic requests use `Service.resolvedModel()` so config applies consistently.
 - Sleep UI visual differentiation: Thomas/Fabian now use child-specific colors in both web and Android sleep History/Summary views (left accent border + colored child name). Colors are theme-aware and fixed to: Thomas dark/light `#5b9bd5`/`#2a7ab5`, Fabian dark/light `#d9a05b`/`#c4842a`.
+
+## 2026-02-22
+
+- Agent session list ordering should be by `CreatedAt` descending (newest-created first), not by `LastUsedAt`; web and Android consume server ordering directly.
+- Agent conversation timelines are now durably persisted per person/session at `agent/sessions/<url-escaped-session-id>.items.json` as a full JSON array of `ConversationItem`s.
+- `GetConversationHistory` should load the durable timeline file first and only reconstruct from runtime chat messages when the file does not exist (legacy sessions); this preserves `tool_call` and `tool_result` items across server restarts.

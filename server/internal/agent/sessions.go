@@ -114,10 +114,10 @@ func (s *Service) ListSessions(person string) ([]SessionSummary, error) {
 	s.mu.Unlock()
 
 	sort.Slice(records, func(i, j int) bool {
-		if records[i].LastUsedAt.Equal(records[j].LastUsedAt) {
-			return records[i].CreatedAt.After(records[j].CreatedAt)
+		if records[i].CreatedAt.Equal(records[j].CreatedAt) {
+			return records[i].LastUsedAt.After(records[j].LastUsedAt)
 		}
-		return records[i].LastUsedAt.After(records[j].LastUsedAt)
+		return records[i].CreatedAt.After(records[j].CreatedAt)
 	})
 
 	summaries := make([]SessionSummary, 0, len(records))
@@ -285,6 +285,8 @@ func (s *Service) ClearAllSessions(person string) error {
 	s.mu.Unlock()
 
 	for _, rec := range records {
+		s.removeStoredConversation(person, rec.SessionID)
+
 		runtime := s.runtimes[rec.RuntimeMode]
 		if runtime == nil || !runtime.Available() {
 			continue

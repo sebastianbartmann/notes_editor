@@ -183,3 +183,35 @@ func TestClearAllSessionsRemovesGatewayRecoveredSessionFiles(t *testing.T) {
 		t.Fatalf("expected runtime session file removed, got err=%v", err)
 	}
 }
+
+func TestListSessionsOrdersByCreatedAtDescending(t *testing.T) {
+	t.Setenv("PI_GATEWAY_PI_SESSION_DIR", t.TempDir())
+
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey: &stubRuntime{mode: RuntimeModeAnthropicAPIKey, available: false},
+	})
+
+	svc.touchSession("petra", "older", "older", RuntimeModeAnthropicAPIKey)
+	svc.touchSession("petra", "newer", "newer", RuntimeModeAnthropicAPIKey)
+
+	svc.mu.Lock()
+	older := svc.sessionRecordsByPerson["petra"]["older"]
+	newer := svc.sessionRecordsByPerson["petra"]["newer"]
+	base := time.Now().UTC()
+	older.CreatedAt = base.Add(-2 * time.Hour)
+	older.LastUsedAt = base.Add(2 * time.Hour)
+	newer.CreatedAt = base.Add(-1 * time.Hour)
+	newer.LastUsedAt = base.Add(-3 * time.Hour)
+	svc.mu.Unlock()
+
+	sessions, err := svc.ListSessions("petra")
+	if err != nil {
+		t.Fatalf("list sessions failed: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("expected 2 sessions, got %d", len(sessions))
+	}
+	if sessions[0].SessionID != "newer" {
+		t.Fatalf("expected newest-created session first, got order: %q then %q", sessions[0].SessionID, sessions[1].SessionID)
+	}
+}

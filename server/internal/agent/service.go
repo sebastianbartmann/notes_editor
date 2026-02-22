@@ -2,8 +2,12 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -24,6 +28,7 @@ const (
 	maxStepsLimitStatusFmt  = "Action max_steps=%d applied for this run"
 	toolCallLimitStatusFmt  = "Run exceeded max tool calls (%d)"
 	defaultActionStepsLimit = 0
+	conversationItemsDir    = "agent/sessions"
 )
 
 var ErrSessionBusy = errors.New("session already has an active run")
@@ -543,8 +548,16 @@ func (s *Service) GetConversationHistory(person, sessionID string) ([]Conversati
 		return nil, fmt.Errorf("session_id is required")
 	}
 
-	items := s.getStoredConversation(person, sessionID)
-	if len(items) == 0 {
+	items, foundDurable, err := s.readStoredConversationFile(person, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if foundDurable {
+		s.setStoredConversationCache(person, sessionID, items)
+	} else {
+		items = s.getStoredConversation(person, sessionID)
+	}
+	if !foundDurable && len(items) == 0 {
 		runtime, err := s.runtimeForSession(person, sessionID)
 		if err != nil {
 			return nil, err
@@ -670,47 +683,140 @@ func (s *Service) getStoredConversation(person, sessionID string) []Conversation
 	return out
 }
 
-func (s *Service) replaceStoredConversation(person, sessionID string, items []ConversationItem) {
-	if len(items) == 0 {
+func (s *Service) setStoredConversationCache(person, sessionID string, items []ConversationItem) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
 		return
 	}
+
+	copied := make([]ConversationItem, len(items))
+	copy(copied, items)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	personSessions := s.conversationsByPerson[person]
+	if len(copied) == 0 {
+		if personSessions != nil {
+			delete(personSessions, sessionID)
+			if len(personSessions) == 0 {
+				delete(s.conversationsByPerson, person)
+			}
+		}
+		return
+	}
 	if personSessions == nil {
 		personSessions = make(map[string][]ConversationItem)
 		s.conversationsByPerson[person] = personSessions
 	}
-	copied := make([]ConversationItem, len(items))
-	copy(copied, items)
 	personSessions[sessionID] = copied
+}
+
+func (s *Service) replaceStoredConversation(person, sessionID string, items []ConversationItem) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return
+	}
+
+	s.setStoredConversationCache(person, sessionID, items)
+	_ = s.writeStoredConversationFile(person, sessionID, items)
 }
 
 func (s *Service) appendStoredConversation(person, sessionID string, items []ConversationItem) {
 	if len(items) == 0 {
 		return
 	}
+
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return
+	}
+
+	copiedItems := make([]ConversationItem, len(items))
+	copy(copiedItems, items)
+
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	personSessions := s.conversationsByPerson[person]
 	if personSessions == nil {
 		personSessions = make(map[string][]ConversationItem)
 		s.conversationsByPerson[person] = personSessions
 	}
-	personSessions[sessionID] = append(personSessions[sessionID], items...)
+	personSessions[sessionID] = append(personSessions[sessionID], copiedItems...)
+	full := make([]ConversationItem, len(personSessions[sessionID]))
+	copy(full, personSessions[sessionID])
+	s.mu.Unlock()
+
+	_ = s.writeStoredConversationFile(person, sessionID, full)
 }
 
 func (s *Service) removeStoredConversation(person, sessionID string) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return
+	}
+
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	personSessions := s.conversationsByPerson[person]
 	if personSessions == nil {
+		s.mu.Unlock()
+		_ = s.deleteStoredConversationFile(person, sessionID)
 		return
 	}
 	delete(personSessions, sessionID)
 	if len(personSessions) == 0 {
 		delete(s.conversationsByPerson, person)
 	}
+	s.mu.Unlock()
+
+	_ = s.deleteStoredConversationFile(person, sessionID)
+}
+
+func (s *Service) readStoredConversationFile(person, sessionID string) ([]ConversationItem, bool, error) {
+	if s.store == nil {
+		return nil, false, nil
+	}
+
+	path := storedConversationFilePath(sessionID)
+	content, err := s.store.ReadFile(person, path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return []ConversationItem{}, true, nil
+	}
+
+	var items []ConversationItem
+	if err := json.Unmarshal([]byte(content), &items); err != nil {
+		return nil, true, err
+	}
+	return items, true, nil
+}
+
+func (s *Service) writeStoredConversationFile(person, sessionID string, items []ConversationItem) error {
+	if s.store == nil {
+		return nil
+	}
+	data, err := json.MarshalIndent(items, "", "  ")
+	if err != nil {
+		return err
+	}
+	return s.store.WriteFile(person, storedConversationFilePath(sessionID), string(data))
+}
+
+func (s *Service) deleteStoredConversationFile(person, sessionID string) error {
+	if s.store == nil {
+		return nil
+	}
+	return s.store.DeleteFile(person, storedConversationFilePath(sessionID))
+}
+
+func storedConversationFilePath(sessionID string) string {
+	safeID := url.PathEscape(strings.TrimSpace(sessionID))
+	filename := safeID + ".items.json"
+	return filepath.ToSlash(filepath.Join(conversationItemsDir, filename))
 }
 
 func (s *Service) registerRun(runID, person, sessionID string, streamCancel context.CancelFunc) *runControl {

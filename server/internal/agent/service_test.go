@@ -18,6 +18,7 @@ type stubRuntime struct {
 	chatErr    error
 	streamResp *RuntimeStream
 	streamErr  error
+	history    map[string][]claude.ChatMessage
 }
 
 func (r *stubRuntime) Mode() string { return r.mode }
@@ -40,7 +41,18 @@ func (r *stubRuntime) ChatStream(_ context.Context, _ string, _ RuntimeChatReque
 
 func (r *stubRuntime) ClearSession(_ string) error { return nil }
 
-func (r *stubRuntime) GetHistory(_ string) ([]claude.ChatMessage, error) { return nil, nil }
+func (r *stubRuntime) GetHistory(sessionID string) ([]claude.ChatMessage, error) {
+	if r.history == nil {
+		return nil, nil
+	}
+	history := r.history[sessionID]
+	if len(history) == 0 {
+		return nil, nil
+	}
+	out := make([]claude.ChatMessage, len(history))
+	copy(out, history)
+	return out, nil
+}
 
 type cancelAwareRuntime struct {
 	mode      string
@@ -623,5 +635,128 @@ func TestChatStreamTimeoutCancelsUpstreamStreamContext(t *testing.T) {
 
 	close(runtime.events)
 	for range run.Events {
+	}
+}
+
+func TestStoredConversationItemsRoundTrip(t *testing.T) {
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey: &stubRuntime{mode: RuntimeModeAnthropicAPIKey, available: true},
+	})
+
+	want := []ConversationItem{
+		{Type: ConversationItemMessage, Role: "user", Content: "hello"},
+		{Type: ConversationItemToolCall, Tool: "read_file", Args: map[string]any{"path": "daily.md"}},
+		{Type: ConversationItemToolResult, Tool: "read_file", OK: true, Summary: "ok"},
+	}
+	if err := svc.writeStoredConversationFile("sebastian", "roundtrip", want); err != nil {
+		t.Fatalf("write stored conversation failed: %v", err)
+	}
+
+	got, found, err := svc.readStoredConversationFile("sebastian", "roundtrip")
+	if err != nil {
+		t.Fatalf("read stored conversation failed: %v", err)
+	}
+	if !found {
+		t.Fatal("expected stored conversation file to be found")
+	}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d items, got %d", len(want), len(got))
+	}
+	if got[1].Type != ConversationItemToolCall || got[1].Tool != "read_file" {
+		t.Fatalf("expected tool_call item to round-trip, got %#v", got[1])
+	}
+	if got[2].Type != ConversationItemToolResult || !got[2].OK {
+		t.Fatalf("expected tool_result item to round-trip, got %#v", got[2])
+	}
+}
+
+func TestGetConversationHistoryPrefersDurableTimeline(t *testing.T) {
+	root := t.TempDir()
+	store := vault.NewStore(root)
+
+	upstream := make(chan StreamEvent, 8)
+	upstream <- StreamEvent{Type: "text", Delta: "First part."}
+	upstream <- StreamEvent{Type: "tool_call", Tool: "read_file", Args: map[string]any{"path": "daily.md"}}
+	upstream <- StreamEvent{Type: "text", Delta: "Second part."}
+	upstream <- StreamEvent{Type: "tool_result", Tool: "read_file", OK: true, Summary: "Tool read_file executed"}
+	upstream <- StreamEvent{Type: "done", SessionID: "persisted-session"}
+	close(upstream)
+
+	writerSvc := NewServiceWithRuntimes(store, map[string]Runtime{
+		RuntimeModeAnthropicAPIKey: &stubRuntime{
+			mode:      RuntimeModeAnthropicAPIKey,
+			available: true,
+			streamResp: &RuntimeStream{
+				Events: upstream,
+			},
+		},
+	})
+
+	run, err := writerSvc.ChatStream(context.Background(), "sebastian", ChatRequest{
+		SessionID: "persisted-session",
+		Message:   "persist this timeline",
+	})
+	if err != nil {
+		t.Fatalf("chat stream failed: %v", err)
+	}
+	for range run.Events {
+	}
+
+	readerSvc := NewServiceWithRuntimes(store, map[string]Runtime{
+		RuntimeModeAnthropicAPIKey: &stubRuntime{
+			mode:      RuntimeModeAnthropicAPIKey,
+			available: true,
+			history: map[string][]claude.ChatMessage{
+				"persisted-session": {
+					{Role: "user", Content: "persist this timeline"},
+					{Role: "assistant", Content: "message-only fallback"},
+				},
+			},
+		},
+	})
+
+	history, err := readerSvc.GetConversationHistory("sebastian", "persisted-session")
+	if err != nil {
+		t.Fatalf("get conversation history failed: %v", err)
+	}
+
+	var sawToolCall bool
+	var sawToolResult bool
+	for _, item := range history {
+		if item.Type == ConversationItemToolCall && item.Tool == "read_file" {
+			sawToolCall = true
+		}
+		if item.Type == ConversationItemToolResult && item.Tool == "read_file" {
+			sawToolResult = true
+		}
+	}
+	if !sawToolCall || !sawToolResult {
+		t.Fatalf("expected durable history with tool_call/tool_result, got %#v", history)
+	}
+}
+
+func TestGetConversationHistoryFallsBackToLegacyChatMessagesWhenNoDurableFile(t *testing.T) {
+	svc := NewServiceWithRuntimes(vault.NewStore(t.TempDir()), map[string]Runtime{
+		RuntimeModeAnthropicAPIKey: &stubRuntime{
+			mode:      RuntimeModeAnthropicAPIKey,
+			available: true,
+			history: map[string][]claude.ChatMessage{
+				"legacy-session": {
+					{Role: "user", Content: "hello"},
+					{Role: "assistant", Content: "legacy response"},
+				},
+			},
+		},
+	})
+
+	items, err := svc.GetConversationHistory("sebastian", "legacy-session")
+	if err != nil {
+		t.Fatalf("get legacy history failed: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 message items from legacy fallback, got %d", len(items))
+	}
+	if items[0].Type != ConversationItemMessage || items[1].Type != ConversationItemMessage {
+		t.Fatalf("expected message-only fallback items, got %#v", items)
 	}
 }
